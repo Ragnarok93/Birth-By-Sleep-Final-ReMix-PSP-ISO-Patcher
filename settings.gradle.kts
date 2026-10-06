@@ -15,5 +15,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Birth By Sleep Final ReMix PSP ISO Patcher"
+rootProject.name = "BirthBySleepFinalReMixPspIsoPatcher"
 include(":composeApp")
