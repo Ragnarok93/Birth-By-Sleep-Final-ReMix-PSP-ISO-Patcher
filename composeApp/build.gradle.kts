@@ -37,7 +37,6 @@ kotlin {
         androidMain.dependencies {
             implementation(libs.androidx.activity.compose)
             implementation(libs.oneui.compose)
-            coreLibraryDesugaring(libs.desugar.jdk.libs)
         }
         val desktopMain by getting {
             dependencies {
@@ -51,6 +50,10 @@ kotlin {
             }
         }
     }
+}
+
+dependencies {
+    coreLibraryDesugaring(libs.desugar.jdk.libs)
 }
 
 android {
