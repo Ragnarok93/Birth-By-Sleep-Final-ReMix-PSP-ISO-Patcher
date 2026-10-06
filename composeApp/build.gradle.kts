@@ -44,8 +44,10 @@ kotlin {
                 implementation(libs.kotlinx.coroutines.swing)
             }
         }
-        desktopTest.dependencies {
-            implementation(kotlin("test"))
+        val desktopTest by getting {
+            dependencies {
+                implementation(kotlin("test"))
+            }
         }
     }
 }
