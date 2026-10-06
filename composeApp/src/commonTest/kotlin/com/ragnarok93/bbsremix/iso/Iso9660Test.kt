@@ -119,11 +119,9 @@ class Iso9660Test {
         try {
             val image = reader.inspect(source)
             val duplicate = record("EBOOT.BIN;2", 24, 3000, false)
-            fileSystem.source(source).buffer().use { input ->
-                val bytes = input.readByteArray()
-                duplicate.copyInto(bytes, (22 * SECTOR_SIZE) + 160)
-                fileSystem.sink(source).buffer().use { output -> output.write(bytes) }
-            }
+            val bytes = fileSystem.source(source).buffer().use { it.readByteArray() }
+            duplicate.copyInto(bytes, (22 * SECTOR_SIZE) + 160)
+            fileSystem.sink(source).buffer().use { it.write(bytes) }
             assertFailsWith<IsoFormatException> { reader.inspect(source) }
             assertEquals(24L, image.eboot.extentSector)
         } finally {
