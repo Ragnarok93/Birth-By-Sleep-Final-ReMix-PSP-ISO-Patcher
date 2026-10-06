@@ -1,0 +1,19 @@
+.gradle/
+build/
+composeApp/build/
+local.properties
+.idea/
+*.iml
+
+# Local user-owned validation material; never commit game data.
+validation-fixtures/
+*.iso
+EBOOT.BIN
+*.ELF
+
+# Packaged artifacts
+*.dmg
+*.msi
+*.deb
+*.apk
+*.aab

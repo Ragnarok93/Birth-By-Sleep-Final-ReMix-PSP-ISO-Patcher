@@ -1,0 +1,113 @@
+name: Multi-Platform Release Build
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  android-release:
+    name: Android release (signed when configured)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source (Android release)
+        uses: actions/checkout@v4.2.2
+      - name: Set up JDK 17 (Android release)
+        uses: actions/setup-java@v4.7.1
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Set up Android SDK (Android release)
+        uses: android-actions/setup-android@v3.2.2
+      - name: Set up Gradle (Android release)
+        uses: gradle/actions/setup-gradle@v4.4.1
+      - name: Configure Android signing (Android release)
+        id: signing
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ] && [ -n "$ANDROID_KEYSTORE_PASSWORD" ] && [ -n "$ANDROID_KEY_ALIAS" ] && [ -n "$ANDROID_KEY_PASSWORD" ]; then
+            printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/bbs-release.jks"
+            echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/bbs-release.jks" >> "$GITHUB_ENV"
+            echo "android_artifact_suffix=signed" >> "$GITHUB_OUTPUT"
+            echo "Android release signing configured."
+          else
+            echo "android_artifact_suffix=unsigned" >> "$GITHUB_OUTPUT"
+            echo "Android signing secrets are absent; producing an unsigned release APK."
+          fi
+          echo "ANDROID_KEYSTORE_PASSWORD=$ANDROID_KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
+          echo "ANDROID_KEY_ALIAS=$ANDROID_KEY_ALIAS" >> "$GITHUB_ENV"
+          echo "ANDROID_KEY_PASSWORD=$ANDROID_KEY_PASSWORD" >> "$GITHUB_ENV"
+      - name: Build Android release APK (Android release)
+        run: ./gradlew :composeApp:assembleRelease --stacktrace
+      - name: Upload Android release APK (Android release)
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: android-release-${{ steps.signing.outputs.android_artifact_suffix }}
+          path: composeApp/build/outputs/apk/release/*.apk
+          if-no-files-found: error
+
+  desktop-release:
+    name: ${{ matrix.platform }} desktop release
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: Linux
+            os: ubuntu-latest
+            package_task: :composeApp:packageDeb
+            artifact_glob: composeApp/build/compose/binaries/main/deb/*.deb
+          - platform: Windows
+            os: windows-latest
+            package_task: :composeApp:packageMsi
+            artifact_glob: composeApp/build/compose/binaries/main/msi/*.msi
+          - platform: macOS
+            os: macos-latest
+            package_task: :composeApp:packageDmg
+            artifact_glob: composeApp/build/compose/binaries/main/dmg/*.dmg
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout source (${{ matrix.platform }} release)
+        uses: actions/checkout@v4.2.2
+      - name: Set up JDK 17 (${{ matrix.platform }} release)
+        uses: actions/setup-java@v4.7.1
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Set up Gradle (${{ matrix.platform }} release)
+        uses: gradle/actions/setup-gradle@v4.4.1
+      - name: Build desktop release installer (${{ matrix.platform }})
+        run: ./gradlew ${{ matrix.package_task }} --stacktrace
+      - name: Upload desktop release installer (${{ matrix.platform }})
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: desktop-release-${{ matrix.platform }}
+          path: ${{ matrix.artifact_glob }}
+          if-no-files-found: error
+
+  attach-release-assets:
+    name: Attach release assets (version tag)
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [android-release, desktop-release]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download release artifacts (release)
+        uses: actions/download-artifact@v4.3.0
+        with:
+          path: release-artifacts
+          merge-multiple: true
+      - name: Attach artifacts to GitHub Release (release)
+        uses: softprops/action-gh-release@v2.2.2
+        with:
+          tag_name: ${{ github.ref_name }}
+          generate_release_notes: true
+          files: release-artifacts/**/*
