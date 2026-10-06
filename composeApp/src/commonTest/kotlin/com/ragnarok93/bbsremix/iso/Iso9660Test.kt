@@ -118,12 +118,10 @@ class Iso9660Test {
         val source = createFixture("ambiguous")
         try {
             val image = reader.inspect(source)
-            val duplicate = record("EBOOT.BIN;2", 24, 3000, false)
-            fileSystem.source(source).buffer().use { input ->
-                val bytes = input.readByteArray()
-                duplicate.copyInto(bytes, (22 * SECTOR_SIZE) + 160)
-                fileSystem.sink(source).buffer().use { output -> output.write(bytes) }
-            }
+            val duplicate = record("PSP_GAME;2", 21, SECTOR_SIZE, true)
+            val bytes = fileSystem.source(source).buffer().use { it.readByteArray() }
+            duplicate.copyInto(bytes, (20 * SECTOR_SIZE) + 154)
+            fileSystem.sink(source).buffer().use { it.write(bytes) }
             assertFailsWith<IsoFormatException> { reader.inspect(source) }
             assertEquals(24L, image.eboot.extentSector)
         } finally {
