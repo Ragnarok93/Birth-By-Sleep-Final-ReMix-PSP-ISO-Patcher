@@ -1,0 +1,83 @@
+name: Multi-Platform Debug Build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  android-debug:
+    name: Android debug (ubuntu / ${{ github.event_name }})
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source (Android)
+        uses: actions/checkout@v4.2.2
+      - name: Set up JDK 17 (Android)
+        uses: actions/setup-java@v4.7.1
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Set up Android SDK (Android)
+        uses: android-actions/setup-android@v3.2.2
+        with:
+          packages: platform-tools
+      - name: Set up Gradle (Android)
+        uses: gradle/actions/setup-gradle@v4.4.1
+      - name: Run Android debug unit tests (Android)
+        run: sh ./gradlew :composeApp:testDebugUnitTest --stacktrace
+      - name: Build Android debug APK (Android)
+        run: sh ./gradlew :composeApp:assembleDebug --stacktrace
+      - name: Upload Android debug APK (Android)
+        if: always()
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: android-debug-apk
+          path: composeApp/build/outputs/apk/debug/*.apk
+          if-no-files-found: warn
+
+  desktop-debug:
+    name: ${{ matrix.platform }} desktop debug
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: Linux
+            os: ubuntu-latest
+            gradle_command: sh ./gradlew
+            package_task: :composeApp:packageDeb
+            artifact_glob: composeApp/build/compose/binaries/main/deb/*.deb
+          - platform: Windows
+            os: windows-latest
+            gradle_command: .\\gradlew.bat
+            package_task: :composeApp:packageMsi
+            artifact_glob: composeApp/build/compose/binaries/main/msi/*.msi
+          - platform: macOS
+            os: macos-latest
+            gradle_command: sh ./gradlew
+            package_task: :composeApp:packageDmg
+            artifact_glob: composeApp/build/compose/binaries/main/dmg/*.dmg
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout source (${{ matrix.platform }})
+        uses: actions/checkout@v4.2.2
+      - name: Set up JDK 17 (${{ matrix.platform }})
+        uses: actions/setup-java@v4.7.1
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Set up Gradle (${{ matrix.platform }})
+        uses: gradle/actions/setup-gradle@v4.4.1
+      - name: Run shared desktop tests (${{ matrix.platform }})
+        run: ${{ matrix.gradle_command }} :composeApp:desktopTest --stacktrace
+      - name: Build desktop installer (${{ matrix.platform }})
+        run: ${{ matrix.gradle_command }} ${{ matrix.package_task }} --stacktrace
+      - name: Upload desktop installer (${{ matrix.platform }})
+        if: always()
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: desktop-debug-${{ matrix.platform }}
+          path: ${{ matrix.artifact_glob }}
+          if-no-files-found: warn
