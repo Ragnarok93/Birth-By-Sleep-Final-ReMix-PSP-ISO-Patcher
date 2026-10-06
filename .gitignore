@@ -10,8 +10,6 @@ validation-fixtures/
 *.iso
 EBOOT.BIN
 *.ELF
-__pycache__/
-*.pyc
 
 # Packaged artifacts
 *.dmg

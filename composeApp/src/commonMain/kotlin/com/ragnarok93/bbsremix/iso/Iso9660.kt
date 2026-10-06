@@ -82,6 +82,9 @@ class Iso9660Reader(
         )
         if (!root.isDirectory) throw IsoFormatException("The ISO root record is not a directory.")
         val eboot = findTarget(path, root, sectorSize)
+        if (eboot.isDirectory) {
+            throw IsoFormatException("Required ISO path $TARGET_PATH resolves to a directory, not EBOOT.BIN.")
+        }
         return IsoImageInfo(
             sourceSize = sourceSize,
             sectorSize = sectorSize,
