@@ -181,7 +181,7 @@ class Iso9660Reader(
         while (sector < MAX_DESCRIPTOR_SECTORS) {
             val offset = sector * DESCRIPTOR_SIZE
             if (offset + DESCRIPTOR_SIZE > sourceSize) break
-            val bytes = readAt(path, offset, DESCRIPTOR_SIZE)
+            val bytes = readAt(path, offset, DESCRIPTOR_SIZE.toInt())
             if (!bytes.copyOfRange(1, 6).contentEquals(CD001)) {
                 throw IsoFormatException("Invalid ISO9660 descriptor identifier at sector $sector.")
             }

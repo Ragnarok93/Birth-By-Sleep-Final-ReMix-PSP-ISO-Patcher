@@ -6,6 +6,7 @@ coroutines = "1.10.2"
 okio = "3.15.0"
 activityCompose = "1.10.1"
 oneuiCompose = "0.7.0"
+desugarJdkLibs = "2.1.5"
 junit = "4.13.2"
 
 [libraries]
@@ -15,6 +16,7 @@ kotlinx-coroutines-swing = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-
 okio = { module = "com.squareup.okio:okio", version.ref = "okio" }
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }
 oneui-compose = { module = "com.github.TrainerSnow:oneui-compose", version.ref = "oneuiCompose" }
+desugar-jdk-libs = { module = "com.android.tools:desugar_jdk_libs", version.ref = "desugarJdkLibs" }
 junit = { module = "junit:junit", version.ref = "junit" }
 
 [plugins]

@@ -37,6 +37,7 @@ kotlin {
         androidMain.dependencies {
             implementation(libs.androidx.activity.compose)
             implementation(libs.oneui.compose)
+            coreLibraryDesugaring(libs.desugar.jdk.libs)
         }
         val desktopMain by getting {
             dependencies {
@@ -62,6 +63,12 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "0.1.0"
+    }
+
+    compileOptions {
+        isCoreLibraryDesugaringEnabled = true
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
 
     if (hasCiSigning) {
