@@ -94,6 +94,43 @@ class Iso9660Test {
         }
     }
 
+    @Test
+    fun existing_destination_is_not_deleted_when_rebuild_is_rejected() {
+        val source = createFixture("existing-destination-source")
+        val destination = path("existing-destination-output")
+        val sentinel = "do-not-delete".encodeToByteArray()
+        try {
+            fileSystem.sink(destination).buffer().use { it.write(sentinel) }
+            val image = reader.inspect(source)
+
+            assertFailsWith<IsoFormatException> {
+                rebuilder.rebuild(source, destination, image, ByteArray(16))
+            }
+            assertContentEquals(sentinel, fileSystem.source(destination).buffer().use { it.readByteArray() })
+        } finally {
+            fileSystem.delete(source, mustExist = false)
+            fileSystem.delete(destination, mustExist = false)
+        }
+    }
+
+    @Test
+    fun ambiguous_target_path_is_rejected() {
+        val source = createFixture("ambiguous")
+        try {
+            val image = reader.inspect(source)
+            val duplicate = record("EBOOT.BIN;2", 24, 3000, false)
+            fileSystem.source(source).buffer().use { input ->
+                val bytes = input.readByteArray()
+                duplicate.copyInto(bytes, (22 * SECTOR_SIZE) + 160)
+                fileSystem.sink(source).buffer().use { output -> output.write(bytes) }
+            }
+            assertFailsWith<IsoFormatException> { reader.inspect(source) }
+            assertEquals(24L, image.eboot.extentSector)
+        } finally {
+            fileSystem.delete(source, mustExist = false)
+        }
+    }
+
     private fun createFixture(label: String): Path {
         val path = path(label)
         fileSystem.delete(path, mustExist = false)

@@ -160,6 +160,10 @@ fun PatcherApp(
                 status = PatcherStatus.Failure("The output must be a separate ISO and must not overwrite the source image.")
                 return
             }
+            if (!outputSelection.displayName.endsWith(".iso", ignoreCase = true)) {
+                status = PatcherStatus.Failure("Choose an output filename ending in .iso.")
+                return
+            }
             start { token ->
                 val temporary = fileGateway.createTempPath("bbs-output", ".iso")
                 try {
