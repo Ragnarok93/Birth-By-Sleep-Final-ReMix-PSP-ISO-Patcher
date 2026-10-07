@@ -1,42 +1,62 @@
 package com.ragnarok93.bbsremix.ui
 
-import androidx.compose.foundation.isSystemInDarkTheme
+import android.graphics.BitmapFactory
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.unit.dp
 import org.oneui.compose.progress.ProgressIndicator
 import org.oneui.compose.progress.ProgressIndicatorType
 import org.oneui.compose.theme.OneUITheme
-import org.oneui.compose.widgets.box.RoundedCornerBox
-import org.oneui.compose.widgets.buttons.Button as OneUiButton
-import org.oneui.compose.widgets.buttons.Checkbox as OneUiCheckbox
+
+private val RemixBlue = Color(0xFF1E8FFF)
+private val RemixBlueSoft = Color(0xFF6AAEFF)
+private val RemixBackground = Color(0xFF06111F)
+private val RemixSurface = Color(0xFF101D2D)
+private val RemixSurfaceVariant = Color(0xFF18283B)
+private val RemixText = Color(0xFFF4F7FF)
+private val RemixTextMuted = Color(0xFFA7B4C9)
+private val RemixOutline = Color(0xFF334965)
 
 @Composable
 actual fun PatcherTheme(content: @Composable () -> Unit) {
     OneUITheme {
-        val colors = OneUITheme.colors
-        val scheme = if (isSystemInDarkTheme()) {
-            darkColorScheme(
-                primary = colors.seslPrimaryColor,
-                background = colors.seslRoundAndBgcolor,
-                surface = colors.seslBackgroundColor,
-                onBackground = colors.seslPrimaryTextColor,
-                onSurface = colors.seslPrimaryTextColor,
-            )
-        } else {
-            lightColorScheme(
-                primary = colors.seslPrimaryColor,
-                background = colors.seslRoundAndBgcolor,
-                surface = colors.seslBackgroundColor,
-                onBackground = colors.seslPrimaryTextColor,
-                onSurface = colors.seslPrimaryTextColor,
-            )
-        }
-        MaterialTheme(colorScheme = scheme, content = content)
+        MaterialTheme(
+            colorScheme = darkColorScheme(
+                primary = RemixBlue,
+                onPrimary = Color.White,
+                primaryContainer = Color(0xFF123E6D),
+                onPrimaryContainer = RemixText,
+                secondary = RemixBlueSoft,
+                background = RemixBackground,
+                onBackground = RemixText,
+                surface = RemixSurface,
+                onSurface = RemixText,
+                surfaceVariant = RemixSurfaceVariant,
+                onSurfaceVariant = RemixTextMuted,
+                outline = RemixOutline,
+            ),
+            content = content,
+        )
     }
 }
 
@@ -45,7 +65,14 @@ actual fun PatcherSurface(
     modifier: Modifier,
     content: @Composable BoxScope.() -> Unit,
 ) {
-    RoundedCornerBox(modifier = modifier, content = content)
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(28.dp),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
+        tonalElevation = 0.dp,
+    ) {
+        Box(Modifier.padding(18.dp), content = content)
+    }
 }
 
 @Composable
@@ -55,7 +82,20 @@ actual fun PatcherButton(
     modifier: Modifier,
     enabled: Boolean,
 ) {
-    OneUiButton(label = label, onClick = onClick, modifier = modifier, enabled = enabled)
+    Button(
+        onClick = onClick,
+        modifier = modifier,
+        enabled = enabled,
+        shape = RoundedCornerShape(16.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = MaterialTheme.colorScheme.primary,
+            contentColor = MaterialTheme.colorScheme.onPrimary,
+            disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+            disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        ),
+    ) {
+        Text(label)
+    }
 }
 
 @Composable
@@ -66,13 +106,10 @@ actual fun PatcherCheckbox(
     modifier: Modifier,
     enabled: Boolean,
 ) {
-    OneUiCheckbox(
-        modifier = modifier,
-        checked = checked,
-        enabled = enabled,
-        onCheckedChange = onCheckedChange,
-        label = { Text(label) },
-    )
+    androidx.compose.foundation.layout.Row(modifier, verticalAlignment = Alignment.CenterVertically) {
+        Checkbox(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
+        Text(label)
+    }
 }
 
 @Composable
@@ -81,4 +118,35 @@ actual fun PatcherProgress(progress: Float, modifier: Modifier) {
         modifier = modifier,
         type = ProgressIndicatorType.HorizontalDeterminate(progress.coerceIn(0f, 1f)),
     )
+}
+
+@Composable
+actual fun GameCoverArt(
+    pngBytes: ByteArray?,
+    modifier: Modifier,
+) {
+    val bitmap = remember(pngBytes) {
+        pngBytes?.let { BitmapFactory.decodeByteArray(it, 0, it.size) }
+    }
+    if (bitmap != null) {
+        Image(
+            bitmap = bitmap.asImageBitmap(),
+            contentDescription = "PSP game cover art",
+            contentScale = ContentScale.Crop,
+            modifier = modifier.clip(RoundedCornerShape(18.dp)),
+        )
+    } else {
+        Box(
+            modifier = modifier
+                .clip(RoundedCornerShape(18.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = "PSP",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.titleMedium,
+            )
+        }
+    }
 }
