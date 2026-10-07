@@ -54,8 +54,10 @@ NEXT_ORIGINAL_LOAD_FILE_OFF = 0x0036C000
 # We capture the final sample's right-analog bytes into two otherwise-unreferenced
 # padding bytes at 0x08B4199A/0x08B4199B. The pair is loaded as a halfword and
 # XORed with 0x8080 so each axis is stored as a signed-centered byte. Tagged
-# camera getters signed-load and negate that centered value so physical stick
-# direction matches camera direction. Normal left-stick callers remain native.
+# camera getters signed-load the centered value. X is negated to match the
+# game's horizontal camera polarity; Y is left centered because the native
+# vertical camera path already uses the opposite sign convention. Normal
+# left-stick callers remain native.
 RIGHT_STICK_MAGIC = 0x5253  # ASCII "RS"
 RIGHT_STICK_X_BYTE_VA = 0x08B4199A
 RIGHT_STICK_Y_BYTE_VA = 0x08B4199B
@@ -80,7 +82,7 @@ RIGHT_STICK_WORD_PATCHES = [
     (0x0881631C, 0x0E20593E, 0x3C0208B4, 'right-Y resident base'),
     (0x08816320, 0x00000000, 0x8042199B, 'right-Y signed captured byte'),
     (0x08816324, 0x8FBF0000, 0x03E00008, 'right-Y return'),
-    (0x08816328, 0x03E00008, 0x00021023, 'right-Y invert in delay slot'),
+    (0x08816328, 0x03E00008, 0x00000000, 'right-Y preserve centered polarity'),
     (0x0881632C, 0x27BD0010, 0x00000000, 'right-Y tail padding'),
 
     # Capture analog[1][0/1] from the final CtrlData record as one aligned
