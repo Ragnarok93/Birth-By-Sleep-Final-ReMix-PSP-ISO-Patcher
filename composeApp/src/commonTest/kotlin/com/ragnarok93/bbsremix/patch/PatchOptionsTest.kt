@@ -21,10 +21,12 @@ class PatchOptionsTest {
     }
 
     @Test
-    fun pc_derived_camera_and_combat_ports_are_rejected() {
+    fun psp_native_camera_geometry_is_allowed_but_combat_ports_are_rejected() {
+        assertTrue(PatchOptions(cameraDistanceEnabled = true).validate().isEmpty())
+        assertTrue(PatchOptions(cameraHeightEnabled = true).validate().isEmpty())
+        assertTrue(PatchOptions(cameraDistanceEnabled = true, cameraHeightEnabled = true).validate().isEmpty())
+
         listOf(
-            PatchOptions(cameraDistanceEnabled = true),
-            PatchOptions(cameraHeightEnabled = true),
             PatchOptions(extendedDefense = true),
             PatchOptions(commandCancels = true),
             PatchOptions(telemetry = true),
@@ -48,7 +50,7 @@ class PatchOptionsTest {
     }
 
     @Test
-    fun dormant_camera_values_keep_reference_boundaries() {
+    fun camera_values_keep_reference_boundaries() {
         assertEquals(1, PatchOptions(cameraDistance = 0.999f).validate().size)
         assertEquals(1, PatchOptions(cameraHeight = 4.001f).validate().size)
     }
