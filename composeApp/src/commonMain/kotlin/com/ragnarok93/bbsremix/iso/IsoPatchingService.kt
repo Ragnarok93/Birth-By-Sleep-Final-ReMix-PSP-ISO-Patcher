@@ -11,12 +11,14 @@ import com.ragnarok93.bbsremix.patch.PatchProgress
 import com.ragnarok93.bbsremix.patch.PatchValidationException
 import com.ragnarok93.bbsremix.patch.ProgressReporter
 import com.ragnarok93.bbsremix.patch.Stage5EbootPatchEngine
+import com.ragnarok93.bbsremix.patch.sha256Hex
 import okio.FileSystem
 import okio.Path
 
 data class IsoPreflight(
     val image: IsoImageInfo,
     val eboot: EbootInspection,
+    val game: PspGameMetadata,
 )
 
 data class IsoPatchResult(
@@ -26,6 +28,13 @@ data class IsoPatchResult(
     val patchedEbootSha256: String,
     val outputSize: Long,
     val relocatedEboot: Boolean,
+)
+
+data class IsoVerificationResult(
+    val candidate: Path,
+    val expectedEbootSha256: String,
+    val actualEbootSha256: String,
+    val outputSize: Long,
 )
 
 class IsoPatchingService(
@@ -48,8 +57,9 @@ class IsoPatchingService(
         cancellation.throwIfCancelled()
         progress.report(PatchProgress(PatchPhase.STAGING_EBOOT, 0L, image.eboot.size, "Reading PSP_GAME/SYSDIR/EBOOT.BIN"))
         val eboot = engine.inspect(reader.readEntry(source, image.eboot), options)
-        progress.report(PatchProgress(PatchPhase.STAGING_EBOOT, image.eboot.size, image.eboot.size, "EBOOT preflight complete"))
-        return IsoPreflight(image, eboot)
+        val game = readGameMetadata(source, image)
+        progress.report(PatchProgress(PatchPhase.STAGING_EBOOT, image.eboot.size, image.eboot.size, "Source ISO preflight complete"))
+        return IsoPreflight(image, eboot, game)
     }
 
     fun patchTo(
@@ -69,7 +79,7 @@ class IsoPatchingService(
         try {
             cancellation.throwIfCancelled()
             val originalEboot = reader.readEntry(source, preflight.image.eboot)
-            progress.report(PatchProgress(PatchPhase.PATCHING_EBOOT, 0L, originalEboot.size.toLong(), "Applying Better Battle System"))
+            progress.report(PatchProgress(PatchPhase.PATCHING_EBOOT, 0L, originalEboot.size.toLong(), "Applying Birth By Sleep - Final ReMix"))
             val patched = engine.patch(originalEboot, options)
             progress.report(PatchProgress(PatchPhase.PATCHING_EBOOT, patched.bytes.size.toLong(), patched.bytes.size.toLong(), "EBOOT patch validated"))
 
@@ -99,5 +109,73 @@ class IsoPatchingService(
             if (destinationWasAbsent) fileSystem.delete(destination, mustExist = false)
             throw error
         }
+    }
+
+    fun verifyPatchedOutput(
+        source: Path,
+        candidate: Path,
+        options: PatchOptions,
+        cancellation: CancellationToken = NeverCancelled,
+        progress: ProgressReporter = NoProgress,
+    ): IsoVerificationResult {
+        options.requireValid()
+        cancellation.throwIfCancelled()
+        progress.report(PatchProgress(PatchPhase.VALIDATING_OUTPUT, 0L, 3L, "Preparing expected patched EBOOT"))
+
+        val sourceImage = reader.inspect(source)
+        val originalEboot = reader.readEntry(source, sourceImage.eboot)
+        val sourceInspection = engine.inspect(originalEboot, options)
+        if (!sourceInspection.supported) {
+            throw PatchValidationException(sourceInspection.problems.joinToString(" "))
+        }
+        val expected = engine.patch(originalEboot, options)
+
+        cancellation.throwIfCancelled()
+        progress.report(PatchProgress(PatchPhase.VALIDATING_OUTPUT, 1L, 3L, "Inspecting selected output ISO"))
+        val candidateImage = reader.inspect(candidate)
+        val actual = reader.readEntry(candidate, candidateImage.eboot)
+
+        cancellation.throwIfCancelled()
+        progress.report(PatchProgress(PatchPhase.VALIDATING_OUTPUT, 2L, 3L, "Comparing embedded patched EBOOT"))
+        if (!actual.contentEquals(expected.bytes)) {
+            throw PatchValidationException(
+                "The selected ISO does not match the patch options currently selected for this source ISO."
+            )
+        }
+
+        progress.report(PatchProgress(PatchPhase.VALIDATING_OUTPUT, 3L, 3L, "Output ISO verified successfully"))
+        return IsoVerificationResult(
+            candidate = candidate,
+            expectedEbootSha256 = expected.outputSha256,
+            actualEbootSha256 = sha256Hex(actual),
+            outputSize = fileSystem.metadata(candidate).size
+                ?: throw IsoFormatException("Unable to determine selected output ISO size."),
+        )
+    }
+
+    private fun readGameMetadata(source: Path, image: IsoImageInfo): PspGameMetadata {
+        val fields = runCatching {
+            val entry = reader.findEntry(source, image.root, PARAM_SFO_PATH) ?: return@runCatching emptyMap()
+            parseParamSfo(reader.readEntry(source, entry))
+        }.getOrDefault(emptyMap())
+
+        val cover = runCatching {
+            val entry = reader.findEntry(source, image.root, ICON0_PATH) ?: return@runCatching null
+            if (entry.isDirectory || entry.size !in 1..MAX_COVER_ART_BYTES) return@runCatching null
+            reader.readEntry(source, entry)
+        }.getOrNull()
+
+        return PspGameMetadata(
+            title = fields["TITLE"],
+            discId = fields["DISC_ID"],
+            version = fields["APP_VER"] ?: fields["DISC_VERSION"],
+            coverArtPng = cover,
+        )
+    }
+
+    private companion object {
+        const val PARAM_SFO_PATH = "PSP_GAME/PARAM.SFO"
+        const val ICON0_PATH = "PSP_GAME/ICON0.PNG"
+        const val MAX_COVER_ART_BYTES = 4L * 1024L * 1024L
     }
 }
