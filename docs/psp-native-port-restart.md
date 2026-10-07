@@ -39,38 +39,49 @@ address-lifetime collision.
 
 ## Immediate product behavior
 
-Gameplay ISO patch output is disabled while the PSP-native implementation is
-re-derived. The HD texture workflow is unaffected.
+The HD texture workflow is unaffected. The only gameplay patch currently exposed
+is the **resident right-stick-only** research profile. Camera distance, camera
+height, and all Better Battle System combat options remain disabled.
 
-The app exposes a **Diagnostic rebuild** instead. It rebuilds the ISO with the
-original EBOOT byte-for-byte unchanged, reopens the result, verifies the EBOOT
-extent and size are unchanged, and compares the entire rebuilt ISO against the
-staged source. A successful diagnostic must be fully byte-identical.
+The app also exposes **Diagnostic rebuild**. It rebuilds the ISO with the original
+EBOOT byte-for-byte unchanged, reopens the result, verifies the EBOOT extent and
+size are unchanged, and compares the entire rebuilt ISO against the staged
+source. A successful diagnostic must be fully byte-identical.
 
-The low-level legacy Stage 5 engine remains in-tree only as a research reference.
-It is not a supported runtime payload.
+The legacy Stage 4/5 combat payloads and the old Stage 2 overlay helper remain
+in-tree only as research artifacts. They are not supported runtime payloads.
 
 ## Right-stick re-port
 
 TheOfficialFloW's RemasteredControls Kingdom Hearts implementation is the
-behavioral PSP reference, not the previous injected overlay blob. Its MainApp
-patch locates the native camera patterns, forces Control Type B, and replaces the
-camera analog calls with plugin syscalls whose functions call
-`sceCtrlPeekBufferPositive` and read `SceCtrlData.Rsrv[0]` /
-`SceCtrlData.Rsrv[1]`.
+behavioral PSP reference. PPSSPP's current controller implementation confirms
+that `CtrlData` contains `analog[2][2]`; the second stick occupies bytes
+10/11, corresponding to the historical `SceCtrlData.Rsrv[0]/Rsrv[1]` fields
+used by RemasteredControls.
 
-For the ISO-only patcher, do not copy the plugin architecture blindly. Re-derive
-an equivalent resident implementation from this exact EBOOT:
+The ISO-only candidate now implements the behavior entirely in resident MainApp
+code/data:
 
-1. Keep all code and data outside the `.overlays` arena.
-2. Prove any chosen resident code/data location from the ELF section map and
-   runtime ownership, not merely from zero-filled bytes.
-3. Prefer minimal in-place MainApp changes. Do not extend a load segment into
-   `.overlays`.
-4. Validate one no-op hook first: original behavior, same registers, same delay
-   slots, and successful title/gameplay transitions.
-5. Add right-analog sampling only after the no-op hook boots across title,
-   load/save, scene transitions, and all three characters.
+- The original controller poll at `0x08816688` remains unchanged.
+- After MainApp processes its four 16-byte controller records, the final
+  sample's right-X/right-Y bytes are copied into resident padding
+  `0x08B4199A/0x08B4199B`, initialized to neutral `0x80`.
+- The existing raw X/Y getter entry points are rewritten as small resident
+  dispatchers. Untagged callers branch directly to the original left-stick
+  getters at `0x088164D0/0x088164F8`; tagged camera calls read the captured
+  right-stick byte and subtract 128.
+- The four original float camera JALs remain unchanged. Their previously empty
+  delay slots load selector `0x5253` so only those camera calls request the
+  right stick.
+- The RemasteredControls-equivalent L-modifier and Type-B camera branches are
+  disabled in-place.
+- ELF program-header count and LOAD sizes remain unchanged, and
+  `0x08B6EE7C+` dynamic overlay memory is untouched.
+
+This removes the address-lifetime collision responsible for the old
+`0x08B6EE80` payload failure. It is still a runtime **candidate**, not a
+validated release feature, until it boots and survives title/gameplay/module
+transitions in PPSSPP.
 
 ## Better Battle System re-port
 
@@ -90,11 +101,12 @@ Restart combat work as PSP-native reverse engineering:
 
 ## Validation gates
 
-Before gameplay patching can be re-enabled:
+Runtime promotion gates:
 
-- Diagnostic rebuild must produce a byte-identical ISO.
-- A no-op resident MainApp hook must boot and survive scene/module transitions.
-- Right-stick-only must boot and operate without touching combat.
+- Diagnostic rebuild must produce a byte-identical ISO and boot normally.
+- The resident right-stick-only candidate must boot, preserve left-stick movement,
+  rotate the camera from PPSSPP Right Analog X/Y, and survive scene/module
+  transitions plus save/load for Terra, Ventus, and Aqua.
 - Combat telemetry-only must boot without gameplay writes.
 - Each gameplay behavior must pass isolated runtime validation before inclusion.
 - Combined builds are allowed only after each component independently passes.
