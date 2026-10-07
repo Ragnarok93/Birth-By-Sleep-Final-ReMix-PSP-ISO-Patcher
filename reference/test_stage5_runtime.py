@@ -92,7 +92,7 @@ class RuntimeRegressionTest(unittest.TestCase):
                 case.update(result='pass', evidence_reference='synthetic')
         gate.validate(evidence)
         evidence['profile_sha256'] = 'b' * 64
-        with self.assertRaisesRegex(ValueError, 'current default payload'):
+        with self.assertRaisesRegex(ValueError, 'resident right-stick profile'):
             gate.validate(evidence)
 
 
