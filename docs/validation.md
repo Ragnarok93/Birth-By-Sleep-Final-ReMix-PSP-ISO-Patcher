@@ -5,11 +5,13 @@
 CI can run without game data. The shared tests use a small synthetic ISO9660 image and verify:
 
 - `PSP_GAME/SYSDIR/EBOOT.BIN;1` lookup and path normalization;
+- optional `PSP_GAME/ICON0.PNG;1` cover-art lookup and bounded extraction;
 - ISO9660 little/big-endian fields;
 - preservation of unrelated directory records and file sectors;
 - in-place replacement when the new file fits its allocation;
 - sector-aligned append and directory extent updates when it grows;
 - output reopen and embedded-EBOOT byte equality;
+- patched-output verification states for verified, unpatched, incompatible, and malformed images;
 - cancellation and partial-output cleanup;
 - strict patch option boundaries and unsupported/encrypted EBOOT rejection.
 
@@ -22,7 +24,7 @@ size: 3589832
 sha256: 8c8947e83b829199f82370c4c638856718886d9a0a525892fed22ce6a8b26ca7
 ```
 
-For each mode and option combination:
+For each independent feature selection and option combination:
 
 1. Run the Python reference with `--verify-only` and the selected flags.
 2. Run the Kotlin engine through the application or a local test harness.
