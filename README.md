@@ -54,7 +54,7 @@ The portrait and large-screen layouts use the same dark navy, electric-blue, pal
 ## Implementation notes
 
 - `commonMain` contains the patch model, option validation, pure Kotlin SHA-256, strict patch engine, ISO9660 reader/rebuilder, bounded-memory streaming, output verification, progress, cancellation, cover-art extraction, and tests.
-- Android pins the SESL8 One UI 8 Compose fork at `3d5582860ff974daa8ec0db8a515cd1fa4d50b90`, whose successful `One UI 8 Compose demo APK` run also verifies release AAR publication and its dependency metadata. The workflow publishes a demo APK and reports; the application resolves the library from the pinned JitPack commit. Desktop uses shared parity adapters for the controls that library does not publish for JVM.
+- Android pins the SESL8 One UI 8 Compose fork at `7cd7c88d1232f6269caa333deb6edce015a13779`, whose successful `One UI 8 Compose demo APK` run also verifies release AAR publication and its dependency metadata. The workflow publishes a demo APK and reports; the application resolves the library from the pinned JitPack commit. Desktop uses shared parity adapters for the controls that library does not publish for JVM.
 - ISO rebuilding preserves source bytes and directory metadata except for target extent/size fields and volume-space fields that must change.
 - Desktop output is atomically moved from a temporary file when the filesystem supports it. Android document-provider output is streamed only after validation; temporary staging files are cleaned on success, cancellation, and failure.
 
