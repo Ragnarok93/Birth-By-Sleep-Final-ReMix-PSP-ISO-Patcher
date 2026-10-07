@@ -48,7 +48,7 @@ class Stage5EbootPatchEngine : EbootPatchEngine {
 
         val postInput = options.combatFeatures || options.appliesCameraDistance
         if (options.rightStickCamera) {
-            validateCameraPayload(data, problems)
+            PspNativeRightStickPatch.validateSource(data, problems)
         }
         if (postInput) {
             validatePostInputHook(data, problems)
@@ -69,14 +69,7 @@ class Stage5EbootPatchEngine : EbootPatchEngine {
 
         var output = data.copyOf()
         if (options.rightStickCamera) {
-            output.writeIntLe(PH0_FILESZ_OFFSET, Stage5Payloads.s2NewSegmentSize)
-            output.writeIntLe(PH0_MEMSZ_OFFSET, Stage5Payloads.s2NewSegmentSize)
-            output.copyAt(Stage5Payloads.S2_FILE_OFFSET, Stage5Payloads.s2Blob)
-            cameraPatches.forEach { (virtualAddress, expected, replacement, description) ->
-                val offset = fileOffset(virtualAddress)
-                check(output.readIntLe(offset) == expected) { "$description changed after verification" }
-                output.writeIntLe(offset, replacement)
-            }
+            PspNativeRightStickPatch.apply(output)
         }
 
         val postInput = options.combatFeatures || options.appliesCameraDistance
@@ -110,33 +103,20 @@ class Stage5EbootPatchEngine : EbootPatchEngine {
         }
 
         if (options.rightStickCamera) {
-            requireRange(data, Stage5Payloads.S2_FILE_OFFSET, Stage5Payloads.s2Blob.size, problems)
-            if (data.size >= PH0_MEMSZ_OFFSET + 4 &&
-                (data.readIntLe(PH0_FILESZ_OFFSET) != Stage5Payloads.s2NewSegmentSize ||
-                    data.readIntLe(PH0_MEMSZ_OFFSET) != Stage5Payloads.s2NewSegmentSize)
-            ) {
-                problems += "The right-stick camera segment is not enabled."
-            }
-            if (data.size >= Stage5Payloads.S2_FILE_OFFSET + Stage5Payloads.s2Blob.size &&
-                !data.copyOfRange(
-                    Stage5Payloads.S2_FILE_OFFSET,
-                    Stage5Payloads.S2_FILE_OFFSET + Stage5Payloads.s2Blob.size,
-                ).contentEquals(Stage5Payloads.s2Blob)
-            ) {
-                problems += "The right-stick camera payload is missing or altered."
-            }
-            cameraPatches.forEach { (virtualAddress, _, replacement, description) ->
-                val offset = fileOffset(virtualAddress)
-                if (offset < 0 || offset + 4 > data.size || data.readIntLe(offset) != replacement) {
-                    problems += "$description is not enabled in the output EBOOT."
-                }
-            }
-        } else {
+            PspNativeRightStickPatch.verifyPatched(data, problems)
             if (data.size >= PH0_MEMSZ_OFFSET + 4 &&
                 (data.readIntLe(PH0_FILESZ_OFFSET) != OLD_SEGMENT_SIZE ||
                     data.readIntLe(PH0_MEMSZ_OFFSET) != OLD_SEGMENT_SIZE)
             ) {
-                problems += "The output EBOOT contains an unselected right-stick camera segment."
+                problems += "The PSP-native right-stick patch must not extend LOAD #0."
+            }
+            if (data.size >= E_PHNUM_OFFSET + 2 && data.readShortLe(E_PHNUM_OFFSET) != 2) {
+                problems += "The PSP-native right-stick patch must keep the original two program headers."
+            }
+            if (data.size >= THIRD_PHDR_OFFSET + PROGRAM_HEADER_SIZE &&
+                !data.isZero(THIRD_PHDR_OFFSET, THIRD_PHDR_OFFSET + PROGRAM_HEADER_SIZE)
+            ) {
+                problems += "The PSP-native right-stick patch unexpectedly populated the reserved third program-header slot."
             }
             if (data.size >= Stage5Payloads.S2_FILE_OFFSET + Stage5Payloads.s2Blob.size &&
                 !data.isZero(
@@ -144,7 +124,22 @@ class Stage5EbootPatchEngine : EbootPatchEngine {
                     Stage5Payloads.S2_FILE_OFFSET + Stage5Payloads.s2Blob.size,
                 )
             ) {
-                problems += "The output EBOOT contains an unselected right-stick camera payload."
+                problems += "Legacy right-stick code is present inside MainApp's dynamic overlay arena."
+            }
+        } else {
+            if (data.size >= PH0_MEMSZ_OFFSET + 4 &&
+                (data.readIntLe(PH0_FILESZ_OFFSET) != OLD_SEGMENT_SIZE ||
+                    data.readIntLe(PH0_MEMSZ_OFFSET) != OLD_SEGMENT_SIZE)
+            ) {
+                problems += "The output EBOOT contains an unexpected LOAD #0 extension."
+            }
+            if (data.size >= Stage5Payloads.S2_FILE_OFFSET + Stage5Payloads.s2Blob.size &&
+                !data.isZero(
+                    Stage5Payloads.S2_FILE_OFFSET,
+                    Stage5Payloads.S2_FILE_OFFSET + Stage5Payloads.s2Blob.size,
+                )
+            ) {
+                problems += "The output EBOOT contains a legacy overlay-based right-stick payload."
             }
         }
 
@@ -243,24 +238,6 @@ class Stage5EbootPatchEngine : EbootPatchEngine {
         }
     }
 
-    private fun validateCameraPayload(data: ByteArray, problems: MutableList<String>) {
-        val payloadEnd = Stage5Payloads.S2_FILE_OFFSET + Stage5Payloads.s2Blob.size
-        if (payloadEnd > NEXT_ORIGINAL_LOAD_FILE_OFFSET || payloadEnd > data.size) {
-            problems += "The camera payload would overlap the original LOAD #1 or exceed the EBOOT."
-            return
-        }
-        if (!data.isZero(Stage5Payloads.S2_FILE_OFFSET, payloadEnd)) {
-            problems += "The camera code cave is not zero-filled."
-        }
-        cameraPatches.forEach { (virtualAddress, expected, _, description) ->
-            val offset = fileOffset(virtualAddress)
-            if (offset < 0 || offset + 4 > data.size || data.readIntLe(offset) != expected) {
-                val found = if (offset >= 0 && offset + 4 <= data.size) data.readIntLe(offset).toUInt().toString(16) else "out-of-range"
-                problems += "$description mismatch at VA 0x${virtualAddress.toString(16)} (got 0x$found)."
-            }
-        }
-    }
-
     private fun validatePostInputHook(data: ByteArray, problems: MutableList<String>) {
         val offset = fileOffset(POST_INPUT_HOOK.first)
         if (offset < 0 || offset + 4 > data.size || data.readIntLe(offset) != POST_INPUT_HOOK.second) {
@@ -337,13 +314,6 @@ class Stage5EbootPatchEngine : EbootPatchEngine {
 
     private fun fileOffset(virtualAddress: Int): Int = virtualAddress - VA_FILE_DELTA
 
-    private data class CameraPatch(
-        val virtualAddress: Int,
-        val expected: Int,
-        val replacement: Int,
-        val description: String,
-    )
-
     private companion object {
         const val SUPPORTED_SHA256 = "8c8947e83b829199f82370c4c638856718886d9a0a525892fed22ce6a8b26ca7"
         const val SUPPORTED_SIZE = 3589832
@@ -354,22 +324,12 @@ class Stage5EbootPatchEngine : EbootPatchEngine {
         const val OLD_SEGMENT_SIZE = 0x0036ae64
         const val THIRD_PHDR_OFFSET = 0x74
         const val PROGRAM_HEADER_SIZE = 0x20
-        const val NEXT_ORIGINAL_LOAD_FILE_OFFSET = 0x0036c000
         const val POST_INPUT_HOOK_VA = 0x08816904
         const val POST_INPUT_HOOK_EXPECTED = 0x8fb00048.toInt()
         val POST_INPUT_HOOK = POST_INPUT_HOOK_VA to POST_INPUT_HOOK_EXPECTED
         val ELF_MAGIC = byteArrayOf(0x7f, 'E'.code.toByte(), 'L'.code.toByte(), 'F'.code.toByte())
         val PRX_MAGIC = byteArrayOf('~'.code.toByte(), 'P'.code.toByte(), 'S'.code.toByte(), 'P'.code.toByte())
         val SCE_MAGIC = byteArrayOf('~'.code.toByte(), 'S'.code.toByte(), 'C'.code.toByte(), 'E'.code.toByte())
-        val cameraPatches = listOf(
-            CameraPatch(0x08940fec, 0x508000ba, 0, "remove L modifier from camera"),
-            CameraPatch(0x0898f68c, 0x1c80000b, 0, "force Type-B horizontal camera"),
-            CameraPatch(0x0898f850, 0x1c80000b, 0, "force Type-B vertical camera"),
-            CameraPatch(0x0898f69c, 0x0e2058cc, jal(Stage5Payloads.S2_RIGHT_X_VA), "right-stick X read 1"),
-            CameraPatch(0x0898f6dc, 0x0e2058cc, jal(Stage5Payloads.S2_RIGHT_X_VA), "right-stick X read 2"),
-            CameraPatch(0x0898f860, 0x0e2058d8, jal(Stage5Payloads.S2_RIGHT_Y_VA), "right-stick Y read 1"),
-            CameraPatch(0x0898f8a0, 0x0e2058d8, jal(Stage5Payloads.S2_RIGHT_Y_VA), "right-stick Y read 2"),
-        )
     }
 }
 
