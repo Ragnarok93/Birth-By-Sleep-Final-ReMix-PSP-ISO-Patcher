@@ -6,7 +6,7 @@ This patcher contains patch data/injected code only; it does not contain game as
 
 Supported runtime profile:
 - PSP-native right-stick camera through the game's existing Type-B camera path,
-  using direct controller reads modeled on TheOfficialFloW/RemasteredControls
+  using resident MainApp input capture modeled on TheOfficialFloW/RemasteredControls
 
 Dormant research code (not enabled by the application):
 - Stage 4/5 PC-behavior-port payloads
@@ -38,43 +38,92 @@ PH0_FILESZ_OFF = 0x44
 PH0_MEMSZ_OFF = 0x48
 OLD_SEGMENT_SIZE = 0x0036AE64
 THIRD_PHDR_OFF = 0x74
+# Legacy Stage 2 overlay payload addresses are retained below only for research parity.
+# They are NOT used by the supported right-stick path. 0x08B6EE7C is the start
+# of MainApp's dynamic .overlays arena, so code placed at 0x08B6EE80 can be
+# overwritten by separately loaded PSP modules.
 S2_FILE_OFF = 0x0036BE80
 S2_VA = 0x08B6EE80
 NEXT_ORIGINAL_LOAD_FILE_OFF = 0x0036C000
-# PSP-native right-stick helper derived from TheOfficialFloW/RemasteredControls.
-# Do not hook the game's controller-poll function at 0x08816688. Each camera helper
-# performs its own controller read through the game's existing import stub at
-# 0x08B16D38 and consumes SceCtrlData.Rsrv[0]/Rsrv[1].
+
+# PSP-native in-place right-stick path.
+#
+# PPSSPP exposes the second stick in CtrlData.analog[1], which occupies the two
+# bytes historically named SceCtrlData.Rsrv[0]/Rsrv[1] at offsets 10/11.
+# MainApp already reads four CtrlData records in its resident input routine.
+# We copy the final sample's right-analog bytes into two otherwise-unreferenced
+# padding bytes at 0x08B4199A/0x08B4199B, then use a magic a0 selector on only
+# the two native camera-axis call paths. The existing float-normalization
+# wrappers remain intact and continue to service all normal left-stick callers.
+RIGHT_STICK_MAGIC = 0x5253  # ASCII "RS"
+RIGHT_STICK_X_BYTE_VA = 0x08B4199A
+RIGHT_STICK_Y_BYTE_VA = 0x08B4199B
+RIGHT_STICK_SELECTOR = 0x34045253  # ori a0,zero,0x5253
+
+RIGHT_STICK_WORD_PATCHES = [
+    # Raw X getter: default callers branch directly to the original left-X
+    # getter at 0x088164D0; camera callers tagged with RIGHT_STICK_MAGIC read
+    # the captured right-X byte instead.
+    (0x088162F8, 0x27BDFFF0, 0x34035253, 'right-X selector magic'),
+    (0x088162FC, 0xAFBF0000, 0x14830074, 'right-X default branch'),
+    (0x08816300, 0x0E205934, 0x3C0208B4, 'right-X resident base'),
+    (0x08816304, 0x00000000, 0x9042199A, 'right-X captured byte'),
+    (0x08816308, 0x8FBF0000, 0x03E00008, 'right-X return'),
+    (0x0881630C, 0x03E00008, 0x2442FF80, 'right-X center in delay slot'),
+    (0x08816310, 0x27BD0010, 0x00000000, 'right-X tail padding'),
+
+    # Raw Y getter: same scheme, preserving the native left-Y getter at
+    # 0x088164F8 for every untagged caller.
+    (0x08816314, 0x27BDFFF0, 0x34035253, 'right-Y selector magic'),
+    (0x08816318, 0xAFBF0000, 0x14830077, 'right-Y default branch'),
+    (0x0881631C, 0x0E20593E, 0x3C0208B4, 'right-Y resident base'),
+    (0x08816320, 0x00000000, 0x9042199B, 'right-Y captured byte'),
+    (0x08816324, 0x8FBF0000, 0x03E00008, 'right-Y return'),
+    (0x08816328, 0x03E00008, 0x2442FF80, 'right-Y center in delay slot'),
+    (0x0881632C, 0x27BD0010, 0x00000000, 'right-Y tail padding'),
+
+    # Capture analog[1][0/1] from the final CtrlData record while preserving
+    # the game's normal left analog values in 0x08B41980/0x08B41984.
+    (0x0881683C, 0x3C0408B4, 0x9145FFFA, 'capture right-X from CtrlData+10'),
+    (0x08816840, 0x3C0508B4, 0x9146FFFB, 'capture right-Y from CtrlData+11'),
+    (0x08816848, 0xACA71970, 0xAC871970, 'reuse resident input-state base'),
+    (0x0881684C, 0x3C0408B4, 0xA085199A, 'store captured right-X'),
+    (0x08816854, 0x3C0408B4, 0xA086199B, 'store captured right-Y'),
+
+    # RemasteredControls-equivalent camera selection.
+    (0x08940FEC, 0x508000BA, 0x00000000, 'remove L modifier from camera'),
+    (0x0898F68C, 0x1C80000B, 0x00000000, 'force Type-B horizontal camera'),
+    (0x0898F850, 0x1C80000B, 0x00000000, 'force Type-B vertical camera'),
+
+    # Keep the game's original JALs to 0x08816330/0x08816360; use their delay
+    # slots to tag only these four camera calls as right-stick reads.
+    (0x0898F6A0, 0x00000000, RIGHT_STICK_SELECTOR, 'right-stick X selector 1'),
+    (0x0898F6E0, 0x00000000, RIGHT_STICK_SELECTOR, 'right-stick X selector 2'),
+    (0x0898F864, 0x00000000, RIGHT_STICK_SELECTOR, 'right-stick Y selector 1'),
+    (0x0898F8A4, 0x00000000, RIGHT_STICK_SELECTOR, 'right-stick Y selector 2'),
+]
+
+RIGHT_STICK_BYTE_PATCHES = [
+    (RIGHT_STICK_X_BYTE_VA, 0x00, 0x80, 'right-X neutral initialization'),
+    (RIGHT_STICK_Y_BYTE_VA, 0x00, 0x80, 'right-Y neutral initialization'),
+]
+
+# Dormant legacy overlay payload, retained only so historical payload-parity
+# tooling can continue to reproduce prior research artifacts.
 def _right_analog_helper(reserved_offset:int)->bytes:
     words = [
-        0x27BDFFD0,       # addiu sp,sp,-48: outgoing args + local SceCtrlData
-        0xAFBF002C,       # sw ra,44(sp)
-        0x27A40010,       # addiu a0,sp,16
-        0x34050001,       # ori a1,zero,1
-        0x0E2C5B4E,       # jal 0x08B16D38 (controller peek import stub)
-        0x00000000,
-        0x1840000A,       # blez v0,neutral
-        0x00000000,
-        0x93A80000 | reserved_offset,
-        0x2508FF80,       # byte - 128
-        0x44880000,       # mtc1 t0,f0
-        0x46800020,       # cvt.s.w f0,f0
-        0x3C093C00,       # 1/128
-        0x44891000,       # mtc1 t1,f2
-        0x46020002,       # mul.s f0,f0,f2
-        0x10000002,       # b done
-        0x00000000,
-        0x44800000,       # neutral: mtc1 zero,f0
-        0x8FBF002C,
-        0x03E00008,
-        0x27BD0030,
+        0x27BDFFD0, 0xAFBF002C, 0x27A40010, 0x34050001, 0x0E2C5B4E,
+        0x00000000, 0x1840000A, 0x00000000, 0x93A80000 | reserved_offset,
+        0x2508FF80, 0x44880000, 0x46800020, 0x3C093C00, 0x44891000,
+        0x46020002, 0x10000002, 0x00000000, 0x44800000, 0x8FBF002C,
+        0x03E00008, 0x27BD0030,
     ]
     return struct.pack('<' + 'I' * len(words), *words)
 
 S2_RIGHT_X_VA = S2_VA
-S2_X_BLOB = _right_analog_helper(0x1A)  # local SceCtrlData + 10 = Rsrv[0]
+S2_X_BLOB = _right_analog_helper(0x1A)
 S2_RIGHT_Y_VA = S2_VA + len(S2_X_BLOB)
-S2_Y_BLOB = _right_analog_helper(0x1B)  # local SceCtrlData + 11 = Rsrv[1]
+S2_Y_BLOB = _right_analog_helper(0x1B)
 S2_BLOB = S2_X_BLOB + S2_Y_BLOB
 S2_CODE_SIZE = len(S2_BLOB)
 S2_NEW_SEGMENT_SIZE = (S2_FILE_OFF + len(S2_BLOB)) - 0x1018
@@ -126,15 +175,8 @@ def f32(b,off): return struct.unpack_from('<f',b,off)[0]
 def pf32(b,off,v): struct.pack_into('<f',b,off,float(v))
 def sha(b): return hashlib.sha256(b).hexdigest()
 
-CAMERA_PATCHES = [
- (0x08940FEC,0x508000BA,NOP,'remove L modifier from camera'),
- (0x0898F68C,0x1C80000B,NOP,'force Type-B horizontal camera'),
- (0x0898F850,0x1C80000B,NOP,'force Type-B vertical camera'),
- (0x0898F69C,0x0E2058CC,jal(S2_RIGHT_X_VA),'right-stick X read 1'),
- (0x0898F6DC,0x0E2058CC,jal(S2_RIGHT_X_VA),'right-stick X read 2'),
- (0x0898F860,0x0E2058D8,jal(S2_RIGHT_Y_VA),'right-stick Y read 1'),
- (0x0898F8A0,0x0E2058D8,jal(S2_RIGHT_Y_VA),'right-stick Y read 2'),
-]
+# RIGHT_STICK_WORD_PATCHES above is the supported camera patch map.
+
 POST_INPUT_HOOK=(0x08816904,0x8FB00048)
 
 def verify(data:bytes, camera_controls:bool, post_input:bool):
@@ -148,12 +190,14 @@ def verify(data:bytes, camera_controls:bool, post_input:bool):
         raise ValueError('Unexpected LOAD #0 sizes')
     if any(data[THIRD_PHDR_OFF:THIRD_PHDR_OFF+0x20]): raise ValueError('Third phdr slot not empty')
     if camera_controls:
-        end=S2_FILE_OFF+len(S2_BLOB)
-        if end>NEXT_ORIGINAL_LOAD_FILE_OFF: raise ValueError('Camera blob overlaps LOAD #1')
-        if any(data[S2_FILE_OFF:end]): raise ValueError('Camera cave is not zero-filled')
-        for va,exp,rep,desc in CAMERA_PATCHES:
+        # The supported path must remain entirely inside original resident code/data.
+        # Program headers and .overlays are intentionally untouched.
+        for va,exp,rep,desc in RIGHT_STICK_WORD_PATCHES:
             got=u32(data,foff(va))
             if got!=exp: raise ValueError(f'{desc} mismatch @0x{va:08X} got 0x{got:08X} exp 0x{exp:08X}')
+        for va,exp,rep,desc in RIGHT_STICK_BYTE_PATCHES:
+            got=data[foff(va)]
+            if got!=exp: raise ValueError(f'{desc} mismatch @0x{va:08X} got 0x{got:02X} exp 0x{exp:02X}')
     if post_input:
         va,exp=POST_INPUT_HOOK; got=u32(data,foff(va))
         if got!=exp: raise ValueError(f'post-input hook mismatch @0x{va:08X} got 0x{got:08X} exp 0x{exp:08X}')
@@ -207,9 +251,10 @@ def patch(data:bytes,camera_controls:bool,post_input:bool,cfg:int,camera_distanc
     if camera_height_enabled: verify_camera_height(data)
     out=bytearray(data)
     if camera_controls:
-        p32(out,PH0_FILESZ_OFF,S2_NEW_SEGMENT_SIZE); p32(out,PH0_MEMSZ_OFF,S2_NEW_SEGMENT_SIZE)
-        out[S2_FILE_OFF:S2_FILE_OFF+len(S2_BLOB)]=S2_BLOB
-        for va,exp,rep,desc in CAMERA_PATCHES: p32(out,foff(va),rep)
+        for va,exp,rep,desc in RIGHT_STICK_WORD_PATCHES:
+            p32(out,foff(va),rep)
+        for va,exp,rep,desc in RIGHT_STICK_BYTE_PATCHES:
+            out[foff(va)] = rep
     if post_input:
         p32(out,foff(POST_INPUT_HOOK[0]),jal(S5_WRAPPER_VA))
         add_stage5(out,cfg,camera_distance,critical_passives)
@@ -256,7 +301,7 @@ def main():
     data=args.input.read_bytes(); verify(data,camera_controls,post_input)
     if camera_height_enabled: verify_camera_height(data)
     print('Supported source fingerprint verified:',SUPPORTED_SHA256)
-    print('Profile: conservative candidate; gameplay validation pending')
+    print('Profile: PSP-native in-place right-stick candidate; gameplay validation pending')
     print('Right-stick camera:', 'ON' if camera_controls else 'off')
     print('Camera distance:', f'ON ({args.camera_distance:g})' if camera_distance else 'off')
     print('Camera height:', f'ON ({args.camera_height:g})' if camera_height_enabled else 'off')
@@ -282,7 +327,7 @@ def main():
     print('Wrote:',dst)
     print('Patched SHA-256:',sha(out))
     print('Output size:',len(out))
-    if camera_controls: print('PPSSPP: bind your physical right stick to Right Analog X/Y.')
+    if camera_controls: print('PPSSPP: bind your physical right stick to Right Analog X/Y. No overlay payload or extra ELF segment is used.')
     return 0
 if __name__=='__main__': raise SystemExit(main())
 
