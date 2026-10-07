@@ -72,6 +72,7 @@ import okio.Path
 import okio.FileSystem
 import okio.buffer
 import com.ragnarok93.bbsremix.resources.Res
+import com.ragnarok93.bbsremix.resources.wallpaper
 import org.jetbrains.compose.resources.painterResource
 
 private const val REPOSITORY_URL =
