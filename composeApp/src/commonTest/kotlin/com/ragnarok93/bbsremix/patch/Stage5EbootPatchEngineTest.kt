@@ -59,6 +59,34 @@ class Stage5EbootPatchEngineTest {
     }
 
     @Test
+    fun right_stick_axes_are_centered_and_inverted_in_place() {
+        val replacements = PspNativeRightStickPatch.wordPatches.associate {
+            it.virtualAddress to it.replacement
+        }
+
+        assertTrue(PspNativeRightStickPatch.bytePatches.isEmpty())
+        assertEquals(0x9545FFFA.toInt(), replacements[0x0881683C])
+        assertEquals(0x38A58080, replacements[0x08816840])
+        assertEquals(0xA485199A.toInt(), replacements[0x0881684C])
+        assertTrue(0x08816854 !in replacements)
+
+        assertEquals(0x8042199A.toInt(), replacements[0x08816304])
+        assertEquals(0x00021023, replacements[0x0881630C])
+        assertEquals(0x8042199B.toInt(), replacements[0x08816320])
+        assertEquals(0x00021023, replacements[0x08816328])
+
+        fun transformed(raw: Int): Int {
+            val stored = raw xor 0x80
+            val signed = if (stored < 0x80) stored else stored - 0x100
+            return -signed
+        }
+
+        assertEquals(0, transformed(0x80))
+        assertTrue(transformed(0x00) > 0)
+        assertTrue(transformed(0xFF) < 0)
+    }
+
+    @Test
     fun right_stick_patch_preserves_native_poll_and_camera_jals() {
         val required = PspNativeRightStickPatch.requiredUnchangedWords.associate {
             it.virtualAddress to it.expected
