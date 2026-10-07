@@ -24,7 +24,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4.4.1
       - name: Test and build Android debug
         run: |
-          ./gradlew :composeApp:testDebugUnitTest :composeApp:assembleDebug --stacktrace
+          sh ./gradlew :composeApp:testDebugUnitTest :composeApp:assembleDebug --stacktrace
           mkdir -p dist
           cp "$(find composeApp/build/outputs/apk/debug -name '*.apk' -type f | head -n 1)"             dist/Birth-By-Sleep-Final-ReMix-PSP-ISO-Patcher-Android-Debug.apk
       - uses: actions/upload-artifact@v4.6.2
@@ -65,7 +65,7 @@ jobs:
           java-version: '17'
       - uses: gradle/actions/setup-gradle@v4.4.1
       - name: Test and build Linux app image
-        run: ./gradlew :composeApp:desktopTest :composeApp:createDistributable --stacktrace
+        run: sh ./gradlew :composeApp:desktopTest :composeApp:createDistributable --stacktrace
       - name: Package Linux AppImage
         run: |
           chmod +x packaging/package-linux-appimage.sh
@@ -88,7 +88,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4.4.1
       - name: Test and build macOS DMG
         run: |
-          ./gradlew :composeApp:desktopTest :composeApp:packageDmg --stacktrace
+          sh ./gradlew :composeApp:desktopTest :composeApp:packageDmg --stacktrace
           mkdir -p dist
           cp "$(find composeApp/build/compose/binaries/main/dmg -name '*.dmg' -type f | head -n 1)"             dist/Birth-By-Sleep-Final-ReMix-PSP-ISO-Patcher-macOS-Debug.dmg
       - uses: actions/upload-artifact@v4.6.2
