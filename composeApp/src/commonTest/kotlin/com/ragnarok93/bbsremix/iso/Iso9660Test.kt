@@ -37,6 +37,29 @@ class Iso9660Test {
     }
 
     @Test
+    fun identical_replacement_produces_a_byte_identical_iso() {
+        val source = createFixture("identity")
+        val destination = path("identity-output")
+        try {
+            val originalImage = fileSystem.source(source).buffer().use { it.readByteArray() }
+            val image = reader.inspect(source)
+            val originalEboot = reader.readEntry(source, image.eboot)
+
+            rebuilder.rebuild(source, destination, image, originalEboot)
+
+            val rebuiltImage = fileSystem.source(destination).buffer().use { it.readByteArray() }
+            val rebuilt = reader.inspect(destination)
+            assertContentEquals(originalImage, rebuiltImage)
+            assertEquals(image.eboot.extentSector, rebuilt.eboot.extentSector)
+            assertEquals(image.eboot.size, rebuilt.eboot.size)
+            assertContentEquals(originalEboot, reader.readEntry(destination, rebuilt.eboot))
+        } finally {
+            fileSystem.delete(source, mustExist = false)
+            fileSystem.delete(destination, mustExist = false)
+        }
+    }
+
+    @Test
     fun larger_replacement_is_appended_and_unrelated_sectors_are_unchanged() {
         val source = createFixture("growth")
         val destination = path("growth-output")
