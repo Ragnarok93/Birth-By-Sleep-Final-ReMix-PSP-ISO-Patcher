@@ -226,7 +226,7 @@ fun PatcherApp(
         fun selectOutput() {
             val sourceName = source?.displayName ?: "Birth-By-Sleep-Final-ReMix"
             val suggested = sourceName.substringBeforeLast('.', sourceName) + ".psp-native-rightstick.iso"
-            start("Choose ISO output") { output = fileGateway.pickOutput(suggested) }
+            start("Choose patch output") { output = fileGateway.pickOutput(suggested) }
         }
 
         fun verifySource() {
@@ -297,20 +297,25 @@ fun PatcherApp(
         fun diagnosticRebuild() {
             val sourcePath = stagedSource ?: return
             val sourceSelection = source ?: return
-            val outputSelection = output ?: return
-            if (fileGateway.isSameSourceAndOutput(sourceSelection, outputSelection)) {
-                status = PatcherStatus.Failure("The diagnostic output must be separate from the source ISO.")
-                appendLog("Diagnostic rebuild refused: output points to the source image.")
-                return
-            }
-            if (!outputSelection.displayName.endsWith(".iso", ignoreCase = true)) {
-                status = PatcherStatus.Failure("Choose an output filename ending in .iso.")
-                appendLog("Diagnostic rebuild refused: output filename must end in .iso.")
-                return
-            }
+            val sourceName = sourceSelection.displayName
+            val suggested = sourceName.substringBeforeLast('.', sourceName) + ".diagnostic-rebuild.iso"
             start("Diagnostic rebuild") { token ->
+                val outputSelection = fileGateway.pickOutput(suggested) ?: run {
+                    appendLog("Diagnostic rebuild output picker cancelled.")
+                    return@start
+                }
+                if (fileGateway.isSameSourceAndOutput(sourceSelection, outputSelection)) {
+                    status = PatcherStatus.Failure("The diagnostic output must be separate from the source ISO.")
+                    appendLog("Diagnostic rebuild refused: output points to the source image.")
+                    return@start
+                }
+                if (!outputSelection.displayName.endsWith(".iso", ignoreCase = true)) {
+                    status = PatcherStatus.Failure("Choose an output filename ending in .iso.")
+                    appendLog("Diagnostic rebuild refused: output filename must end in .iso.")
+                    return@start
+                }
+
                 val temporary = fileGateway.createTempPath("bbs-diagnostic-rebuild", ".iso")
-                var outputCommitted = false
                 try {
                     val result = withContext(Dispatchers.Default) {
                         patchingService.rebuildUnmodifiedTo(
@@ -323,17 +328,12 @@ fun PatcherApp(
                     withContext(Dispatchers.Default) {
                         fileGateway.commitOutput(temporary, outputSelection, token, ProgressReporter(::report))
                     }
-                    outputCommitted = true
                     status = PatcherStatus.DiagnosticComplete(result, outputSelection.location)
                     appendLog(
-                        "Diagnostic rebuild committed to ${outputSelection.location}; complete ISO is byte-identical to the staged source.",
+                        "Diagnostic rebuild committed to ${outputSelection.location}; complete ISO is byte-identical to the staged source. The source remains staged for a right-stick patch test.",
                     )
                 } finally {
                     fileGateway.deleteTemp(temporary)
-                    if (outputCommitted && stagedSource == sourcePath) {
-                        fileGateway.deleteTemp(sourcePath)
-                        stagedSource = null
-                    }
                 }
             }
         }
@@ -1293,7 +1293,7 @@ private fun OutputCard(
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("4. Patch", style = MaterialTheme.typography.titleLarge)
             Text(
-                output?.displayName ?: "Choose a separate output ISO path.",
+                output?.displayName ?: "No right-stick patch output selected.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -1302,10 +1302,31 @@ private fun OutputCard(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                PatcherButton("Choose output…", onSelect, enabled = !busy && canWriteOutput)
-                PatcherButton("Diagnostic rebuild", onDiagnosticRebuild, enabled = !busy && canWriteOutput && output != null)
-                PatcherButton("Patch ISO", onPatch, enabled = !busy && canPatch && output != null)
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                PatcherButton(
+                    "Choose right-stick output…",
+                    onSelect,
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !busy && canWriteOutput,
+                )
+                PatcherButton(
+                    "Patch Right-Stick ISO",
+                    onPatch,
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !busy && canPatch && output != null,
+                )
+                HorizontalDivider()
+                Text(
+                    "Diagnostic rebuild is a separate no-op test. It opens its own output picker and never writes the camera patch.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                PatcherButton(
+                    "Run Diagnostic Rebuild…",
+                    onDiagnosticRebuild,
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !busy && canWriteOutput,
+                )
             }
             if (isPatching || isDiagnosticRebuild) {
                 Row(
