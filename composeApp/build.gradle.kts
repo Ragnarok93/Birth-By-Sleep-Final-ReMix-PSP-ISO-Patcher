@@ -96,14 +96,20 @@ android {
     }
 }
 
+val hostTargetFormat = run {
+    val osName = System.getProperty("os.name").lowercase()
+    when {
+        osName.contains("win") -> org.jetbrains.compose.desktop.application.dsl.TargetFormat.Exe
+        osName.contains("mac") -> org.jetbrains.compose.desktop.application.dsl.TargetFormat.Dmg
+        else -> org.jetbrains.compose.desktop.application.dsl.TargetFormat.AppImage
+    }
+}
 compose.desktop {
     application {
         mainClass = "com.ragnarok93.bbsremix.desktop.MainKt"
         nativeDistributions {
             targetFormats(
-                org.jetbrains.compose.desktop.application.dsl.TargetFormat.Dmg,
-                org.jetbrains.compose.desktop.application.dsl.TargetFormat.Exe,
-                org.jetbrains.compose.desktop.application.dsl.TargetFormat.AppImage,
+                hostTargetFormat,
             )
             packageName = "Birth By Sleep - Final ReMix PSP ISO Patcher"
             packageVersion = "1.0.0"
