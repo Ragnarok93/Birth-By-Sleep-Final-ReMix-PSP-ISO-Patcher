@@ -22,7 +22,7 @@ def profile_sha256():
     # 2/4/5 overlay blobs are deliberately excluded because the supported
     # profile never writes them.
     digest = hashlib.sha256()
-    digest.update(b'psp-native-right-stick-v1\\0')
+    digest.update(b'psp-native-right-stick-v2\\0')
     digest.update(bytes.fromhex(p.SUPPORTED_SHA256))
     for va, expected, replacement, _desc in p.RIGHT_STICK_WORD_PATCHES:
         digest.update(struct.pack('<III', va, expected & 0xffffffff, replacement & 0xffffffff))
