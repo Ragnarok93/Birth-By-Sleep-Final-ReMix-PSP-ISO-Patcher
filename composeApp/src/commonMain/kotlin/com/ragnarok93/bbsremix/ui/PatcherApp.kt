@@ -494,7 +494,7 @@ private fun PageHeader() {
 private fun PatcherBackground(modifier: Modifier = Modifier) {
     Box(modifier) {
         Image(
-            painter = painterResource(Res.drawable.patcher_wallpaper),
+            painter = painterResource(Res.drawable.wallpaper),
             contentDescription = null,
             modifier = Modifier.fillMaxSize(),
             contentScale = ContentScale.Crop,
