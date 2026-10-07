@@ -10,14 +10,19 @@ import okio.FileSystem
 import okio.Path
 import okio.Path.Companion.toPath
 import okio.buffer
+import java.awt.Desktop
 import java.awt.FileDialog
 import java.awt.Frame
 import java.io.File
+import java.net.URI
 import java.util.UUID
+import java.util.prefs.Preferences
 
 class DesktopFileGateway(
     private val fileSystem: FileSystem = FileSystem.SYSTEM,
 ) : FileGateway {
+    private val preferences = Preferences.userNodeForPackage(DesktopFileGateway::class.java)
+
     override suspend fun pickSource(): PlatformFileSelection? = withContext(Dispatchers.Main) {
         val dialog = FileDialog(null as Frame?, "Select a Birth By Sleep Final Mix ISO", FileDialog.LOAD)
         dialog.filenameFilter = java.io.FilenameFilter { _, name -> name.endsWith(".iso", ignoreCase = true) }
@@ -38,7 +43,7 @@ class DesktopFileGateway(
 
     override suspend fun createTempPath(prefix: String, suffix: String): Path {
         val root = System.getProperty("java.io.tmpdir").toPath()
-        return root / "$prefix-${UUID.randomUUID()}$suffix"
+        return root / "$prefix-\${UUID.randomUUID()}$suffix"
     }
 
     override suspend fun stageSource(
@@ -48,7 +53,7 @@ class DesktopFileGateway(
         progress: ProgressReporter,
     ) {
         val sourcePath = source.token as? Path ?: throw FileGatewayException("The desktop source selection is invalid.")
-        copy(sourcePath, destination, cancellation, progress, PatchPhase.STAGING_EBOOT, "Copying source ISO to private workspace")
+        copy(sourcePath, destination, cancellation, progress, PatchPhase.STAGING_EBOOT, "Copying ISO to private workspace")
     }
 
     override suspend fun commitOutput(
@@ -80,6 +85,19 @@ class DesktopFileGateway(
         }
     }
 
+    override fun shouldShowDonationPrompt(): Boolean =
+        preferences.getBoolean(DONATION_PROMPT_KEY, true)
+
+    override fun suppressDonationPrompt() {
+        preferences.putBoolean(DONATION_PROMPT_KEY, false)
+    }
+
+    override fun openExternalUrl(url: String) {
+        runCatching {
+            if (Desktop.isDesktopSupported()) Desktop.getDesktop().browse(URI(url))
+        }
+    }
+
     private fun copy(
         source: Path,
         destination: Path,
@@ -108,5 +126,6 @@ class DesktopFileGateway(
 
     private companion object {
         const val COPY_BUFFER_SIZE = 1024 * 1024
+        const val DONATION_PROMPT_KEY = "show-kofi-prompt"
     }
 }
