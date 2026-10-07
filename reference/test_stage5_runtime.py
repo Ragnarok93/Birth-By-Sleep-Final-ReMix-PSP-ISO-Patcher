@@ -35,16 +35,24 @@ class RuntimeRegressionTest(unittest.TestCase):
         self.assertEqual(0x8042199A, replacements[0x08816304])  # lb v0,rightX
         self.assertEqual(0x00021023, replacements[0x0881630C])  # subu v0,zero,v0
         self.assertEqual(0x8042199B, replacements[0x08816320])  # lb v0,rightY
-        self.assertEqual(0x00021023, replacements[0x08816328])  # subu v0,zero,v0
+        self.assertEqual(0x00000000, replacements[0x08816328])  # preserve centered Y
 
-        def transformed(raw):
+        def centered(raw):
             stored = raw ^ 0x80
-            signed = stored if stored < 0x80 else stored - 0x100
-            return -signed
+            return stored if stored < 0x80 else stored - 0x100
 
-        self.assertEqual(0, transformed(0x80))
-        self.assertGreater(transformed(0x00), 0)
-        self.assertLess(transformed(0xFF), 0)
+        def transformed_x(raw):
+            return -centered(raw)
+
+        def transformed_y(raw):
+            return centered(raw)
+
+        self.assertEqual(0, transformed_x(0x80))
+        self.assertEqual(0, transformed_y(0x80))
+        self.assertGreater(transformed_x(0x00), 0)
+        self.assertLess(transformed_x(0xFF), 0)
+        self.assertLess(transformed_y(0x00), 0)
+        self.assertGreater(transformed_y(0xFF), 0)
 
     def test_camera_patch_preserves_native_jals_and_tags_delay_slots(self):
         replacements = {va: replacement for va, _expected, replacement, _desc
