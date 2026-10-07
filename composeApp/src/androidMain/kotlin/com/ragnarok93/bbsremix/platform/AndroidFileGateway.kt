@@ -147,7 +147,7 @@ class AndroidFileGateway(
                         if (read == 0) continue
                         stream.write(buffer, 0, read)
                         completed += read
-                        progress.report(PatchProgress(PatchPhase.COMMITTING_OUTPUT, completed, total, "Writing patched ISO"))
+                        progress.report(PatchProgress(PatchPhase.COMMITTING_OUTPUT, completed, total, "Writing output ISO"))
                     }
                     stream.flush()
                 }
@@ -155,7 +155,7 @@ class AndroidFileGateway(
         } catch (error: kotlinx.coroutines.CancellationException) {
             throw error
         } catch (error: Throwable) {
-            throw FileGatewayException("The patched ISO could not be committed: ${error.message}")
+            throw FileGatewayException("The output ISO could not be committed: ${error.message}")
         }
     }
 
