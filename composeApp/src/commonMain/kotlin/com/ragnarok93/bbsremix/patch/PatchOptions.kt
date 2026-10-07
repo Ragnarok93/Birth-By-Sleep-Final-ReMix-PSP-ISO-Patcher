@@ -2,16 +2,16 @@ package com.ragnarok93.bbsremix.patch
 
 data class PatchOptions(
     val rightStickCamera: Boolean = true,
-    val cameraDistanceEnabled: Boolean = true,
+    val cameraDistanceEnabled: Boolean = false,
     val cameraDistance: Float = 4.5f,
-    val cameraHeightEnabled: Boolean = true,
+    val cameraHeightEnabled: Boolean = false,
     val cameraHeight: Float = 1.0f,
     val strictSteamExclusions: Boolean = false,
     val hitAwareCancels: Boolean = false,
     val invincibilityWindows: Boolean = false,
-    val extendedDefense: Boolean = true,
-    val commandCancels: Boolean = true,
-    val telemetry: Boolean = true,
+    val extendedDefense: Boolean = false,
+    val commandCancels: Boolean = false,
+    val telemetry: Boolean = false,
     val criticalModeAbilities: Boolean = false,
     val criticalModePassives: Boolean = false,
 ) {
@@ -35,8 +35,8 @@ data class PatchOptions(
         get() = rightStickCamera || appliesCameraDistance || appliesCameraHeight || combatFeatures
 
     fun validate(): List<PatchOptionError> = buildList {
-        if (hitAwareCancels || invincibilityWindows || criticalModeAbilities || criticalModePassives) {
-            add(PatchOptionError.UnvalidatedCombatFeature)
+        if (appliesCameraDistance || appliesCameraHeight || combatFeatures) {
+            add(PatchOptionError.UnvalidatedPspPortFeature)
         }
         if (cameraDistance !in CAMERA_DISTANCE_RANGE) {
             add(PatchOptionError.CameraDistanceOutOfRange(cameraDistance))
@@ -60,8 +60,8 @@ data class PatchOptions(
 }
 
 sealed class PatchOptionError(val message: String) {
-    data object UnvalidatedCombatFeature : PatchOptionError(
-        "Advanced combat writes are disabled pending PSP runtime validation."
+    data object UnvalidatedPspPortFeature : PatchOptionError(
+        "PC-derived camera/combat ports are disabled pending PSP-native re-derivation and runtime validation."
     )
 
     data class CameraDistanceOutOfRange(val value: Float) : PatchOptionError(
