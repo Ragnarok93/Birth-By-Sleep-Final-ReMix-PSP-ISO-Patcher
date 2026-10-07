@@ -70,8 +70,9 @@ code/data:
 - The existing raw X/Y getter entry points are rewritten as small resident
   dispatchers. Untagged callers branch directly to the original left-stick
   getters at `0x088164D0/0x088164F8`; tagged camera calls signed-load the
-  centered right-stick byte and negate it. This corrects the runtime-observed
-  reversed horizontal and vertical camera directions.
+  centered right-stick byte. X is negated; Y retains the centered sign because
+  runtime testing showed that the game's vertical camera path has the opposite
+  polarity convention from the horizontal path.
 - The four original float camera JALs remain unchanged. Their previously empty
   delay slots load selector `0x5253` so only those camera calls request the
   right stick.
@@ -83,10 +84,11 @@ code/data:
 This removes the address-lifetime collision responsible for the old
 `0x08B6EE80` payload failure. Runtime testing of the first resident candidate
 confirmed that right-stick camera control works and remains compatible with both
-in-game camera-control options without interfering with other controls. That
-candidate exposed reversed X/Y polarity; the current v2 profile corrects both
-axes and remains pending confirmation plus the remaining transition/save-load
-matrix.
+in-game camera-control options without interfering with other controls. The v2
+candidate corrected horizontal direction but runtime testing showed vertical
+direction remained reversed. The current v3 profile keeps X inverted and returns
+Y with the native centered polarity. It remains pending confirmation plus the
+remaining transition/save-load matrix.
 
 ## Better Battle System re-port
 
