@@ -25,8 +25,8 @@ class RuntimeRegressionTest(unittest.TestCase):
         replacements = {va: replacement for va, _expected, replacement, _desc
                         in p.RIGHT_STICK_WORD_PATCHES}
 
-        # Final CtrlData analog[1] is captured as one halfword, both sign bits
-        # are flipped, and the centered signed byte is negated in each getter.
+        # Final CtrlData analog[1] is captured as one halfword and both sign
+        # bits are flipped. X is negated; Y keeps the native centered sign.
         self.assertEqual(0x9545FFFA, replacements[0x0881683C])  # lhu a1,-6(t2)
         self.assertEqual(0x38A58080, replacements[0x08816840])  # xori a1,a1,0x8080
         self.assertEqual(0xA485199A, replacements[0x0881684C])  # sh a1,0x199a(a0)
@@ -53,6 +53,47 @@ class RuntimeRegressionTest(unittest.TestCase):
         self.assertLess(transformed_x(0xFF), 0)
         self.assertLess(transformed_y(0x00), 0)
         self.assertGreater(transformed_y(0xFF), 0)
+
+    def test_camera_geometry_uses_resident_native_mode_vectors(self):
+        self.assertLess(p.CAMERA_TABLE_VA, 0x08B6EE7C)
+        for address in (
+            p.CAMERA_FREE_HEIGHT_VA,
+            p.CAMERA_FREE_DISTANCE_VA,
+            p.CAMERA_LOCK_HEIGHT_VA,
+            p.CAMERA_LOCK_DISTANCE_VA,
+        ):
+            self.assertLess(address, 0x08B6EE7C)
+
+        data = bytearray(p.SUPPORTED_SIZE)
+        p.p32(data, p.foff(p.CAMERA_TABLE_VA), p.CAMERA_TABLE_SIGNATURE)
+        p.p32(data, p.foff(p.CAMERA_MODE1_RECORD_VA), 1)
+        p.p32(data, p.foff(p.CAMERA_MODE2_RECORD_VA), 2)
+        for va, value in (
+            (p.CAMERA_FREE_HEIGHT_VA, p.CAMERA_FREE_HEIGHT_ORIG),
+            (p.CAMERA_FREE_DISTANCE_VA, p.CAMERA_FREE_DISTANCE_ORIG),
+            (p.CAMERA_LOCK_HEIGHT_VA, p.CAMERA_LOCK_HEIGHT_ORIG),
+            (p.CAMERA_LOCK_DISTANCE_VA, p.CAMERA_LOCK_DISTANCE_ORIG),
+            (p.CAMERA_MODE1_RECORD_VA + 0x1C, 1.0),
+            (p.CAMERA_MODE2_RECORD_VA + 0x1C, 1.0),
+        ):
+            p.pf32(data, p.foff(va), value)
+
+        p.verify_camera_geometry_source(data)
+        p.apply_camera_geometry(
+            data,
+            camera_distance_enabled=True,
+            camera_distance=4.5,
+            camera_height_enabled=True,
+            camera_height=1.0,
+        )
+
+        self.assertAlmostEqual(-4.5, p.f32(data, p.foff(p.CAMERA_FREE_DISTANCE_VA)))
+        self.assertAlmostEqual(-4.5, p.f32(data, p.foff(p.CAMERA_LOCK_DISTANCE_VA)))
+        self.assertAlmostEqual(1.0, p.f32(data, p.foff(p.CAMERA_FREE_HEIGHT_VA)))
+        self.assertAlmostEqual(1.0, p.f32(data, p.foff(p.CAMERA_LOCK_HEIGHT_VA)))
+        self.assertEqual(p.CAMERA_TABLE_SIGNATURE, p.u32(data, p.foff(p.CAMERA_TABLE_VA)))
+        self.assertEqual(1, p.u32(data, p.foff(p.CAMERA_MODE1_RECORD_VA)))
+        self.assertEqual(2, p.u32(data, p.foff(p.CAMERA_MODE2_RECORD_VA)))
 
     def test_camera_patch_preserves_native_jals_and_tags_delay_slots(self):
         replacements = {va: replacement for va, _expected, replacement, _desc
