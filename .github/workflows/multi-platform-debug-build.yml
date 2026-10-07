@@ -15,6 +15,8 @@ jobs:
     steps:
       - name: Checkout source (Android)
         uses: actions/checkout@v4.2.2
+        with:
+          submodules: true
       - name: Set up JDK 17 (Android)
         uses: actions/setup-java@v4.7.1
         with:
@@ -26,10 +28,15 @@ jobs:
           packages: platform-tools
       - name: Set up Gradle (Android)
         uses: gradle/actions/setup-gradle@v4.4.1
-      - name: Check pinned OneUI JitPack module (Android)
+      - name: Verify pinned OneUI source checkout (Android)
+        shell: bash
         run: |
-          curl -sS -w '\nHTTP %{http_code}\n' 'https://jitpack.io/api/builds/com.github.Ragnarok93.oneui-compose/lib/1fe97b4e5a4ad559a7252376fad650a64310b229' || true
-          curl -sS -w '\nHTTP %{http_code}\n' 'https://jitpack.io/com/github/Ragnarok93/oneui-compose/lib/1fe97b4e5a4ad559a7252376fad650a64310b229/lib-1fe97b4e5a4ad559a7252376fad650a64310b229.pom' || true
+          expected="1fe97b4e5a4ad559a7252376fad650a64310b229"
+          actual="$(git -C third_party/oneui-compose rev-parse HEAD)"
+          if [[ "$actual" != "$expected" ]]; then
+            echo "Expected OneUI source $expected, found $actual." >&2
+            exit 1
+          fi
       - name: Run Android debug unit tests (Android)
         run: sh ./gradlew :composeApp:testDebugUnitTest --refresh-dependencies --stacktrace
       - name: Build Android debug APK (Android)
@@ -138,6 +145,8 @@ jobs:
     steps:
       - name: Checkout source (debug source archive)
         uses: actions/checkout@v4.2.2
+        with:
+          submodules: true
       - name: Download application artifacts (debug)
         uses: actions/download-artifact@v4.3.0
         with:
@@ -146,6 +155,12 @@ jobs:
       - name: Create Source.zip and SHA.zip (debug)
         run: |
           git archive --format=zip --output=release-files/Source.zip HEAD
+          mkdir -p "$RUNNER_TEMP/oneui-source"
+          git -C third_party/oneui-compose archive --format=tar --prefix=third_party/oneui-compose/ HEAD | tar -xf - -C "$RUNNER_TEMP/oneui-source"
+          (
+            cd "$RUNNER_TEMP/oneui-source"
+            zip -qr "$GITHUB_WORKSPACE/release-files/Source.zip" third_party/oneui-compose
+          )
           (
             cd release-files
             find . -maxdepth 1 -type f ! -name 'SHA256SUMS.txt' ! -name 'SHA.zip' -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS.txt

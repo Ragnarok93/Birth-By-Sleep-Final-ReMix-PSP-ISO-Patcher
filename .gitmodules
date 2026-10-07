@@ -1,0 +1,3 @@
+[submodule "third_party/oneui-compose"]
+	path = third_party/oneui-compose
+	url = https://github.com/Ragnarok93/oneui-compose.git
