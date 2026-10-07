@@ -17,28 +17,27 @@ accepted as PSP evidence.
 
 Only the right-stick camera candidate is patchable. Camera distance, camera
 height and all combat modifications are disabled in both defaults and validation
-until they are independently re-derived against the exact English-patched
-ULJM-05775 PSP executable.
+until independently re-derived against the exact English-patched ULJM-05775 PSP
+executable.
 
-The right-stick candidate no longer hooks the game's main controller poll at
-`0x08816688`. Static inspection of the exact supported EBOOT shows that call
-already passes the game's 0x70-byte stack input buffer to the controller import.
-The previous capture detour was therefore unnecessary and was the common point
-for the repeatable RA `08816690` crash.
+The earlier "direct-poll helper" candidate was still placed at `0x08B6EE80`,
+which is inside MainApp's dynamic overlay arena. It has been retired.
 
-Instead, the candidate follows the PSP-native strategy in
-TheOfficialFloW/RemasteredControls (KingdomHearts/main.c, commit
-`a5b75aff53531befb4ddbc319f2b4e8c00e3f2c5`): force the existing Type-B camera
-paths and source horizontal/vertical values from
-`SceCtrlData.Rsrv[0]`/`Rsrv[1]`. Because an ISO patch cannot allocate a plugin
-syscall dynamically, each injected helper uses the game's existing controller
-peek import stub at `0x08B16D38`, reads one local `SceCtrlData`, converts the
-reserved byte around 128 to the game's -1..1 float, and returns in `f0`.
+The current candidate follows the observable PSP behavior of
+TheOfficialFloW/RemasteredControls without allocating a plugin syscall or any
+overlay-resident code. PPSSPP's `CtrlData` layout provides the second stick at
+bytes 10/11. MainApp already polls four 16-byte records through its unchanged
+`0x08816688` controller call. The patch captures the final record's bytes
+10/11 into resident padding at `0x08B4199A/0x08B4199B`.
 
-The helper code stays in the verified zero-filled gap immediately following
-LOAD #0 and only extends that existing load segment. It does not add the Stage
-4/5 third PT_LOAD segment and does not grow the EBOOT file for the supported
-profile.
+The resident raw-axis entry points become selectors: normal callers branch to
+the original left-X/left-Y getters, while only the four existing Type-B camera
+calls set selector `0x5253` in their JAL delay slots and receive centered
+right-stick values. Existing float normalization remains unchanged.
+
+This profile does **not** modify ELF program-header count, LOAD #0 size, add a
+third PT_LOAD, or write the legacy `0x08B6EE80` overlay area. Structural tests
+enforce those invariants. Runtime validation in PPSSPP is still required.
 
 ## ISO isolation
 
@@ -65,8 +64,8 @@ validation.
 
 ## Current diagnostic gate
 
-The app now blocks gameplay patch output and exposes a no-op **Diagnostic rebuild**.
-It writes the original EBOOT unchanged, verifies its directory extent/size, and
-requires the complete rebuilt ISO to compare byte-for-byte equal to the staged
-source before committing the result. This isolates ISO-rebuild correctness from
-gameplay-code correctness.
+The no-op **Diagnostic rebuild** remains available alongside the right-stick-only
+candidate. It writes the original EBOOT unchanged, verifies its directory
+extent/size, and requires the complete rebuilt ISO to compare byte-for-byte equal
+to the staged source before committing the result. This isolates ISO-rebuild
+correctness from gameplay-code correctness.
