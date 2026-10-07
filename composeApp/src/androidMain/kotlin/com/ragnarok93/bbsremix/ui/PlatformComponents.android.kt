@@ -1,42 +1,36 @@
 package com.ragnarok93.bbsremix.ui
 
+import android.graphics.BitmapFactory
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import org.oneui.compose.progress.ProgressIndicator
-import org.oneui.compose.progress.ProgressIndicatorType
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.unit.dp
 import org.oneui.compose.theme.OneUITheme
-import org.oneui.compose.widgets.box.RoundedCornerBox
-import org.oneui.compose.widgets.buttons.Button as OneUiButton
-import org.oneui.compose.widgets.buttons.Checkbox as OneUiCheckbox
 
 @Composable
 actual fun PatcherTheme(content: @Composable () -> Unit) {
+    val dark = isSystemInDarkTheme()
     OneUITheme {
-        val colors = OneUITheme.colors
-        val scheme = if (isSystemInDarkTheme()) {
-            darkColorScheme(
-                primary = colors.seslPrimaryColor,
-                background = colors.seslRoundAndBgcolor,
-                surface = colors.seslBackgroundColor,
-                onBackground = colors.seslPrimaryTextColor,
-                onSurface = colors.seslPrimaryTextColor,
-            )
-        } else {
-            lightColorScheme(
-                primary = colors.seslPrimaryColor,
-                background = colors.seslRoundAndBgcolor,
-                surface = colors.seslBackgroundColor,
-                onBackground = colors.seslPrimaryTextColor,
-                onSurface = colors.seslPrimaryTextColor,
-            )
-        }
-        MaterialTheme(colorScheme = scheme, content = content)
+        MaterialTheme(
+            colorScheme = if (dark) PatcherDarkColorScheme else PatcherLightColorScheme,
+            content = content,
+        )
     }
 }
 
@@ -45,7 +39,15 @@ actual fun PatcherSurface(
     modifier: Modifier,
     content: @Composable BoxScope.() -> Unit,
 ) {
-    RoundedCornerBox(modifier = modifier, content = content)
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(26.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.34f)),
+        tonalElevation = 1.dp,
+    ) {
+        Box(Modifier.padding(18.dp), content = content)
+    }
 }
 
 @Composable
@@ -55,7 +57,18 @@ actual fun PatcherButton(
     modifier: Modifier,
     enabled: Boolean,
 ) {
-    OneUiButton(label = label, onClick = onClick, modifier = modifier, enabled = enabled)
+    Button(
+        onClick = onClick,
+        modifier = modifier,
+        enabled = enabled,
+        shape = RoundedCornerShape(18.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = MaterialTheme.colorScheme.primary,
+            contentColor = MaterialTheme.colorScheme.onPrimary,
+        ),
+    ) {
+        Text(label)
+    }
 }
 
 @Composable
@@ -66,19 +79,21 @@ actual fun PatcherCheckbox(
     modifier: Modifier,
     enabled: Boolean,
 ) {
-    OneUiCheckbox(
-        modifier = modifier,
-        checked = checked,
-        enabled = enabled,
-        onCheckedChange = onCheckedChange,
-        label = { Text(label) },
-    )
+    Row(modifier) {
+        Checkbox(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
+        Text(label, modifier = Modifier.padding(top = 12.dp))
+    }
 }
 
 @Composable
 actual fun PatcherProgress(progress: Float, modifier: Modifier) {
-    ProgressIndicator(
+    LinearProgressIndicator(
+        progress = { progress.coerceIn(0f, 1f) },
         modifier = modifier,
-        type = ProgressIndicatorType.HorizontalDeterminate(progress.coerceIn(0f, 1f)),
+        color = MaterialTheme.colorScheme.primary,
+        trackColor = MaterialTheme.colorScheme.surfaceVariant,
     )
 }
+
+actual fun decodeCoverArt(bytes: ByteArray): ImageBitmap? =
+    BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
