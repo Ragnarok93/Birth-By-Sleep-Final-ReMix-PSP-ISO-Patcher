@@ -6,12 +6,14 @@ Build a focused Kotlin Multiplatform + Compose Multiplatform application for And
 
 ## Architecture Decisions
 
-- Keep the patch contract and patch engine in `commonMain`; platform code only supplies file selection, temporary storage, and output commit operations.
+- Keep the patch contract and patch engine in `commonMain`; platform code only supplies file selection, temporary storage, output commit operations, cover-art decoding, external links, and prompt preferences.
 - Use a small shared ISO9660 reader/rebuilder. It parses directory records, matches the target path case-insensitively while removing ISO version suffixes, and appends a larger replacement at a sector boundary rather than overwriting adjacent data.
 - Treat the exact decrypted ELF fingerprint as a hard trust boundary. Encrypted or otherwise unrecognized EBOOT representations fail with an actionable error until a verified, key-free conversion profile is available; no checks are weakened and no proprietary keys are shipped.
 - Keep the Python patcher as a non-runtime reference artifact/documented parity oracle. Kotlin patch bytes, defaults, option bits, and structural checks mirror it exactly.
-- Use the actual `oneui-compose` Android artifact (`com.github.TrainerSnow:oneui-compose:0.7.0`) only in Android source where its APIs are available. Shared and desktop UI use Compose Multiplatform/Material primitives with matching OneUI tokens and component structure.
+- Use the actual `oneui-compose` Android artifact (`com.github.TrainerSnow:oneui-compose:0.7.0`) only in Android source where its APIs are available. Shared and desktop UI use Compose Multiplatform/Material primitives with the same Final ReMix visual tokens and component structure.
 - Rebuild with temporary output plus atomic move/commit where the selected platform supports it. The source ISO is never modified.
+- Treat verification as a separate user flow: source preflight verifies a patch input; output verification reopens a user-selected ISO and checks that its embedded EBOOT is the expected patched result for the selected feature set.
+- Use one responsive workspace: a portrait/compact flow modeled on the concept art, and a large-screen layout with a compact rail plus source/detected-game and options/output columns. Do not add redundant mode-selection navigation.
 
 ## Task List
 
@@ -37,11 +39,18 @@ Build a focused Kotlin Multiplatform + Compose Multiplatform application for And
 - [x] Implement adaptive Compose UI for source selection, preflight, patch options, output selection, progress/cancel, and completion/error states.
 - [x] Use Android document picker/content URIs and platform desktop file dialogs without broad storage permissions.
 - [x] Apply Android OneUI-Compose components directly where compatible and provide shared desktop equivalents.
+- [ ] Extract optional PSP cover art from the ISO and show it in a collapsible Detected Game pane.
+- [ ] Add output verification with a separate file picker and a result state that distinguishes valid patched output, unpatched input, incompatible input, and malformed ISO.
+- [ ] Replace the redundant mode selector with independently toggleable camera and combat feature rows. Group combat features under an expandable Combat Mods section with contextual submenus/secondary controls where needed; place toggles on the trailing/right side.
+- [ ] Add the Info page with repository/license links and an isolated placeholder donation link; show a first-run donation dialog with dismiss and do-not-show-again actions.
+- [ ] Apply the concept palette through semantic Material/OneUI tokens, defaulting to the dark visual treatment while respecting system theme behavior. Refine compact and large-screen layouts without adding redundant navigation.
 
 ### Phase 5: Documentation and CI
 
 - [x] Document supported image/version requirements, encrypted/unsupported errors, patch semantics, local-only parity validation, and build commands.
-- [x] Add only `.github/workflows/multi-platform-release-build.yml` and `.github/workflows/multi-platform-debug-build.yml` as primary workflows, with least-privilege permissions and platform-labelled failures.
+- [ ] Update user-facing naming throughout source, docs, metadata, and runtime copy; remove obsolete branding references without adding migration commentary.
+- [ ] Produce portable Windows `.exe` and Linux `.AppImage` artifacts. Keep macOS `.dmg` and Android APK outputs available.
+- [ ] Make both debug and release workflows upload one artifact per platform plus `Source.zip` and `SHA.zip`; do not wrap individual application artifacts in platform zip packages.
 - [ ] Run focused tests, full shared tests, and available desktop/Android builds; record any validation requiring a user-owned ISO.
 
 ## Checkpoints
@@ -60,11 +69,19 @@ Build a focused Kotlin Multiplatform + Compose Multiplatform application for And
 ### ISO checkpoint
 
 - Synthetic ISO tests prove target lookup, unrelated-file preservation, safe extent growth, and output re-open validation.
+- Cover-art lookup is optional and never makes a valid patchable image fail.
+
+### UI checkpoint
+
+- Compact portrait layout follows the concept hierarchy.
+- Large screens use the available width with a compact rail and balanced columns.
+- Every feature row has a trailing toggle, and combat settings are discoverable without a redundant mode selector.
+- Output verification can be launched from the bottom action and reports a meaningful result.
 
 ### Completion checkpoint
 
 - The full user flow is available on all requested platforms.
-- Both named workflows run the relevant tests/builds and produce clearly labelled artifacts.
+- Both named workflows run the relevant tests/builds and produce clearly labelled per-platform and source/checksum artifacts.
 
 ## Risks and Mitigations
 
@@ -74,8 +91,10 @@ Build a focused Kotlin Multiplatform + Compose Multiplatform application for And
 | Patched EBOOT grows beyond its original ISO extent | High | Append at a sector boundary, update both-endian ISO directory fields and volume-space metadata, and re-open the rebuilt image before success. |
 | Android OneUI library is Android-only | Medium | Keep shared UI API-neutral, use OneUI directly in Android source, and implement desktop equivalents with matching tokens and semantics. |
 | No copyrighted fixture is suitable for CI | Medium | Use synthetic ISO fixtures and a local-only fixture path/test hook; document manual byte-parity validation as pending when absent. |
+| Cover-art entry is absent or uses a non-PNG asset | Low | Treat cover art as optional, expose a neutral placeholder, and preserve patch functionality. |
+| Portable desktop artifacts differ by runner and platform | Medium | Use explicit Gradle distribution tasks plus native packaging/build steps in the workflows, inspect artifact globs, and generate checksums from the final uploaded files. |
 
 ## Open Questions
 
 - A user-owned supported ISO is required to prove the complete encrypted/decrypted representation path and final in-emulator behavior; CI must remain self-contained.
-- If the target English-patched ISO is encrypted, a verified conversion method/key source must be supplied or approved before claiming encrypted-image support.
+- A placeholder donation URL is intentionally isolated for later wiring.
