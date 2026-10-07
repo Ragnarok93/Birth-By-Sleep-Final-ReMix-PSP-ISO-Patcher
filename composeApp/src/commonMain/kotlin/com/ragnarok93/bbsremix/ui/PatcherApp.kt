@@ -225,7 +225,7 @@ fun PatcherApp(
 
         fun selectOutput() {
             val sourceName = source?.displayName ?: "Birth-By-Sleep-Final-ReMix"
-            val suggested = sourceName.substringBeforeLast('.', sourceName) + ".psp-native-rightstick.iso"
+            val suggested = sourceName.substringBeforeLast('.', sourceName) + ".psp-native-camera.iso"
             start("Choose patch output") { output = fileGateway.pickOutput(suggested) }
         }
 
@@ -330,7 +330,7 @@ fun PatcherApp(
                     }
                     status = PatcherStatus.DiagnosticComplete(result, outputSelection.location)
                     appendLog(
-                        "Diagnostic rebuild committed to ${outputSelection.location}; complete ISO is byte-identical to the staged source. The source remains staged for a right-stick patch test.",
+                        "Diagnostic rebuild committed to ${outputSelection.location}; complete ISO is byte-identical to the staged source. The source remains staged for a camera patch test.",
                     )
                 } finally {
                     fileGateway.deleteTemp(temporary)
@@ -678,12 +678,12 @@ private fun PageHeader() {
             fontWeight = FontWeight.SemiBold,
         )
         Text(
-            text = "PSP-native right-stick camera candidate is ready for runtime testing.",
+            text = "PSP-native camera controls and geometry are ready for runtime testing.",
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.primary,
         )
         Text(
-            text = "The supported patch profile now uses only resident MainApp code/data and leaves ELF program headers plus the dynamic overlay arena untouched. Combat and PC-derived camera geometry remain disabled pending PSP-native validation.",
+            text = "Right-stick camera control is working in runtime tests. Camera distance and height now use the PSP's resident native camera-mode vectors as data-only patches; ELF program headers and the dynamic overlay arena remain untouched. Combat mods stay disabled.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -1055,23 +1055,23 @@ private fun OptionsCard(
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("3. Patch Options", style = MaterialTheme.typography.titleLarge)
             Text(
-                "Only the resident PSP-native right-stick camera candidate is currently patchable. Combat and camera geometry remain unavailable.",
+                "The resident PSP-native right-stick, camera distance, and camera height mods are available for isolated runtime testing. Combat mods remain unavailable.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
             FeatureToggle(
                 title = "Right-stick camera control",
-                description = "Resident in-place PSP patch using PPSSPP SceCtrlData analog[1]; no overlay payload or extra ELF segment. Runtime validation pending.",
+                description = "Resident PSP-native second-stick camera control. Direction and both in-game camera-control modes are runtime-confirmed; broader transition validation continues.",
                 checked = options.rightStickCamera,
                 enabled = !busy,
                 onCheckedChange = { onOptionsChanged(options.copy(rightStickCamera = it)) },
             )
             FeatureToggle(
                 title = "Camera distance",
-                description = "Unavailable · PC-derived mapping requires PSP-native re-derivation.",
+                description = "PSP-native player-camera Z distance for normal and lock-on modes. Data-only patch; default 4.5.",
                 checked = options.cameraDistanceEnabled,
-                enabled = false,
+                enabled = !busy,
                 onCheckedChange = { onOptionsChanged(options.copy(cameraDistanceEnabled = it)) },
             )
             SliderSetting(
@@ -1084,9 +1084,9 @@ private fun OptionsCard(
             )
             FeatureToggle(
                 title = "Camera height",
-                description = "Unavailable · PC-derived mapping requires PSP-native re-derivation.",
+                description = "PSP-native player-camera Y height for normal and lock-on modes. Data-only patch; default 1.0.",
                 checked = options.cameraHeightEnabled,
-                enabled = false,
+                enabled = !busy,
                 onCheckedChange = { onOptionsChanged(options.copy(cameraHeightEnabled = it)) },
             )
             SliderSetting(
@@ -1293,31 +1293,31 @@ private fun OutputCard(
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("4. Patch", style = MaterialTheme.typography.titleLarge)
             Text(
-                output?.displayName ?: "No right-stick patch output selected.",
+                output?.displayName ?: "No camera patch output selected.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
-                "Patch ISO currently supports the PSP-native right-stick-only profile. Diagnostic rebuild writes the original EBOOT unchanged and requires the complete ISO to remain byte-identical.",
+                "Patch ISO supports the resident PSP-native right-stick, camera distance, and camera height mods. Geometry changes only the native camera data table; no overlay payload or extra ELF segment is used.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 PatcherButton(
-                    "Choose right-stick output…",
+                    "Choose camera output…",
                     onSelect,
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !busy && canWriteOutput,
                 )
                 PatcherButton(
-                    "Patch Right-Stick ISO",
+                    "Patch Camera ISO",
                     onPatch,
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !busy && canPatch && output != null,
                 )
                 HorizontalDivider()
                 Text(
-                    "Diagnostic rebuild is a separate no-op test. It opens its own output picker and never writes the camera patch.",
+                    "Diagnostic rebuild is a separate no-op test. It opens its own output picker and never writes any selected camera mod.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -1371,7 +1371,7 @@ private fun VerifyOutputFooter(
             Column(Modifier.weight(1f)) {
                 Text("Verify output", style = MaterialTheme.typography.titleMedium)
                 Text(
-                    "Check the resident right-stick patch structure, unchanged ELF layout, and selected settings. Gameplay validation is separate.",
+                    "Check the selected resident camera patches, native camera-table values, unchanged ELF layout, and embedded EBOOT structure. Gameplay validation is separate.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
