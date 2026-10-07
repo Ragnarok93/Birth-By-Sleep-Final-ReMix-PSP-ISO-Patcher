@@ -974,23 +974,23 @@ private fun OptionsCard(
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("3. Patch Options", style = MaterialTheme.typography.titleLarge)
             Text(
-                "Enable the features you want. Each toggle maps directly to one patch capability.",
+                "PSP-native revalidation is in progress. Only the right-stick candidate is currently patchable.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
             FeatureToggle(
                 title = "Right-stick camera control",
-                description = "Adds native right-stick camera input support.",
+                description = "PSP-native candidate using direct SceCtrlData right-analog reads; gameplay validation pending.",
                 checked = options.rightStickCamera,
                 enabled = !busy,
                 onCheckedChange = { onOptionsChanged(options.copy(rightStickCamera = it)) },
             )
             FeatureToggle(
                 title = "Camera distance",
-                description = "Normal-player camera distance; default 4.5, range 1.0–12.0.",
+                description = "Unavailable · PC-derived mapping requires PSP-native re-derivation.",
                 checked = options.cameraDistanceEnabled,
-                enabled = !busy,
+                enabled = false,
                 onCheckedChange = { onOptionsChanged(options.copy(cameraDistanceEnabled = it)) },
             )
             SliderSetting(
@@ -1003,9 +1003,9 @@ private fun OptionsCard(
             )
             FeatureToggle(
                 title = "Camera height",
-                description = "Free and lock-on camera height; default 1.0, range 0.0–4.0.",
+                description = "Unavailable · PC-derived mapping requires PSP-native re-derivation.",
                 checked = options.cameraHeightEnabled,
-                enabled = !busy,
+                enabled = false,
                 onCheckedChange = { onOptionsChanged(options.copy(cameraHeightEnabled = it)) },
             )
             SliderSetting(
@@ -1020,7 +1020,7 @@ private fun OptionsCard(
             HorizontalDivider()
             ExpandableRow(
                 title = "Combat Mods",
-                description = "Independent combat behavior and Critical Mode toggles.",
+                description = "Unavailable while the PC mod is re-derived against the English-patched PSP executable.",
                 expanded = combatExpanded,
                 enabled = !busy,
                 onExpandedChange = { combatExpanded = it },
@@ -1043,23 +1043,23 @@ private fun OptionsCard(
                     )
                     FeatureToggle(
                         title = "Extended defense",
-                        description = "Keep extended guard and defensive cancel rules.",
+                        description = "Unavailable · PSP-native re-derivation pending.",
                         checked = options.extendedDefense,
-                        enabled = !busy,
+                        enabled = false,
                         onCheckedChange = { onOptionsChanged(options.copy(extendedDefense = it)) },
                     )
                     FeatureToggle(
                         title = "Command cancels",
-                        description = "Keep command-windup and command cancel rules.",
+                        description = "Unavailable · PSP-native re-derivation pending.",
                         checked = options.commandCancels,
-                        enabled = !busy,
+                        enabled = false,
                         onCheckedChange = { onOptionsChanged(options.copy(commandCancels = it)) },
                     )
                     FeatureToggle(
                         title = "Telemetry",
-                        description = "Keep the 64-frame runtime telemetry ring.",
+                        description = "Unavailable · PSP-native re-derivation pending.",
                         checked = options.telemetry,
-                        enabled = !busy,
+                        enabled = false,
                         onCheckedChange = { onOptionsChanged(options.copy(telemetry = it)) },
                     )
                     FeatureToggle(
@@ -1087,9 +1087,9 @@ private fun OptionsCard(
                     AnimatedVisibility(advancedExpanded) {
                         FeatureToggle(
                             title = "Strict category exclusions",
-                            description = "Use the strict category guard for excluded actions.",
+                            description = "Unavailable · PSP-native re-derivation pending.",
                             checked = options.strictSteamExclusions,
-                            enabled = !busy,
+                            enabled = false,
                             onCheckedChange = { onOptionsChanged(options.copy(strictSteamExclusions = it)) },
                         )
                     }
