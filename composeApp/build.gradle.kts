@@ -102,12 +102,10 @@ compose.desktop {
         nativeDistributions {
             targetFormats(
                 org.jetbrains.compose.desktop.application.dsl.TargetFormat.Dmg,
-                org.jetbrains.compose.desktop.application.dsl.TargetFormat.Msi,
-                org.jetbrains.compose.desktop.application.dsl.TargetFormat.Deb,
             )
-            packageName = "Birth By Sleep Final ReMix PSP ISO Patcher"
+            packageName = "Birth By Sleep - Final ReMix PSP ISO Patcher"
             packageVersion = "1.0.0"
-            description = "Direct ISO patcher for the Birth By Sleep Final ReMix Better Battle System."
+            description = "Direct ISO patcher for Birth By Sleep - Final ReMix."
         }
     }
 }
