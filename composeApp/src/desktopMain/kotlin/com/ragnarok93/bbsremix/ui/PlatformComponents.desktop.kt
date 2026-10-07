@@ -117,7 +117,7 @@ actual fun GameCoverArt(
     modifier: Modifier,
 ) {
     val bitmap = remember(pngBytes) {
-        runCatching { pngBytes?.let { Image.makeFromEncoded(it).toComposeImageBitmap() } }.getOrNull()
+        runCatching { pngBytes?.decodeToImageBitmap() }.getOrNull()
     }
     if (bitmap != null) {
         androidx.compose.foundation.Image(
