@@ -3,6 +3,9 @@ package com.ragnarok93.bbsremix.platform
 import com.ragnarok93.bbsremix.patch.CancellationToken
 import com.ragnarok93.bbsremix.patch.NoProgress
 import com.ragnarok93.bbsremix.patch.ProgressReporter
+import com.ragnarok93.bbsremix.texture.TextureInstallPlan
+import com.ragnarok93.bbsremix.texture.TextureInstallProgress
+import com.ragnarok93.bbsremix.texture.TextureInstallResult
 import okio.Path
 
 class PlatformFileSelection internal constructor(
@@ -17,10 +20,25 @@ class PlatformOutputSelection internal constructor(
     internal val token: Any,
 )
 
+class PlatformDirectorySelection internal constructor(
+    val displayName: String,
+    val location: String,
+    internal val token: Any,
+)
+
 interface FileGateway {
     suspend fun pickSource(): PlatformFileSelection?
 
     suspend fun pickOutput(suggestedName: String): PlatformOutputSelection?
+
+    suspend fun pickTextureDestination(): PlatformDirectorySelection?
+
+    suspend fun installTexturePack(
+        destination: PlatformDirectorySelection,
+        plan: TextureInstallPlan,
+        cancellation: CancellationToken,
+        progress: (TextureInstallProgress) -> Unit,
+    ): TextureInstallResult
 
     suspend fun createTempPath(prefix: String, suffix: String): Path
 

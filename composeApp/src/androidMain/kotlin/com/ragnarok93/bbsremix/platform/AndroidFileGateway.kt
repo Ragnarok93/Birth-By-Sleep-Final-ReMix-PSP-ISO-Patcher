@@ -9,10 +9,15 @@ import android.provider.OpenableColumns
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
 import com.ragnarok93.bbsremix.patch.CancellationToken
+import com.ragnarok93.bbsremix.texture.TextureInstallPlan
+import com.ragnarok93.bbsremix.texture.TextureInstallProgress
+import com.ragnarok93.bbsremix.texture.TextureInstallResult
 import com.ragnarok93.bbsremix.patch.PatchPhase
 import com.ragnarok93.bbsremix.patch.PatchProgress
 import com.ragnarok93.bbsremix.patch.ProgressReporter
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
 import okio.FileSystem
 import okio.Path
 import okio.Path.Companion.toPath
@@ -34,6 +39,7 @@ class AndroidFileGateway(
 
     private var sourceContinuation: kotlinx.coroutines.CancellableContinuation<PlatformFileSelection?>? = null
     private var outputContinuation: kotlinx.coroutines.CancellableContinuation<PlatformOutputSelection?>? = null
+    private var textureDestinationContinuation: kotlinx.coroutines.CancellableContinuation<PlatformDirectorySelection?>? = null
 
     private val sourceLauncher = activity.registerForActivityResult(
         ActivityResultContracts.OpenDocument(),
@@ -49,6 +55,15 @@ class AndroidFileGateway(
         continuation?.resume(uri?.let { PlatformOutputSelection(displayName(it), it.toString(), it) })
     }
 
+    private val textureDestinationLauncher = activity.registerForActivityResult(
+        ActivityResultContracts.OpenDocumentTree(),
+    ) { uri ->
+        val continuation = textureDestinationContinuation.also { textureDestinationContinuation = null }
+        continuation?.resume(uri?.let {
+            PlatformDirectorySelection("PPSSPP TEXTURES folder", "Selected PPSSPP TEXTURES folder", it)
+        })
+    }
+
     override suspend fun pickSource(): PlatformFileSelection? = suspendCancellableCoroutine { continuation ->
         sourceContinuation = continuation
         continuation.invokeOnCancellation { if (sourceContinuation === continuation) sourceContinuation = null }
@@ -59,6 +74,23 @@ class AndroidFileGateway(
         outputContinuation = continuation
         continuation.invokeOnCancellation { if (outputContinuation === continuation) outputContinuation = null }
         outputLauncher.launch(suggestedName)
+    }
+
+    override suspend fun pickTextureDestination(): PlatformDirectorySelection? = suspendCancellableCoroutine { continuation ->
+        textureDestinationContinuation = continuation
+        continuation.invokeOnCancellation {
+            if (textureDestinationContinuation === continuation) textureDestinationContinuation = null
+        }
+        textureDestinationLauncher.launch(null)
+    }
+
+    override suspend fun installTexturePack(
+        destination: PlatformDirectorySelection,
+        plan: TextureInstallPlan,
+        cancellation: CancellationToken,
+        progress: (TextureInstallProgress) -> Unit,
+    ): TextureInstallResult = withContext(Dispatchers.IO) {
+        installTexturePackOnDocumentTree(resolver, destination, plan, cancellation, progress)
     }
 
     override suspend fun createTempPath(prefix: String, suffix: String): Path {

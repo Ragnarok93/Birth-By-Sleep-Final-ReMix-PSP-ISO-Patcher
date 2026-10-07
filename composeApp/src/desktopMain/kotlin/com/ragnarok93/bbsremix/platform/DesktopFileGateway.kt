@@ -4,6 +4,9 @@ import com.ragnarok93.bbsremix.patch.CancellationToken
 import com.ragnarok93.bbsremix.patch.PatchPhase
 import com.ragnarok93.bbsremix.patch.PatchProgress
 import com.ragnarok93.bbsremix.patch.ProgressReporter
+import com.ragnarok93.bbsremix.texture.TextureInstallPlan
+import com.ragnarok93.bbsremix.texture.TextureInstallProgress
+import com.ragnarok93.bbsremix.texture.TextureInstallResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okio.FileSystem
@@ -21,6 +24,7 @@ import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import java.util.prefs.Preferences
+import javax.swing.JFileChooser
 
 class DesktopFileGateway(
     private val fileSystem: FileSystem = FileSystem.SYSTEM,
@@ -43,6 +47,27 @@ class DesktopFileGateway(
         val file = dialog.file ?: return@withContext null
         val path = File(dialog.directory, file).absoluteFile
         PlatformOutputSelection(path.name, path.absolutePath, path.absolutePath.toPath())
+    }
+
+    override suspend fun pickTextureDestination(): PlatformDirectorySelection? = withContext(Dispatchers.Main) {
+        val chooser = JFileChooser().apply {
+            dialogTitle = "Select the PPSSPP PSP/TEXTURES folder"
+            fileSelectionMode = JFileChooser.DIRECTORIES_ONLY
+            isAcceptAllFileFilterUsed = false
+        }
+        if (chooser.showOpenDialog(null) != JFileChooser.APPROVE_OPTION) return@withContext null
+        val folder = chooser.selectedFile.canonicalFile
+        if (!folder.isDirectory) return@withContext null
+        PlatformDirectorySelection(folder.name, folder.absolutePath, folder.absolutePath.toPath())
+    }
+
+    override suspend fun installTexturePack(
+        destination: PlatformDirectorySelection,
+        plan: TextureInstallPlan,
+        cancellation: CancellationToken,
+        progress: (TextureInstallProgress) -> Unit,
+    ): TextureInstallResult = withContext(Dispatchers.IO) {
+        installTexturePackOnDesktop(destination, plan, cancellation, progress)
     }
 
     override suspend fun createTempPath(prefix: String, suffix: String): Path {

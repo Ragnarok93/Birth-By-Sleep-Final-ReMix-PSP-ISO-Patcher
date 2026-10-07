@@ -63,6 +63,13 @@ import com.ragnarok93.bbsremix.patch.ProgressReporter
 import com.ragnarok93.bbsremix.platform.FileGateway
 import com.ragnarok93.bbsremix.platform.PlatformFileSelection
 import com.ragnarok93.bbsremix.platform.PlatformOutputSelection
+import com.ragnarok93.bbsremix.platform.PlatformDirectorySelection
+import com.ragnarok93.bbsremix.texture.TextureAssetManifest
+import com.ragnarok93.bbsremix.texture.TextureCoverage
+import com.ragnarok93.bbsremix.texture.TextureInstallOptions
+import com.ragnarok93.bbsremix.texture.TextureInstallProgress
+import com.ragnarok93.bbsremix.texture.TextureProfile
+import com.ragnarok93.bbsremix.texture.TextureProfileCatalog
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -96,6 +103,11 @@ fun PatcherApp(
         var options by remember { mutableStateOf(PatchOptions()) }
         var preflight by remember { mutableStateOf<IsoPreflight?>(null) }
         var verification by remember { mutableStateOf<IsoVerificationResult?>(null) }
+        var textureDestination by remember { mutableStateOf<PlatformDirectorySelection?>(null) }
+        var includeRegionalButtonSwaps by remember { mutableStateOf(false) }
+        var includeExtraHdPortraits by remember { mutableStateOf(false) }
+        var textureStatus by remember { mutableStateOf("Select an ISO to identify its texture profile.") }
+        var textureProgress by remember { mutableStateOf<TextureInstallProgress?>(null) }
         var status by remember { mutableStateOf<PatcherStatus>(PatcherStatus.Empty) }
         var progress by remember { mutableStateOf<PatchProgress?>(null) }
         var activeJob by remember { mutableStateOf<Job?>(null) }
@@ -287,6 +299,80 @@ fun PatcherApp(
             activeJob?.cancel()
         }
 
+        fun startTextureOperation(label: String, operation: suspend (CancellationToken) -> Unit) {
+            if (activeJob != null) return
+            activeOperation = label
+            textureProgress = null
+            textureStatus = "$label started."
+            appendLog("$label started.")
+            val job = scope.launch {
+                val operationJob = coroutineContext[Job]!!
+                val token = CoroutineCancellationToken(operationJob)
+                try {
+                    operation(token)
+                    appendLog("$label finished.")
+                } catch (_: PatchCancelledException) {
+                    textureStatus = "Texture operation cancelled."
+                    appendLog("$label cancelled.")
+                } catch (_: CancellationException) {
+                    textureStatus = "Texture operation cancelled."
+                    appendLog("$label cancelled.")
+                } catch (error: Exception) {
+                    textureStatus = "Texture operation failed: ${error.message ?: "The operation failed."}"
+                    appendLog("$label failed: ${error.message ?: "The operation failed."}")
+                } finally {
+                    if (activeJob == coroutineContext[Job]) {
+                        activeJob = null
+                        activeOperation = null
+                    }
+                }
+            }
+            activeJob = job
+        }
+
+        fun selectTextureDestination() {
+            startTextureOperation("Choose Texture Destination") {
+                val selected = fileGateway.pickTextureDestination() ?: run {
+                    textureStatus = "Texture destination selection cancelled."
+                    appendLog("Texture destination selection cancelled.")
+                    return@startTextureOperation
+                }
+                textureDestination = selected
+                textureStatus = "Destination selected: ${selected.displayName}"
+                appendLog("Texture destination selected: ${selected.displayName}.")
+            }
+        }
+
+        fun installTextures() {
+            val profile = TextureProfileCatalog.find(preflight?.image?.discSerial)
+            if (profile == null) {
+                textureStatus = "Select an ISO with a supported game ID before installing textures."
+                return
+            }
+            val destination = textureDestination
+            if (destination == null) {
+                textureStatus = "Choose the PPSSPP PSP/TEXTURES folder first."
+                return
+            }
+            val installOptions = TextureInstallOptions(
+                includeRegionalButtonSwaps = includeRegionalButtonSwaps && profile.regionalButtonSwapAvailable,
+                includeExtraHdPortraits = includeExtraHdPortraits && profile.extraHdPortraitsAvailable,
+            )
+            startTextureOperation("Install HD Textures") { token ->
+                textureStatus = "Loading the pinned texture manifest."
+                val manifest = TextureAssetManifest.load()
+                val plan = TextureAssetManifest.buildPlan(profile, manifest, installOptions)
+                val result = withContext(Dispatchers.IO) {
+                    fileGateway.installTexturePack(destination, plan, token) { value ->
+                        scope.launch { textureProgress = value }
+                    }
+                }
+                textureProgress = null
+                textureStatus = "Installed ${result.filesInstalled} verified files to ${result.installedLocation}."
+                appendLog("Installed ${result.filesInstalled} verified texture files to ${result.installedLocation}.")
+            }
+        }
+
         fun exportLog() {
             val serial = preflight?.image?.discSerial
             val fileName = logExportFileName(serial, fileGateway.localDateStamp())
@@ -312,6 +398,8 @@ fun PatcherApp(
             preflight?.eboot?.supported == true &&
             options.validate().isEmpty()
         val busy = activeJob != null
+        val textureProfile = TextureProfileCatalog.find(preflight?.image?.discSerial)
+        val textureOperationBusy = activeOperation == "Choose Texture Destination" || activeOperation == "Install HD Textures"
 
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
             PatcherBackground(Modifier.fillMaxSize())
@@ -339,7 +427,22 @@ fun PatcherApp(
                                 compact = true,
                             )
 
-                            AppPage.HD_TEXTURES -> HdTexturesPage(compact = true)
+                            AppPage.HD_TEXTURES -> HdTexturesPage(
+                                profile = textureProfile,
+                                destination = textureDestination,
+                                includeRegionalButtonSwaps = includeRegionalButtonSwaps,
+                                includeExtraHdPortraits = includeExtraHdPortraits,
+                                statusText = textureStatus,
+                                progress = textureProgress,
+                                busy = busy,
+                                textureOperationBusy = textureOperationBusy,
+                                onPickDestination = ::selectTextureDestination,
+                                onRegionalButtonSwapsChanged = { includeRegionalButtonSwaps = it },
+                                onExtraHdPortraitsChanged = { includeExtraHdPortraits = it },
+                                onInstall = ::installTextures,
+                                onCancel = ::cancelCurrentOperation,
+                                compact = true,
+                            )
                             AppPage.LOGS -> LogsPage(
                                 entries = logEntries,
                                 status = status,
@@ -380,7 +483,22 @@ fun PatcherApp(
                                 compact = false,
                             )
 
-                            AppPage.HD_TEXTURES -> HdTexturesPage(compact = false)
+                            AppPage.HD_TEXTURES -> HdTexturesPage(
+                                profile = textureProfile,
+                                destination = textureDestination,
+                                includeRegionalButtonSwaps = includeRegionalButtonSwaps,
+                                includeExtraHdPortraits = includeExtraHdPortraits,
+                                statusText = textureStatus,
+                                progress = textureProgress,
+                                busy = busy,
+                                textureOperationBusy = textureOperationBusy,
+                                onPickDestination = ::selectTextureDestination,
+                                onRegionalButtonSwapsChanged = { includeRegionalButtonSwaps = it },
+                                onExtraHdPortraitsChanged = { includeExtraHdPortraits = it },
+                                onInstall = ::installTextures,
+                                onCancel = ::cancelCurrentOperation,
+                                compact = false,
+                            )
                             AppPage.LOGS -> LogsPage(
                                 entries = logEntries,
                                 status = status,
@@ -505,7 +623,22 @@ private fun PatcherBackground(modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun HdTexturesPage(compact: Boolean) {
+private fun HdTexturesPage(
+    profile: TextureProfile?,
+    destination: PlatformDirectorySelection?,
+    includeRegionalButtonSwaps: Boolean,
+    includeExtraHdPortraits: Boolean,
+    statusText: String,
+    progress: TextureInstallProgress?,
+    busy: Boolean,
+    textureOperationBusy: Boolean,
+    onPickDestination: () -> Unit,
+    onRegionalButtonSwapsChanged: (Boolean) -> Unit,
+    onExtraHdPortraitsChanged: (Boolean) -> Unit,
+    onInstall: () -> Unit,
+    onCancel: () -> Unit,
+    compact: Boolean,
+) {
     Column(
         Modifier
             .fillMaxSize()
@@ -515,17 +648,108 @@ private fun HdTexturesPage(compact: Boolean) {
     ) {
         Text("HD Textures", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold)
         PatcherSurface(Modifier.fillMaxWidth()) {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("PPSSPP texture profiles", style = MaterialTheme.typography.titleLarge)
+                if (profile == null) {
+                    Text(
+                        "Select an ISO in Setup to detect its game ID and match a texture profile. Texture installation has its own destination and status, separate from ISO patching.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else {
+                    Text(profile.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        "Game ID: ${profile.serial} · " + when (profile.coverage) {
+                            TextureCoverage.PRIMARY -> "Primary upstream profile"
+                            TextureCoverage.PARTIAL -> "Partial regional profile"
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        "Pinned source: HD ReMix+ ${TextureProfileCatalog.UPSTREAM_VERSION} · ${TextureProfileCatalog.CORE_PNG_ASSET_COUNT} base images · about 532 MiB expanded.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    PatcherCheckbox(
+                        label = "Install extra HD character portraits",
+                        checked = includeExtraHdPortraits,
+                        onCheckedChange = onExtraHdPortraitsChanged,
+                        enabled = !busy && profile.extraHdPortraitsAvailable,
+                    )
+                    if (profile.regionalButtonSwapAvailable) {
+                        PatcherCheckbox(
+                            label = "Install regional button swaps (rebind X/O in PPSSPP if needed)",
+                            checked = includeRegionalButtonSwaps,
+                            onCheckedChange = onRegionalButtonSwapsChanged,
+                            enabled = !busy,
+                        )
+                    } else {
+                        Text(
+                            "Regional button swaps are available for the European and North American profiles.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Text(
+                        "Aqua model delta: unavailable until the complete source ISO can be matched to a verified fingerprint.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+        PatcherSurface(Modifier.fillMaxWidth()) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("Install destination", style = MaterialTheme.typography.titleLarge)
                 Text(
-                    "Select a game ISO in Setup to identify its game ID. The matching profile, controller layout, Aqua compatibility, and texture destination will be shown here.",
+                    destination?.displayName ?: "Choose the PPSSPP PSP/TEXTURES folder. The app installs into a new game-ID folder and will not overwrite an existing profile.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                PatcherButton(
+                    label = if (destination == null) "Choose PPSSPP TEXTURES folder" else "Change destination folder",
+                    onClick = onPickDestination,
+                    enabled = !busy,
+                )
+            }
+        }
+        PatcherSurface(Modifier.fillMaxWidth()) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("Texture install", style = MaterialTheme.typography.titleLarge)
+                Text(statusText, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (progress != null) {
+                    if (progress.totalBytes > 0L) {
+                        PatcherProgress(
+                            progress = (progress.completedBytes.toDouble() / progress.totalBytes.toDouble()).toFloat().coerceIn(0f, 1f),
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    } else {
+                        PatcherIndeterminateProgress(Modifier.fillMaxWidth())
+                    }
+                    Text(
+                        "${progress.phase.name.replace('_', ' ')} · ${progress.completedFiles} / ${progress.totalFiles} files · ${formatTextureSize(progress.completedBytes)} / ${formatTextureSize(progress.totalBytes)}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else if (textureOperationBusy) {
+                    PatcherIndeterminateProgress(Modifier.fillMaxWidth())
+                }
+                PatcherButton(
+                    label = "Install verified textures",
+                    onClick = onInstall,
+                    enabled = profile != null && destination != null && !busy,
+                )
+                if (textureOperationBusy) {
+                    TextButton(onClick = onCancel) { Text("Cancel") }
+                }
             }
         }
     }
 }
+
+private fun formatTextureSize(bytes: Long): String =
+    if (bytes <= 0L) "—" else "${bytes / (1024L * 1024L)} MiB"
 
 @Composable
 private fun LogsPage(

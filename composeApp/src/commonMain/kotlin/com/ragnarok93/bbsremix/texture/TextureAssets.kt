@@ -1,7 +1,6 @@
 package com.ragnarok93.bbsremix.texture
 
 import com.ragnarok93.bbsremix.resources.Res
-import org.jetbrains.compose.resources.readBytes
 
 enum class TextureAssetKind {
     CORE,
@@ -54,6 +53,7 @@ data class TextureInstallResult(
 
 object TextureAssetManifest {
     const val RESOURCE_PATH = "files/texture-assets.tsv"
+    const val UPSTREAM_ARCHIVE_URL = "https://github.com/AkiraJkr/Birth-by-Sleep-HD-ReMix/archive/b858f34debbd7bd5b17e989cc194ab05a836c2b5.zip"
     const val MAX_ARCHIVE_BYTES = 650_000_000L
     const val MAX_UNCOMPRESSED_BYTES = 600_000_000L
     const val MAX_ARCHIVE_ENTRIES = 6_000
