@@ -2,7 +2,7 @@
 
 Kotlin Multiplatform + Compose Multiplatform app for applying the Birth By Sleep - Final ReMix patch set to a supported Kingdom Hearts: Birth by Sleep Final Mix PSP ISO.
 
-The app accepts an `.iso` as its patch input and validates the supported decrypted English-patched EBOOT fingerprint. The current patchable research profile is **right-stick camera only**: it uses resident MainApp code/data, does not extend an ELF load segment, and leaves the dynamic overlay arena untouched. PC-derived camera geometry and combat features remain disabled. A separate Diagnostic rebuild writes the original EBOOT unchanged and requires the complete output ISO to remain byte-identical. The source image is never overwritten.
+The app accepts an `.iso` as its patch input and validates the supported decrypted English-patched EBOOT fingerprint. The current PSP-native camera profile supports **right-stick camera control, camera distance, and camera height** using only resident MainApp code/data. It does not extend an ELF load segment and leaves the dynamic overlay arena untouched. Better Battle System combat features remain disabled while they are re-derived against the PSP executable. A separate Diagnostic rebuild writes the original EBOOT unchanged and requires the complete output ISO to remain byte-identical. The source image is never overwritten.
 
 ## Supported image profile
 
@@ -22,10 +22,10 @@ Encrypted PSP PRX containers (`~PSP`/`~SCE`) are identified and rejected before 
 
 1. Select a source `.iso` with the Android document picker or native desktop file dialog.
 2. Review the expandable Detected Game pane. When present, the patcher loads PSP cover art from `PSP_GAME/ICON0.PNG`.
-3. Leave **Right-stick camera control** enabled for the current PSP-native test profile. Camera distance/height and Combat Mods are visible but disabled pending PSP-native re-derivation.
+3. Select any combination of **Right-stick camera control**, **Camera distance**, and **Camera height**. Combat Mods remain disabled.
 4. Select a separate output path.
 5. Use **Diagnostic rebuild** first when validating a new environment. It writes the original EBOOT unchanged and requires the complete output to compare byte-for-byte equal to the staged source.
-6. Use **Patch ISO** to create the resident right-stick-only candidate. It preserves the original two ELF program headers and does not write the legacy overlay payload region.
+6. Use **Patch Camera ISO** to create the selected resident PSP-native camera profile. Right-stick control modifies only resident MainApp input/camera instructions; distance and height modify only the native camera parameter table. The original two ELF program headers remain intact and the legacy overlay payload region is untouched.
 7. Open Logs, use Verify Output to inspect an ISO, and keep texture installation/verification separate.
 8. Export the live operation log to a user-chosen location. The filename uses the detected game ID and local date; when the ISO has no valid ID, the filename clearly says the serial is unavailable.
 
@@ -33,10 +33,11 @@ The app does not ask the user to extract EBOOT.BIN, run Python, decrypt files, o
 
 ## Patch options
 
-The current PSP-native revalidation profile enables only the right-stick camera candidate. PC-derived camera distance/height and combat features remain visible for roadmap context but are disabled and rejected by validation until re-derived against the exact PSP executable:
+The current PSP-native camera profile exposes three independent camera features. Right-stick camera direction and compatibility with both in-game camera-control options have passed runtime testing; distance and height are newly re-derived data-only candidates pending runtime confirmation. Combat features remain visible for roadmap context but are disabled and rejected by validation:
 
 - Right-stick camera control
-- Camera distance and camera height
+- Camera distance — writes the native signed Z component in the two resident player-camera mode vectors
+- Camera height — writes the native Y component in the same two resident camera-mode vectors
 - Hit-aware cancels
 - Invincibility windows
 - Extended defense
@@ -110,11 +111,19 @@ This project remains under the repository's GPL-3.0 license. OneUI-Compose is co
 ## Runtime validation status
 
 The previous Stage 5 candidate reproduced both reported crash classes because its S2/S4/S5
-payloads occupied MainApp's dynamic `.overlays` arena. The current right-stick candidate
+payloads occupied MainApp's dynamic `.overlays` arena. The current right-stick implementation
 contains **no injected overlay blob**: it preserves the controller poll at `0x08816688`,
 captures PPSSPP's second-stick bytes from the game's existing four-record input buffer into
-resident MainApp padding, and tags only the four native Type-B camera analog calls. ELF
-program-header count and LOAD sizes remain unchanged. PC-derived camera geometry and combat
-ports remain disabled pending re-derivation. Verify Output checks structure and bytes;
-gameplay validation remains separate. See [PSP-native gameplay port restart](docs/psp-native-port-restart.md)
-and [Runtime remediation](docs/runtime-remediation.md).
+resident MainApp padding, and tags only the four native Type-B camera analog calls. Runtime
+testing now confirms correct right-stick directions and operation with both in-game camera
+control settings without interference with other controls.
+
+Camera distance and height have also been re-derived from the exact PSP executable. MainApp's
+resident camera table at `0x08B59F00` contains two native camera-mode position vectors:
+`[0.0, 1.5, -3.5, 1.0]` and `[0.0, 1.0, -3.5, 1.0]`. The PSP-native geometry patch changes
+only their Y (height) and signed Z (distance) components. It adds no executable payload and
+does not alter ELF program-header count or LOAD sizes. Runtime validation of these two
+geometry controls is pending. Better Battle System combat ports remain disabled. Verify
+Output checks structure and bytes; gameplay validation remains separate. See
+[PSP-native gameplay port restart](docs/psp-native-port-restart.md) and
+[Runtime remediation](docs/runtime-remediation.md).
