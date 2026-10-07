@@ -4,9 +4,11 @@
 Targets exactly the decrypted English-patched EBOOT fingerprint used during development.
 This patcher contains patch data/injected code only; it does not contain game assets.
 
-Supported runtime profile:
+Supported runtime profiles:
 - PSP-native right-stick camera through the game's existing Type-B camera path,
   using resident MainApp input capture modeled on TheOfficialFloW/RemasteredControls
+- PSP-native camera distance/height through MainApp's resident player-camera
+  parameter table; no injected runtime code or additional ELF segment
 
 Dormant research code (not enabled by the application):
 - Stage 4/5 PC-behavior-port payloads
@@ -154,13 +156,25 @@ S5_CRITICAL_PASSIVE_MASK = 0x04008300  # Munny Plus|Berserk|Auto-Remedy|Double C
 S5_WRAPPER_BLOB = bytes.fromhex(
     "00c02d0e00000000b708083c00130991010029311200201100000000b608083cb0a4088d0e00001100000000a800088d0b00001100000000f209093c015f299103000a2406002a15000000003000098d00040a3c00834a3525482a01300009ad425a200a00000000"
 )
-# PSP player-camera static parameter blocks. Free/normal mode uses base+0x10,
-# lock-on uses base+0x40: the two blocks are exactly 0x30 bytes apart.
-# +0x14 is the vertical camera target/height parameter.
+# PSP player-camera resident parameter table.
+# MainApp selects two 0x30-byte mode records at base+0x10 and base+0x40.
+# Their first homogeneous position vector starts at record+0x10:
+#   mode 1: [0.0, 1.5, -3.5, 1.0]
+#   mode 2: [0.0, 1.0, -3.5, 1.0]
+# Native camera setup passes these vectors directly to 0x08AE0AF0, so +0x14
+# is Y/height and +0x18 is signed Z/distance.
+CAMERA_TABLE_VA = 0x08B59F00
+CAMERA_TABLE_SIGNATURE = 0x41435040
+CAMERA_MODE1_RECORD_VA = 0x08B59F10
+CAMERA_MODE2_RECORD_VA = 0x08B59F40
 CAMERA_FREE_HEIGHT_VA = 0x08B59F24
+CAMERA_FREE_DISTANCE_VA = 0x08B59F28
 CAMERA_LOCK_HEIGHT_VA = 0x08B59F54
+CAMERA_LOCK_DISTANCE_VA = 0x08B59F58
 CAMERA_FREE_HEIGHT_ORIG = 1.5
 CAMERA_LOCK_HEIGHT_ORIG = 1.0
+CAMERA_FREE_DISTANCE_ORIG = -3.5
+CAMERA_LOCK_DISTANCE_ORIG = -3.5
 NOP = 0
 
 def jal(target:int)->int:
@@ -203,13 +217,34 @@ def verify(data:bytes, camera_controls:bool, post_input:bool):
         if got!=exp: raise ValueError(f'post-input hook mismatch @0x{va:08X} got 0x{got:08X} exp 0x{exp:08X}')
         if S4_VA+S5_SEGMENT_PAD>=ORIGINAL_LOAD1_VA: raise ValueError('Stage 5 VA overlaps original LOAD #1')
 
-def verify_camera_height(data:bytes):
-    free = f32(data, foff(CAMERA_FREE_HEIGHT_VA))
-    lock = f32(data, foff(CAMERA_LOCK_HEIGHT_VA))
-    if abs(free - CAMERA_FREE_HEIGHT_ORIG) > 1e-6:
-        raise ValueError(f'free-camera height mismatch @0x{CAMERA_FREE_HEIGHT_VA:08X}: {free:g}')
-    if abs(lock - CAMERA_LOCK_HEIGHT_ORIG) > 1e-6:
-        raise ValueError(f'lock-on height mismatch @0x{CAMERA_LOCK_HEIGHT_VA:08X}: {lock:g}')
+def verify_camera_geometry_source(data:bytes):
+    if u32(data, foff(CAMERA_TABLE_VA)) != CAMERA_TABLE_SIGNATURE:
+        raise ValueError('camera parameter table signature mismatch')
+    if u32(data, foff(CAMERA_MODE1_RECORD_VA)) != 1:
+        raise ValueError('camera mode 1 record mismatch')
+    if u32(data, foff(CAMERA_MODE2_RECORD_VA)) != 2:
+        raise ValueError('camera mode 2 record mismatch')
+    expected = [
+        (CAMERA_FREE_HEIGHT_VA, CAMERA_FREE_HEIGHT_ORIG, 'camera mode 1 height'),
+        (CAMERA_FREE_DISTANCE_VA, CAMERA_FREE_DISTANCE_ORIG, 'camera mode 1 distance'),
+        (CAMERA_LOCK_HEIGHT_VA, CAMERA_LOCK_HEIGHT_ORIG, 'camera mode 2 height'),
+        (CAMERA_LOCK_DISTANCE_VA, CAMERA_LOCK_DISTANCE_ORIG, 'camera mode 2 distance'),
+        (CAMERA_MODE1_RECORD_VA + 0x1C, 1.0, 'camera mode 1 vector W'),
+        (CAMERA_MODE2_RECORD_VA + 0x1C, 1.0, 'camera mode 2 vector W'),
+    ]
+    for va,value,desc in expected:
+        got=f32(data,foff(va))
+        if abs(got-value)>1e-6:
+            raise ValueError(f'{desc} mismatch @0x{va:08X}: {got:g}')
+
+def apply_camera_geometry(out:bytearray,camera_distance_enabled:bool,camera_distance:float,camera_height_enabled:bool,camera_height:float):
+    if camera_distance_enabled:
+        signed=-float(camera_distance)
+        pf32(out,foff(CAMERA_FREE_DISTANCE_VA),signed)
+        pf32(out,foff(CAMERA_LOCK_DISTANCE_VA),signed)
+    if camera_height_enabled:
+        pf32(out,foff(CAMERA_FREE_HEIGHT_VA),float(camera_height))
+        pf32(out,foff(CAMERA_LOCK_HEIGHT_VA),float(camera_height))
 
 def make_config(args, combat:bool, camera_distance:bool)->int:
     cfg=0x3C if combat else 0x00  # conservative cancels + exclusions + telemetry
@@ -221,7 +256,6 @@ def make_config(args, combat:bool, camera_distance:bool)->int:
         if args.no_command_cancel: cfg &= ~0x08
         if args.no_telemetry: cfg &= ~0x10
         if args.no_critical_abilities: cfg &= ~0x40
-    if camera_distance: cfg |= 0x80
     return cfg
 
 def add_stage5(out:bytearray,cfg:int,camera_distance:float,critical_passives:bool):
@@ -246,52 +280,80 @@ def add_stage5(out:bytearray,cfg:int,camera_distance:float,critical_passives:boo
     if len(out)<S4_FILE_OFF: out.extend(b'\0'*(S4_FILE_OFF-len(out)))
     out.extend(blob)
 
-def patch(data:bytes,camera_controls:bool=True,post_input:bool=False,cfg:int=0,camera_distance:float=4.5,camera_height_enabled:bool=False,camera_height:float=1.0,critical_passives:bool=False)->bytearray:
-    if not camera_controls:
-        raise ValueError('The current supported research profile is right-stick camera only')
-    if post_input or camera_height_enabled or critical_passives or cfg:
-        raise ValueError('PC-derived camera/combat paths are disabled pending PSP-native re-derivation')
-    verify(data,True,False)
+def patch(data:bytes,camera_controls:bool=True,post_input:bool=False,cfg:int=0,camera_distance_enabled:bool=False,camera_distance:float=4.5,camera_height_enabled:bool=False,camera_height:float=1.0,critical_passives:bool=False)->bytearray:
+    if not (camera_controls or camera_distance_enabled or camera_height_enabled):
+        raise ValueError('Enable at least one PSP-native camera feature')
+    if not 1.0 <= float(camera_distance) <= 12.0:
+        raise ValueError('Camera distance must be between 1.0 and 12.0')
+    if not 0.0 <= float(camera_height) <= 4.0:
+        raise ValueError('Camera height must be between 0.0 and 4.0')
+    if post_input or critical_passives or cfg:
+        raise ValueError('Better Battle System runtime payloads remain disabled pending PSP-native re-derivation')
+    verify(data,camera_controls,False)
+    if camera_distance_enabled or camera_height_enabled:
+        verify_camera_geometry_source(data)
     out=bytearray(data)
-    for va,exp,rep,desc in RIGHT_STICK_WORD_PATCHES:
-        p32(out,foff(va),rep)
-    for va,exp,rep,desc in RIGHT_STICK_BYTE_PATCHES:
-        out[foff(va)] = rep
+    if camera_controls:
+        for va,exp,rep,desc in RIGHT_STICK_WORD_PATCHES:
+            p32(out,foff(va),rep)
+        for va,exp,rep,desc in RIGHT_STICK_BYTE_PATCHES:
+            out[foff(va)] = rep
+    apply_camera_geometry(out,camera_distance_enabled,camera_distance,camera_height_enabled,camera_height)
     # Resident-only invariant: do not modify program-header layout or the legacy
     # overlay payload region.
     if u16(out,E_PHNUM_OFF)!=2:
-        raise ValueError('right-stick patch changed ELF program-header count')
+        raise ValueError('PSP-native camera patch changed ELF program-header count')
     if u32(out,PH0_FILESZ_OFF)!=OLD_SEGMENT_SIZE or u32(out,PH0_MEMSZ_OFF)!=OLD_SEGMENT_SIZE:
-        raise ValueError('right-stick patch changed LOAD #0 size')
+        raise ValueError('PSP-native camera patch changed LOAD #0 size')
     if any(out[S2_FILE_OFF:S2_FILE_OFF+len(S2_BLOB)]):
-        raise ValueError('right-stick patch wrote into the dynamic overlay arena')
+        raise ValueError('PSP-native camera patch wrote into the dynamic overlay arena')
     return out
 
 def main():
     ap=argparse.ArgumentParser(
-        description='BBSFM ULJM-05775 PSP-native resident right-stick camera patcher'
+        description='BBSFM ULJM-05775 PSP-native resident camera patcher'
     )
     ap.add_argument('input',type=Path,help='ORIGINAL decrypted English-patched EBOOT.BIN')
     ap.add_argument('output',nargs='?',type=Path)
+    ap.add_argument('--no-right-stick',action='store_true',help='do not patch right-stick camera control')
+    ap.add_argument('--camera-distance',type=float,default=None,metavar='VALUE',help='patch native camera distance (1.0-12.0)')
+    ap.add_argument('--camera-height',type=float,default=None,metavar='VALUE',help='patch native camera height (0.0-4.0)')
     ap.add_argument('--verify-only',action='store_true')
     args=ap.parse_args()
 
+    camera_controls=not args.no_right_stick
+    distance_enabled=args.camera_distance is not None
+    height_enabled=args.camera_height is not None
     data=args.input.read_bytes()
-    verify(data,True,False)
+    verify(data,camera_controls,False)
+    if distance_enabled or height_enabled:
+        verify_camera_geometry_source(data)
     print('Supported source fingerprint verified:',SUPPORTED_SHA256)
-    print('Profile: PSP-native resident right-stick candidate; gameplay validation pending')
+    print('Profile: resident PSP-native camera controls/geometry')
     print('ELF layout: unchanged (2 program headers; LOAD #0 is not extended)')
     print('Overlay arena: untouched')
     if args.verify_only:
         return 0
 
-    out=patch(data)
-    dst=args.output or args.input.with_name(args.input.stem + '.psp-native-rightstick.BIN')
+    out=patch(
+        data,
+        camera_controls=camera_controls,
+        camera_distance_enabled=distance_enabled,
+        camera_distance=args.camera_distance if distance_enabled else 4.5,
+        camera_height_enabled=height_enabled,
+        camera_height=args.camera_height if height_enabled else 1.0,
+    )
+    dst=args.output or args.input.with_name(args.input.stem + '.psp-native-camera.BIN')
     dst.write_bytes(out)
     print('Wrote:',dst)
     print('Patched SHA-256:',sha(out))
     print('Output size:',len(out))
-    print('PPSSPP: bind your physical right stick to Right Analog X/Y.')
+    if camera_controls:
+        print('PPSSPP: bind your physical right stick to Right Analog X/Y.')
+    if distance_enabled:
+        print('Camera distance:',args.camera_distance,'(native Z =',-args.camera_distance,')')
+    if height_enabled:
+        print('Camera height:',args.camera_height)
     return 0
 
 if __name__=='__main__': raise SystemExit(main())
