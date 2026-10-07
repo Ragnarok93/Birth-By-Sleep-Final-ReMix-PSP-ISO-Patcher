@@ -32,7 +32,7 @@ The app does not ask the user to extract EBOOT.BIN, run Python, decrypt files, o
 
 ## Patch options
 
-Defaults are enabled for right-stick camera control, camera distance `4.5`, camera height `1.0`, and the Combat Mods. Every feature is independently toggleable:
+The current PSP-native revalidation profile enables only the right-stick camera candidate. PC-derived camera distance/height and combat features remain visible for roadmap context but are disabled and rejected by validation until re-derived against the exact PSP executable:
 
 - Right-stick camera control
 - Camera distance and camera height
@@ -108,9 +108,10 @@ This project remains under the repository's GPL-3.0 license. OneUI-Compose is co
 
 ## Runtime validation status
 
-The current patch is a conservative candidate: the right-stick capture wrapper
-preserves its buffer and return state across the original call; unvalidated
-hit-aware, invincibility, and Critical ability/passive writes are disabled.
-Verify Output checks structure and bytes. Gameplay validation is pending, and
-release packaging requires the evidence matrix documented in
-[Runtime remediation](docs/runtime-remediation.md).
+The previous conservative Stage 5 candidate still reproduced both reported crash classes.
+The supported research profile has therefore been reset to a PSP-native right-stick-only
+candidate. It leaves the main controller poll at `0x08816688` untouched and performs direct
+right-analog reads through the game's existing controller import, following the PSP-native
+RemasteredControls strategy. All PC-derived camera and combat ports are disabled pending
+re-derivation. Verify Output checks structure and bytes; gameplay validation remains separate.
+See [Runtime remediation](docs/runtime-remediation.md).
