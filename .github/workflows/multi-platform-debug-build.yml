@@ -26,8 +26,10 @@ jobs:
           packages: platform-tools
       - name: Set up Gradle (Android)
         uses: gradle/actions/setup-gradle@v4.4.1
-      - name: Check pinned OneUI JitPack build (Android)
-        run: curl -sS -w '\nHTTP %{http_code}\n' 'https://jitpack.io/api/builds/com.github.Ragnarok93/oneui-compose/1fe97b4e5a4ad559a7252376fad650a64310b229' || true
+      - name: Check pinned OneUI JitPack module (Android)
+        run: |
+          curl -sS -w '\nHTTP %{http_code}\n' 'https://jitpack.io/api/builds/com.github.Ragnarok93.oneui-compose/lib/1fe97b4e5a4ad559a7252376fad650a64310b229' || true
+          curl -sS -w '\nHTTP %{http_code}\n' 'https://jitpack.io/com/github/Ragnarok93/oneui-compose/lib/1fe97b4e5a4ad559a7252376fad650a64310b229/lib-1fe97b4e5a4ad559a7252376fad650a64310b229.pom' || true
       - name: Run Android debug unit tests (Android)
         run: sh ./gradlew :composeApp:testDebugUnitTest --refresh-dependencies --stacktrace
       - name: Build Android debug APK (Android)
