@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
-"""KH Birth by Sleep Final Mix ULJM-05775 — Birth By Sleep - Final ReMix Stage 5 conservative runtime candidate.
+"""KH Birth by Sleep Final Mix ULJM-05775 — PSP-native revalidation candidate.
 
 Targets exactly the decrypted English-patched EBOOT fingerprint used during development.
 This patcher contains patch data/injected code only; it does not contain game assets.
 
-Retained Stage 5 code (advanced writes below are disabled):
-- direct PPSSPP right-stick camera through the game's existing Type-B camera path
+Supported runtime profile:
+- PSP-native right-stick camera through the game's existing Type-B camera path,
+  using direct controller reads modeled on TheOfficialFloW/RemasteredControls
+
+Dormant research code (not enabled by the application):
+- Stage 4/5 PC-behavior-port payloads
 - native player-camera distance override (default 4.5) using BBS zoom ratio fields; modes 1/2 only
 - normal/free + lock-on player-camera height override (default 1.0), mapped from the PSP camera parameter table
 - hit-aware attack/finisher cancels using player+0x23C low 2-bit attack-target state
@@ -37,71 +41,43 @@ THIRD_PHDR_OFF = 0x74
 S2_FILE_OFF = 0x0036BE80
 S2_VA = 0x08B6EE80
 NEXT_ORIGINAL_LOAD_FILE_OFF = 0x0036C000
-# Camera-only replacement, assembled from labels to keep helper JALs and data
-# addresses consistent. The original routine uses a0=pad buffer, a1=count.
-# O32 outgoing argument area is sp+0..15; saved s0/ra live at +24/+28.
-def build_camera_payload():
-    words = []
-    labels = {}
-    branches = []
-    data_refs = []
-    def emit(word): words.append(word)
-    def label(name): labels[name] = len(words) * 4
-    def branch(word, target):
-        branches.append((len(words), target))
-        emit(word)
-    def data_ref(word, target):
-        data_refs.append((len(words), target))
-        emit(word)
+# PSP-native right-stick helper derived from TheOfficialFloW/RemasteredControls.
+# Do not hook the game's controller-poll function at 0x08816688. Each camera helper
+# performs its own controller read through the game's existing import stub at
+# 0x08B16D38 and consumes SceCtrlData.Rsrv[0]/Rsrv[1].
+def _right_analog_helper(reserved_offset:int)->bytes:
+    words = [
+        0x27BDFFD0,       # addiu sp,sp,-48: outgoing args + local SceCtrlData
+        0xAFBF002C,       # sw ra,44(sp)
+        0x27A40010,       # addiu a0,sp,16
+        0x34050001,       # ori a1,zero,1
+        0x0E2C5B4E,       # jal 0x08B16D38 (controller peek import stub)
+        0x00000000,
+        0x1840000A,       # blez v0,neutral
+        0x00000000,
+        0x93A80000 | reserved_offset,
+        0x2508FF80,       # byte - 128
+        0x44880000,       # mtc1 t0,f0
+        0x46800020,       # cvt.s.w f0,f0
+        0x3C093C00,       # 1/128
+        0x44891000,       # mtc1 t1,f2
+        0x46020002,       # mul.s f0,f0,f2
+        0x10000002,       # b done
+        0x00000000,
+        0x44800000,       # neutral: mtc1 zero,f0
+        0x8FBF002C,
+        0x03E00008,
+        0x27BD0030,
+    ]
+    return struct.pack('<' + 'I' * len(words), *words)
 
-    label('capture')
-    emit(0x27BDFFE0)  # addiu sp,sp,-32
-    emit(0xAFBF001C)  # sw ra,28(sp)
-    emit(0xAFB00018)  # sw s0,24(sp)
-    emit(0x00808021)  # addu s0,a0,zero: actual pad-buffer pointer
-    emit(0x0E2C5B4E)  # jal original controller routine, 0x08B16D38
-    emit(0)           # delay slot
-    emit(0x3C0808B7)  # lui t0,0x08B7 (signed low address)
-    emit(0x24090080)  # neutral X on failed read
-    emit(0x240A0080)  # neutral Y on failed read
-    branch(0x18400000, 'store')  # blez v0,store
-    emit(0)
-    branch(0x12000000, 'store')  # beq s0,zero,store
-    emit(0)
-    emit(0x9209000A)  # lbu t1,10(s0)
-    emit(0x920A000B)  # lbu t2,11(s0)
-    label('store')
-    data_ref(0xA1090000, 'x')
-    data_ref(0xA10A0000, 'y')
-    emit(0x8FB00018)  # restore s0
-    emit(0x8FBF001C)  # restore ra; leave v0/v1 from original call untouched
-    emit(0x03E00008)  # jr ra
-    emit(0x27BD0020)  # delay slot: restore sp
-    label('right_x')
-    emit(0x3C0808B7)
-    branch(0x10000000, 'convert')
-    data_ref(0x91020000, 'x')  # branch delay slot
-    label('right_y')
-    emit(0x3C0808B7)
-    data_ref(0x91020000, 'y')
-    label('convert')
-    # Original Type-B conversion: (unsigned byte - 128) * (1/128), f0 result.
-    words.extend([0x2442FF80, 0x44820000, 0x46800020, 0x3C083C00,
-                  0x44881000, 0x03E00008, 0x46020002])
-    code_size = len(words) * 4
-    labels['x'], labels['y'] = code_size, code_size + 1
-    for index, target in branches:
-        words[index] |= ((labels[target] - (index * 4 + 4)) // 4) & 0xffff
-    for index, target in data_refs:
-        words[index] |= (S2_VA + labels[target]) & 0xffff
-    blob = struct.pack('<' + 'I' * len(words), *words) + bytes([128, 128])
-    return blob, labels, code_size
-
-S2_BLOB, S2_LABELS, S2_CODE_SIZE = build_camera_payload()
+S2_RIGHT_X_VA = S2_VA
+S2_X_BLOB = _right_analog_helper(0x1A)  # local SceCtrlData + 10 = Rsrv[0]
+S2_RIGHT_Y_VA = S2_VA + len(S2_X_BLOB)
+S2_Y_BLOB = _right_analog_helper(0x1B)  # local SceCtrlData + 11 = Rsrv[1]
+S2_BLOB = S2_X_BLOB + S2_Y_BLOB
+S2_CODE_SIZE = len(S2_BLOB)
 S2_NEW_SEGMENT_SIZE = (S2_FILE_OFF + len(S2_BLOB)) - 0x1018
-S2_CAPTURE_PAD_VA = S2_VA + S2_LABELS['capture']
-S2_RIGHT_X_VA = S2_VA + S2_LABELS['right_x']
-S2_RIGHT_Y_VA = S2_VA + S2_LABELS['right_y']
 
 S4_FILE_OFF = 0x0036D000
 S4_VA = 0x08B70000
@@ -151,7 +127,6 @@ def pf32(b,off,v): struct.pack_into('<f',b,off,float(v))
 def sha(b): return hashlib.sha256(b).hexdigest()
 
 CAMERA_PATCHES = [
- (0x08816688,0x0E2C5B4E,jal(S2_CAPTURE_PAD_VA),'capture PPSSPP second analog'),
  (0x08940FEC,0x508000BA,NOP,'remove L modifier from camera'),
  (0x0898F68C,0x1C80000B,NOP,'force Type-B horizontal camera'),
  (0x0898F850,0x1C80000B,NOP,'force Type-B vertical camera'),
