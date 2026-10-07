@@ -114,6 +114,7 @@ jobs:
             exit 1
           fi
           cp "$icon" "$app_dir/.DirIcon"
+          cp "$icon" "$app_dir/bbs-remix.png"
           cp "$icon" "$app_dir/usr/share/icons/hicolor/512x512/apps/bbs-remix.png"
           curl --fail --location --retry 3 --output "$RUNNER_TEMP/appimagetool" \
             https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
