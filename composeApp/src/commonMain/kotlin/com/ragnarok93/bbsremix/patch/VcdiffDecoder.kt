@@ -398,12 +398,11 @@ object VcdiffDecoder {
 
     private fun buildDefaultCodeTable(): List<CodeEntry> {
         val table = MutableList(256) { CodeEntry(Instruction(InstructionType.NOOP), Instruction(InstructionType.NOOP)) }
+        var tableIndex = 0
         fun entry(first: Instruction, second: Instruction = Instruction(InstructionType.NOOP)) {
             if (tableIndex >= table.size) fail("The built-in VCDIFF code table is invalid.")
             table[tableIndex++] = CodeEntry(first, second)
         }
-
-        var tableIndex = 0
         entry(Instruction(InstructionType.RUN))
         entry(Instruction(InstructionType.ADD))
         for (size in 1..17) entry(Instruction(InstructionType.ADD, size))
