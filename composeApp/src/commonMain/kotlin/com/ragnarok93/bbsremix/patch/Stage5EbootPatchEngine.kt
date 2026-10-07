@@ -24,10 +24,10 @@ class Stage5EbootPatchEngine : EbootPatchEngine {
             problems += "EBOOT.BIN is neither the supported decrypted ELF nor a recognized PSP PRX container."
         }
         if (data.size != SUPPORTED_SIZE) {
-            problems += "Unsupported EBOOT size \${data.size}; expected $SUPPORTED_SIZE bytes."
+            problems += "Unsupported EBOOT size ${data.size}; expected $SUPPORTED_SIZE bytes."
         }
         if (fingerprint.sha256 != SUPPORTED_SHA256) {
-            problems += "Unsupported EBOOT SHA-256 \${fingerprint.sha256}; expected $SUPPORTED_SHA256."
+            problems += "Unsupported EBOOT SHA-256 ${fingerprint.sha256}; expected $SUPPORTED_SHA256."
         }
 
         if (data.size >= E_PHNUM_OFFSET + 2 && data.readShortLe(E_PHNUM_OFFSET) != 2) {
@@ -246,7 +246,7 @@ class Stage5EbootPatchEngine : EbootPatchEngine {
             val offset = fileOffset(virtualAddress)
             if (offset < 0 || offset + 4 > data.size || data.readIntLe(offset) != expected) {
                 val found = if (offset >= 0 && offset + 4 <= data.size) data.readIntLe(offset).toUInt().toString(16) else "out-of-range"
-                problems += "$description mismatch at VA 0x\${virtualAddress.toString(16)} (got 0x$found)."
+                problems += "$description mismatch at VA 0x${virtualAddress.toString(16)} (got 0x$found)."
             }
         }
     }
