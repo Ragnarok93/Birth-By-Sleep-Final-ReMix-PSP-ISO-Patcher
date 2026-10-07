@@ -1,13 +1,7 @@
 package com.ragnarok93.bbsremix.patch
 
-enum class PatchMode {
-    COMBINED,
-    CAMERA_ONLY,
-    COMBAT_ONLY,
-}
-
 data class PatchOptions(
-    val mode: PatchMode = PatchMode.COMBINED,
+    val rightStickCamera: Boolean = true,
     val cameraDistanceEnabled: Boolean = true,
     val cameraDistance: Float = 4.5f,
     val cameraHeightEnabled: Boolean = true,
@@ -21,17 +15,24 @@ data class PatchOptions(
     val criticalModeAbilities: Boolean = true,
     val criticalModePassives: Boolean = true,
 ) {
-    val rightStickCamera: Boolean
-        get() = mode != PatchMode.COMBAT_ONLY
-
     val combatFeatures: Boolean
-        get() = mode != PatchMode.CAMERA_ONLY
+        get() = strictSteamExclusions ||
+            hitAwareCancels ||
+            invincibilityWindows ||
+            extendedDefense ||
+            commandCancels ||
+            telemetry ||
+            criticalModeAbilities ||
+            criticalModePassives
 
     val appliesCameraDistance: Boolean
-        get() = cameraDistanceEnabled && mode != PatchMode.COMBAT_ONLY
+        get() = cameraDistanceEnabled
 
     val appliesCameraHeight: Boolean
-        get() = cameraHeightEnabled && mode != PatchMode.COMBAT_ONLY
+        get() = cameraHeightEnabled
+
+    val hasSelectedFeature: Boolean
+        get() = rightStickCamera || appliesCameraDistance || appliesCameraHeight || combatFeatures
 
     fun validate(): List<PatchOptionError> = buildList {
         if (cameraDistance !in CAMERA_DISTANCE_RANGE) {
@@ -39,6 +40,9 @@ data class PatchOptions(
         }
         if (cameraHeight !in CAMERA_HEIGHT_RANGE) {
             add(PatchOptionError.CameraHeightOutOfRange(cameraHeight))
+        }
+        if (!hasSelectedFeature) {
+            add(PatchOptionError.NoFeaturesSelected)
         }
     }
 
@@ -59,5 +63,9 @@ sealed class PatchOptionError(val message: String) {
 
     data class CameraHeightOutOfRange(val value: Float) : PatchOptionError(
         "Camera height must be between 0.0 and 4.0 (received $value)."
+    )
+
+    data object NoFeaturesSelected : PatchOptionError(
+        "Enable at least one patch feature before creating an output ISO."
     )
 }
