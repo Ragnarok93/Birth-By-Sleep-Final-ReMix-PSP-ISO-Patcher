@@ -232,7 +232,7 @@ class IsoPatchingService(
     ): IsoPatchResult {
         if (!RUNTIME_PATCHING_ENABLED) {
             throw PatchValidationException(
-                "Gameplay patching is temporarily disabled. The previous payloads were placed in the MainApp overlay arena and are being re-derived against the English-patched PSP executable. Use Diagnostic rebuild to validate the ISO pipeline without changing game code.",
+                "No runtime-validated PSP-native patch profile is enabled for the selected options. Use the right-stick-only profile or Diagnostic rebuild.",
             )
         }
         if (source == destination) throw PatchValidationException("The output ISO must be different from the source ISO.")
@@ -320,7 +320,7 @@ class IsoPatchingService(
     private companion object {
         const val MAX_COVER_ART_BYTES = 4L * 1024L * 1024L
         const val COMPARE_CHUNK_SIZE = 1024 * 1024
-        const val RUNTIME_PATCHING_ENABLED = false
+        const val RUNTIME_PATCHING_ENABLED = true
     }
 }
 
