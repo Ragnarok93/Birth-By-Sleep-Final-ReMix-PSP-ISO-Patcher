@@ -103,6 +103,7 @@ class Stage5EbootPatchEngine : EbootPatchEngine {
         if (!options.hasSelectedFeature) return PatchVerification(false, problems)
 
         val postInput = options.combatFeatures || options.appliesCameraDistance
+        if (!data.startsWith(ELF_MAGIC)) problems += "The embedded EBOOT is not a decrypted ELF."
         if (data.size < SUPPORTED_SIZE) {
             problems += "The embedded EBOOT is smaller than the supported input profile."
             return PatchVerification(false, problems)
@@ -174,6 +175,15 @@ class Stage5EbootPatchEngine : EbootPatchEngine {
             ) {
                 problems += "The Stage 5 runtime hook is missing."
             }
+            val expectedSegment = stage5Segment(options)
+            if (data.size >= Stage5Payloads.S4_FILE_OFFSET + expectedSegment.size &&
+                !data.copyOfRange(
+                    Stage5Payloads.S4_FILE_OFFSET,
+                    Stage5Payloads.S4_FILE_OFFSET + expectedSegment.size,
+                ).contentEquals(expectedSegment)
+            ) {
+                problems += "The combat payload, telemetry initialization, or segment padding is altered."
+            }
             val configOffset = Stage5Payloads.S4_FILE_OFFSET + Stage5Payloads.S4_CONFIG_OFFSET
             if (configOffset >= data.size ||
                 (data[configOffset].toInt() and 0xff) != makeConfig(options)
@@ -196,7 +206,7 @@ class Stage5EbootPatchEngine : EbootPatchEngine {
                 problems += "The Stage 5 wrapper is missing or altered."
             }
             val passiveOffset = Stage5Payloads.S4_FILE_OFFSET + Stage5Payloads.S5_PASSIVES_CONFIG_OFFSET
-            val expectedPassive = if (options.combatFeatures && options.criticalModePassives) 1 else 0
+            val expectedPassive = 0
             if (passiveOffset >= data.size || (data[passiveOffset].toInt() and 0xff) != expectedPassive) {
                 problems += "The Critical Mode passive configuration does not match the selected toggle."
             }
@@ -276,18 +286,23 @@ class Stage5EbootPatchEngine : EbootPatchEngine {
         }
     }
 
-    private fun addStage5(output: ByteArray, options: PatchOptions): ByteArray {
+    private fun stage5Segment(options: PatchOptions): ByteArray {
         val config = makeConfig(options)
         val segment = Stage5Payloads.s4Blob.copyOf().toMutableList()
         while (segment.size < Stage5Payloads.S5_WRAPPER_OFFSET) segment.add(0.toByte())
         segment += Stage5Payloads.s5WrapperBlob.toList()
         while (segment.size < Stage5Payloads.S5_PASSIVES_CONFIG_OFFSET) segment.add(0.toByte())
-        segment.add(if (options.combatFeatures && options.criticalModePassives) 1.toByte() else 0.toByte())
+        segment.add(0.toByte()) // advanced passive writes are gated off
         while (segment.size < Stage5Payloads.S5_SEGMENT_PAD) segment.add(0.toByte())
         val blob = segment.map { it.toByte() }.toByteArray()
         blob[Stage5Payloads.S4_CONFIG_OFFSET] = config.toByte()
         blob.writeFloatLe(Stage5Payloads.S4_CAMERA_DISTANCE_OFFSET, options.cameraDistance)
 
+        return blob
+    }
+
+    private fun addStage5(output: ByteArray, options: PatchOptions): ByteArray {
+        val blob = stage5Segment(options)
         val programHeader = intArrayOf(
             1,
             Stage5Payloads.S4_FILE_OFFSET,
@@ -309,15 +324,12 @@ class Stage5EbootPatchEngine : EbootPatchEngine {
     }
 
     private fun makeConfig(options: PatchOptions): Int {
-        var config = if (options.combatFeatures) 0x7f else 0
+        var config = if (options.combatFeatures) 0x3c else 0
         if (options.combatFeatures) {
             if (options.strictSteamExclusions) config = config and 0x20.inv()
-            if (!options.hitAwareCancels) config = config and 0x01.inv()
-            if (!options.invincibilityWindows) config = config and 0x02.inv()
             if (!options.extendedDefense) config = config and 0x04.inv()
             if (!options.commandCancels) config = config and 0x08.inv()
             if (!options.telemetry) config = config and 0x10.inv()
-            if (!options.criticalModeAbilities) config = config and 0x40.inv()
         }
         if (options.appliesCameraDistance) config = config or 0x80
         return config
@@ -364,3 +376,4 @@ class Stage5EbootPatchEngine : EbootPatchEngine {
 
 private fun ByteArray.startsWith(prefix: ByteArray): Boolean =
     size >= prefix.size && prefix.indices.all { this[it] == prefix[it] }
+

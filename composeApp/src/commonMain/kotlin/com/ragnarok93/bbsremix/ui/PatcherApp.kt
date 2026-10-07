@@ -1029,16 +1029,16 @@ private fun OptionsCard(
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     FeatureToggle(
                         title = "Hit-aware cancels",
-                        description = "Respect the player attack-target state when cancelling.",
+                        description = "Unavailable · PSP runtime validation pending.",
                         checked = options.hitAwareCancels,
-                        enabled = !busy,
+                        enabled = false,
                         onCheckedChange = { onOptionsChanged(options.copy(hitAwareCancels = it)) },
                     )
                     FeatureToggle(
                         title = "Invincibility windows",
-                        description = "Keep dodge, form-change, wind-up, and Zantetsuken windows.",
+                        description = "Unavailable · PSP runtime validation pending.",
                         checked = options.invincibilityWindows,
-                        enabled = !busy,
+                        enabled = false,
                         onCheckedChange = { onOptionsChanged(options.copy(invincibilityWindows = it)) },
                     )
                     FeatureToggle(
@@ -1064,16 +1064,16 @@ private fun OptionsCard(
                     )
                     FeatureToggle(
                         title = "Critical Mode abilities",
-                        description = "Grant Reload Boost and Second Chance in Critical Mode.",
+                        description = "Unavailable · PSP runtime validation pending.",
                         checked = options.criticalModeAbilities,
-                        enabled = !busy,
+                        enabled = false,
                         onCheckedChange = { onOptionsChanged(options.copy(criticalModeAbilities = it)) },
                     )
                     FeatureToggle(
                         title = "Critical Mode passives",
-                        description = "Grant Munny Plus, Berserk, Auto-Remedy, and Double CP.",
+                        description = "Unavailable · PSP runtime validation pending.",
                         checked = options.criticalModePassives,
-                        enabled = !busy,
+                        enabled = false,
                         onCheckedChange = { onOptionsChanged(options.copy(criticalModePassives = it)) },
                     )
 
@@ -1253,7 +1253,7 @@ private fun VerifyOutputFooter(
             Column(Modifier.weight(1f)) {
                 Text("Verify output", style = MaterialTheme.typography.titleMedium)
                 Text(
-                    "Choose an ISO to verify the embedded Final ReMix executable. Texture verification is separate.",
+                    "Check payload structure and selected settings. Gameplay validation is separate.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -1282,7 +1282,7 @@ private fun StatusCard(status: PatcherStatus, progress: PatchProgress?) {
 
         is PatcherStatus.Verification -> {
             val title = when (status.result.status) {
-                IsoVerificationStatus.VERIFIED_PATCHED -> "Output verified"
+                IsoVerificationStatus.VERIFIED_PATCHED -> "Structure verified"
                 IsoVerificationStatus.UNPATCHED -> "Source image detected"
                 IsoVerificationStatus.INCOMPATIBLE -> "Output does not match"
                 IsoVerificationStatus.MALFORMED -> "Invalid ISO"
@@ -1483,3 +1483,4 @@ private class CoroutineCancellationToken(private val job: Job) : CancellationTok
     override val isCancelled: Boolean
         get() = !job.isActive
 }
+

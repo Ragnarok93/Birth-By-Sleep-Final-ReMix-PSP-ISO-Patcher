@@ -98,7 +98,7 @@ class IsoPatchingService(
                 )
                 patched.verified -> IsoVerificationResult(
                     status = IsoVerificationStatus.VERIFIED_PATCHED,
-                    message = "The ISO contains a valid EBOOT patched with the selected Final ReMix features.",
+                    message = "The ISO structure and selected patch bytes match. Gameplay validation is pending.",
                     embeddedEbootSha256 = hash,
                     outputSize = outputSize,
                 )
@@ -179,3 +179,4 @@ class IsoPatchingService(
         const val MAX_COVER_ART_BYTES = 4L * 1024L * 1024L
     }
 }
+

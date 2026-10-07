@@ -7,13 +7,13 @@ data class PatchOptions(
     val cameraHeightEnabled: Boolean = true,
     val cameraHeight: Float = 1.0f,
     val strictSteamExclusions: Boolean = false,
-    val hitAwareCancels: Boolean = true,
-    val invincibilityWindows: Boolean = true,
+    val hitAwareCancels: Boolean = false,
+    val invincibilityWindows: Boolean = false,
     val extendedDefense: Boolean = true,
     val commandCancels: Boolean = true,
     val telemetry: Boolean = true,
-    val criticalModeAbilities: Boolean = true,
-    val criticalModePassives: Boolean = true,
+    val criticalModeAbilities: Boolean = false,
+    val criticalModePassives: Boolean = false,
 ) {
     val combatFeatures: Boolean
         get() = strictSteamExclusions ||
@@ -35,6 +35,9 @@ data class PatchOptions(
         get() = rightStickCamera || appliesCameraDistance || appliesCameraHeight || combatFeatures
 
     fun validate(): List<PatchOptionError> = buildList {
+        if (hitAwareCancels || invincibilityWindows || criticalModeAbilities || criticalModePassives) {
+            add(PatchOptionError.UnvalidatedCombatFeature)
+        }
         if (cameraDistance !in CAMERA_DISTANCE_RANGE) {
             add(PatchOptionError.CameraDistanceOutOfRange(cameraDistance))
         }
@@ -57,6 +60,10 @@ data class PatchOptions(
 }
 
 sealed class PatchOptionError(val message: String) {
+    data object UnvalidatedCombatFeature : PatchOptionError(
+        "Advanced combat writes are disabled pending PSP runtime validation."
+    )
+
     data class CameraDistanceOutOfRange(val value: Float) : PatchOptionError(
         "Camera distance must be between 1.0 and 12.0 (received $value)."
     )
@@ -69,3 +76,4 @@ sealed class PatchOptionError(val message: String) {
         "Enable at least one patch feature before creating an output ISO."
     )
 }
+

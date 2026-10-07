@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""KH Birth by Sleep Final Mix ULJM-05775 — Birth By Sleep - Final ReMix Stage 5 completion beta.
+"""KH Birth by Sleep Final Mix ULJM-05775 — Birth By Sleep - Final ReMix Stage 5 conservative runtime candidate.
 
 Targets exactly the decrypted English-patched EBOOT fingerprint used during development.
 This patcher contains patch data/injected code only; it does not contain game assets.
 
-Stage 5 core:
+Retained Stage 5 code (advanced writes below are disabled):
 - direct PPSSPP right-stick camera through the game's existing Type-B camera path
 - native player-camera distance override (default 4.5) using BBS zoom ratio fields; modes 1/2 only
 - normal/free + lock-on player-camera height override (default 1.0), mapped from the PSP camera parameter table
@@ -17,7 +17,8 @@ Stage 5 core:
 - Critical Mode Reload Boost + Second Chance grants through the PSP runtime ability table
 - Critical Mode Munny Plus + Berserk + Auto-Remedy + Double CP via player+0x30 mask 0x04008300
 
-This completes the main BBS_FinalReMix_Steam.lua feature set. PSP BBS already
+Advanced combat writes are disabled pending runtime validation. Structural
+verification does not certify gameplay correctness. PSP BBS already
 has native L+R+Start+Select soft reset. The archive's title/minigame helper scripts are
 separate utilities whose executable logic lives in separately loaded PSP modules.
 """
@@ -36,11 +37,71 @@ THIRD_PHDR_OFF = 0x74
 S2_FILE_OFF = 0x0036BE80
 S2_VA = 0x08B6EE80
 NEXT_ORIGINAL_LOAD_FILE_OFF = 0x0036C000
-S2_BLOB = bytes.fromhex("f0ffbd270000bfaf4e5b2c0e000000002518400007004018000000001000a8270a0009910b000a91b708083cf0ef09a1f1ef0aa1251060000000bf8f0800e0031000bd27b708083c03000010f0ef0291b708083cf1ef029180ff42240000824420008046003c083c001088440800e003020002464800b08fb608083cb0a4088d3900001100000000a800088d36000011000000002002098d10000a2414002a110000000016000a242f002a15000000004c000b8d2c00601100000000240060c5a0400c3c00108c443c0002462600014500000000b4080c3c74198d8d0050ad312100a011000000001100001000000000b4080c3c74198d8d00a0ad311a00a011000000000020ae310900c0110000000050000f8d1400e011000000006001ef8d0102183c2478f8010f00e0110000000050000f8d0600e011000000006001ef8d0102183c2478f8010500e0110000000001001924200219ad0800e0030000000004001924200219ad0800e003000000008080")
+# Camera-only replacement, assembled from labels to keep helper JALs and data
+# addresses consistent. The original routine uses a0=pad buffer, a1=count.
+# O32 outgoing argument area is sp+0..15; saved s0/ra live at +24/+28.
+def build_camera_payload():
+    words = []
+    labels = {}
+    branches = []
+    data_refs = []
+    def emit(word): words.append(word)
+    def label(name): labels[name] = len(words) * 4
+    def branch(word, target):
+        branches.append((len(words), target))
+        emit(word)
+    def data_ref(word, target):
+        data_refs.append((len(words), target))
+        emit(word)
+
+    label('capture')
+    emit(0x27BDFFE0)  # addiu sp,sp,-32
+    emit(0xAFBF001C)  # sw ra,28(sp)
+    emit(0xAFB00018)  # sw s0,24(sp)
+    emit(0x00808021)  # addu s0,a0,zero: actual pad-buffer pointer
+    emit(0x0E2C5B4E)  # jal original controller routine, 0x08B16D38
+    emit(0)           # delay slot
+    emit(0x3C0808B7)  # lui t0,0x08B7 (signed low address)
+    emit(0x24090080)  # neutral X on failed read
+    emit(0x240A0080)  # neutral Y on failed read
+    branch(0x18400000, 'store')  # blez v0,store
+    emit(0)
+    branch(0x12000000, 'store')  # beq s0,zero,store
+    emit(0)
+    emit(0x9209000A)  # lbu t1,10(s0)
+    emit(0x920A000B)  # lbu t2,11(s0)
+    label('store')
+    data_ref(0xA1090000, 'x')
+    data_ref(0xA10A0000, 'y')
+    emit(0x8FB00018)  # restore s0
+    emit(0x8FBF001C)  # restore ra; leave v0/v1 from original call untouched
+    emit(0x03E00008)  # jr ra
+    emit(0x27BD0020)  # delay slot: restore sp
+    label('right_x')
+    emit(0x3C0808B7)
+    branch(0x10000000, 'convert')
+    data_ref(0x91020000, 'x')  # branch delay slot
+    label('right_y')
+    emit(0x3C0808B7)
+    data_ref(0x91020000, 'y')
+    label('convert')
+    # Original Type-B conversion: (unsigned byte - 128) * (1/128), f0 result.
+    words.extend([0x2442FF80, 0x44820000, 0x46800020, 0x3C083C00,
+                  0x44881000, 0x03E00008, 0x46020002])
+    code_size = len(words) * 4
+    labels['x'], labels['y'] = code_size, code_size + 1
+    for index, target in branches:
+        words[index] |= ((labels[target] - (index * 4 + 4)) // 4) & 0xffff
+    for index, target in data_refs:
+        words[index] |= (S2_VA + labels[target]) & 0xffff
+    blob = struct.pack('<' + 'I' * len(words), *words) + bytes([128, 128])
+    return blob, labels, code_size
+
+S2_BLOB, S2_LABELS, S2_CODE_SIZE = build_camera_payload()
 S2_NEW_SEGMENT_SIZE = (S2_FILE_OFF + len(S2_BLOB)) - 0x1018
-S2_CAPTURE_PAD_VA = 0x08B6EE80
-S2_RIGHT_X_VA = 0x08B6EEC4
-S2_RIGHT_Y_VA = 0x08B6EED0
+S2_CAPTURE_PAD_VA = S2_VA + S2_LABELS['capture']
+S2_RIGHT_X_VA = S2_VA + S2_LABELS['right_x']
+S2_RIGHT_Y_VA = S2_VA + S2_LABELS['right_y']
 
 S4_FILE_OFF = 0x0036D000
 S4_VA = 0x08B70000
@@ -56,7 +117,7 @@ S4_RING_RECORD_SIZE = 0x20
 S4_RING_RECORDS = 64
 ORIGINAL_LOAD1_VA = 0x08BB4780
 
-# Stage 5 wrapper: calls the proven Stage 4.1 post-input routine first, then
+# Stage 5 wrapper: calls the statically inspected Stage 4.1 post-input routine first, then
 # applies the Steam Critical-mode passive/enchant mask to the current PSP
 # player object only when the loaded difficulty mirror equals Critical (3).
 S5_WRAPPER_VA = 0x08B71280
@@ -132,7 +193,7 @@ def verify_camera_height(data:bytes):
         raise ValueError(f'lock-on height mismatch @0x{CAMERA_LOCK_HEIGHT_VA:08X}: {lock:g}')
 
 def make_config(args, combat:bool, camera_distance:bool)->int:
-    cfg=0x7F if combat else 0x00
+    cfg=0x3C if combat else 0x00  # conservative cancels + exclusions + telemetry
     if combat:
         if args.strict_steam: cfg &= ~0x20
         if args.no_hit_aware: cfg &= ~0x01
@@ -145,6 +206,8 @@ def make_config(args, combat:bool, camera_distance:bool)->int:
     return cfg
 
 def add_stage5(out:bytearray,cfg:int,camera_distance:float,critical_passives:bool):
+    if cfg & 0x43 or critical_passives:
+        raise ValueError('Advanced combat writes are disabled pending runtime evidence')
     blob=bytearray(S4_BLOB)
     blob[S4_CONFIG_OFF]=cfg & 0xff
     struct.pack_into('<f',blob,S4_CAMERA_DISTANCE_OFF,float(camera_distance))
@@ -197,8 +260,8 @@ def main():
     ap.add_argument('--no-extended-defense',action='store_true')
     ap.add_argument('--no-command-cancel',action='store_true')
     ap.add_argument('--no-telemetry',action='store_true')
-    ap.add_argument('--no-critical-abilities',action='store_true',help='Disable Critical Mode Reload Boost + Second Chance runtime grants')
-    ap.add_argument('--no-critical-passives',action='store_true',help='Disable Critical Mode Munny Plus + Berserk + Auto-Remedy + Double CP runtime flags')
+    ap.add_argument('--no-critical-abilities',action='store_true',help='Compatibility flag; advanced writes are already disabled')
+    ap.add_argument('--no-critical-passives',action='store_true',help='Compatibility flag; advanced writes are already disabled')
     ap.add_argument('--verify-only',action='store_true')
     args=ap.parse_args()
 
@@ -213,11 +276,12 @@ def main():
     camera_height_enabled=(not args.no_camera_height) and (not args.combat_only)
     post_input=combat or camera_distance
     cfg=make_config(args,combat,camera_distance)
-    critical_passives = combat and (not args.no_critical_passives)
+    critical_passives = False  # disabled until PSP ownership/state semantics are demonstrated
 
     data=args.input.read_bytes(); verify(data,camera_controls,post_input)
     if camera_height_enabled: verify_camera_height(data)
-    print('Supported EBOOT verified:',SUPPORTED_SHA256)
+    print('Supported source fingerprint verified:',SUPPORTED_SHA256)
+    print('Profile: conservative candidate; gameplay validation pending')
     print('Right-stick camera:', 'ON' if camera_controls else 'off')
     print('Camera distance:', f'ON ({args.camera_distance:g})' if camera_distance else 'off')
     print('Camera height:', f'ON ({args.camera_height:g})' if camera_height_enabled else 'off')
@@ -246,3 +310,4 @@ def main():
     if camera_controls: print('PPSSPP: bind your physical right stick to Right Analog X/Y.')
     return 0
 if __name__=='__main__': raise SystemExit(main())
+

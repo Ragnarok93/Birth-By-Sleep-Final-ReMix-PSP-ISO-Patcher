@@ -21,7 +21,11 @@ data class EbootInspection(
 data class PatchVerification(
     val verified: Boolean,
     val problems: List<String> = emptyList(),
+    // Byte/ELF/ISO checks cannot certify the runtime ABI or gameplay semantics.
+    val runtimeValidation: RuntimeValidation = RuntimeValidation.PENDING,
 )
+
+enum class RuntimeValidation { PENDING }
 
 data class PatchedEboot(
     val bytes: ByteArray,
@@ -83,3 +87,4 @@ fun interface ProgressReporter {
 }
 
 val NoProgress: ProgressReporter = ProgressReporter { }
+

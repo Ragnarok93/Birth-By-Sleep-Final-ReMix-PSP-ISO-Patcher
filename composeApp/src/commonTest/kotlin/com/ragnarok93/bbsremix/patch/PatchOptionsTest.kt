@@ -18,13 +18,25 @@ class PatchOptionsTest {
         assertEquals(4.5f, options.cameraDistance)
         assertEquals(1.0f, options.cameraHeight)
         assertFalse(options.strictSteamExclusions)
-        assertTrue(options.hitAwareCancels)
-        assertTrue(options.invincibilityWindows)
+        assertFalse(options.hitAwareCancels)
+        assertFalse(options.invincibilityWindows)
         assertTrue(options.extendedDefense)
         assertTrue(options.commandCancels)
         assertTrue(options.telemetry)
-        assertTrue(options.criticalModeAbilities)
-        assertTrue(options.criticalModePassives)
+        assertFalse(options.criticalModeAbilities)
+        assertFalse(options.criticalModePassives)
+    }
+
+    @Test
+    fun advanced_writes_are_rejected_even_when_requested_programmatically() {
+        listOf(
+            PatchOptions(hitAwareCancels = true),
+            PatchOptions(invincibilityWindows = true),
+            PatchOptions(criticalModeAbilities = true),
+            PatchOptions(criticalModePassives = true),
+        ).forEach { options ->
+            assertTrue(options.validate().any { it is PatchOptionError.UnvalidatedCombatFeature })
+        }
     }
 
     @Test
@@ -66,3 +78,4 @@ class PatchOptionsTest {
         assertTrue(options.hasSelectedFeature)
     }
 }
+
