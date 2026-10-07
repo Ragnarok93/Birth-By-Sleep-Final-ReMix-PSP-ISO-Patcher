@@ -65,13 +65,13 @@ jobs:
           - platform: Linux
             os: ubuntu-latest
             gradle_command: sh ./gradlew
-            package_task: :composeApp:packageDeb
-            artifact_glob: composeApp/build/compose/binaries/main/deb/*.deb
+            package_task: :composeApp:packageAppImage
+            artifact_glob: composeApp/build/compose/binaries/main/appimage/*.AppImage
           - platform: Windows
             os: windows-latest
             gradle_command: .\\gradlew.bat
-            package_task: :composeApp:packageMsi
-            artifact_glob: composeApp/build/compose/binaries/main/msi/*.msi
+            package_task: :composeApp:packageExe
+            artifact_glob: composeApp/build/compose/binaries/main/exe/*.exe
           - platform: macOS
             os: macos-latest
             gradle_command: sh ./gradlew
@@ -88,19 +88,51 @@ jobs:
           java-version: '17'
       - name: Set up Gradle (${{ matrix.platform }} release)
         uses: gradle/actions/setup-gradle@v4.4.1
-      - name: Build desktop release installer (${{ matrix.platform }})
+      - name: Build desktop release application (${{ matrix.platform }})
         run: ${{ matrix.gradle_command }} ${{ matrix.package_task }} --stacktrace
-      - name: Upload desktop release installer (${{ matrix.platform }})
+      - name: Upload desktop release application (${{ matrix.platform }})
         uses: actions/upload-artifact@v4.6.2
         with:
           name: desktop-release-${{ matrix.platform }}
           path: ${{ matrix.artifact_glob }}
           if-no-files-found: error
 
+  source-sha-release:
+    name: Source and checksums (release)
+    needs: [android-release, desktop-release]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source (release source archive)
+        uses: actions/checkout@v4.2.2
+      - name: Download application artifacts (release)
+        uses: actions/download-artifact@v4.3.0
+        with:
+          path: release-files
+          merge-multiple: true
+      - name: Create Source.zip and SHA.zip (release)
+        run: |
+          git archive --format=zip --output=release-files/Source.zip HEAD
+          (
+            cd release-files
+            find . -maxdepth 1 -type f ! -name 'SHA256SUMS.txt' ! -name 'SHA.zip' -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS.txt
+            zip -q SHA.zip SHA256SUMS.txt
+          )
+      - name: Upload Source.zip (release)
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: source-release
+          path: release-files/Source.zip
+          if-no-files-found: error
+      - name: Upload SHA.zip (release)
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: sha-release
+          path: release-files/SHA.zip
+          if-no-files-found: error
   attach-release-assets:
     name: Attach release assets (version tag)
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [android-release, desktop-release]
+    needs: [android-release, desktop-release, source-sha-release]
     runs-on: ubuntu-latest
     permissions:
       contents: write
