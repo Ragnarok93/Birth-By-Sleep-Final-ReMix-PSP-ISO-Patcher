@@ -81,7 +81,8 @@ class Iso9660Reader(
             path = "",
         )
         if (!root.isDirectory) throw IsoFormatException("The ISO root record is not a directory.")
-        val eboot = findTarget(path, root, sectorSize)
+        val eboot = findEntry(path, root, TARGET_PATH)
+            ?: throw IsoFormatException("Required ISO path $TARGET_PATH was not found.")
         if (eboot.isDirectory) {
             throw IsoFormatException("Required ISO path $TARGET_PATH resolves to a directory, not EBOOT.BIN.")
         }
@@ -151,28 +152,27 @@ class Iso9660Reader(
         return result
     }
 
-    private fun findTarget(path: Path, root: IsoDirectoryEntry, sectorSize: Int): IsoDirectoryEntry {
-        val segments = TARGET_PATH.split('/').map { it.uppercase() }
+    fun findEntry(path: Path, root: IsoDirectoryEntry, targetPath: String): IsoDirectoryEntry? {
+        val segments = targetPath.split('/').filter { it.isNotBlank() }.map { it.uppercase() }
+        if (segments.isEmpty()) return root
         var current = root
         val visitedDirectories = mutableSetOf<Long>()
         for ((index, segment) in segments.withIndex()) {
             if (!current.isDirectory) {
-                throw IsoFormatException("${current.path.ifEmpty { "/" }} is not a directory while locating $TARGET_PATH.")
+                throw IsoFormatException("${current.path.ifEmpty { "/" }} is not a directory while locating $targetPath.")
             }
             if (!visitedDirectories.add(current.dataOffset)) {
-                throw IsoFormatException("Directory cycle encountered while locating $TARGET_PATH.")
+                throw IsoFormatException("Directory cycle encountered while locating $targetPath.")
             }
             val matches = readDirectory(path, current).filter { normalizeName(it.name) == segment }
-            if (matches.isEmpty()) {
-                throw IsoFormatException("Required ISO path $TARGET_PATH was not found (missing $segment).")
-            }
+            if (matches.isEmpty()) return null
             if (matches.size != 1) {
-                throw IsoFormatException("ISO path $TARGET_PATH is ambiguous: $segment appears ${matches.size} times.")
+                throw IsoFormatException("ISO path $targetPath is ambiguous: $segment appears ${matches.size} times.")
             }
             current = matches.single()
             if (index == segments.lastIndex) return current
         }
-        throw IsoFormatException("Required ISO path $TARGET_PATH was not found.")
+        return null
     }
 
     private fun readVolumeDescriptors(path: Path, sourceSize: Long): List<Descriptor> {
