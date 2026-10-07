@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -30,7 +29,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TextButtonDefaults
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -932,7 +931,7 @@ private fun NavigationItem(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(18.dp),
-        colors = TextButtonDefaults.textButtonColors(
+        colors = ButtonDefaults.textButtonColors(
             containerColor = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
             contentColor = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
         ),
@@ -988,7 +987,7 @@ private fun Hyperlink(
 ) {
     TextButton(
         onClick = { onOpenUrl(url) },
-        colors = TextButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.primary),
+        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.primary),
     ) {
         Text(label, textDecoration = TextDecoration.Underline)
     }
