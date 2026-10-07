@@ -59,7 +59,7 @@ class AndroidFileGateway(
 
     override suspend fun createTempPath(prefix: String, suffix: String): Path {
         fileSystem.createDirectories(cacheRoot)
-        return cacheRoot / "$prefix-\${UUID.randomUUID()}$suffix"
+        return cacheRoot / "$prefix-${UUID.randomUUID()}$suffix"
     }
 
     override suspend fun stageSource(
@@ -119,7 +119,7 @@ class AndroidFileGateway(
         } catch (error: kotlinx.coroutines.CancellationException) {
             throw error
         } catch (error: Throwable) {
-            throw FileGatewayException("The patched ISO could not be committed: \${error.message}")
+            throw FileGatewayException("The patched ISO could not be committed: ${error.message}")
         }
     }
 
