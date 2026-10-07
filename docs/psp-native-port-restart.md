@@ -39,9 +39,10 @@ address-lifetime collision.
 
 ## Immediate product behavior
 
-The HD texture workflow is unaffected. The only gameplay patch currently exposed
-is the **resident right-stick-only** research profile. Camera distance, camera
-height, and all Better Battle System combat options remain disabled.
+The HD texture workflow is unaffected. The exposed gameplay work is now limited
+to the **resident PSP-native camera profile**: right-stick camera control,
+camera distance, and camera height. Better Battle System combat options remain
+disabled.
 
 The app also exposes **Diagnostic rebuild**. It rebuilds the ISO with the original
 EBOOT byte-for-byte unchanged, reopens the result, verifies the EBOOT extent and
@@ -86,9 +87,44 @@ This removes the address-lifetime collision responsible for the old
 confirmed that right-stick camera control works and remains compatible with both
 in-game camera-control options without interfering with other controls. The v2
 candidate corrected horizontal direction but runtime testing showed vertical
-direction remained reversed. The current v3 profile keeps X inverted and returns
-Y with the native centered polarity. It remains pending confirmation plus the
-remaining transition/save-load matrix.
+direction remained reversed. The v3 profile keeps X inverted and returns Y with
+the native centered polarity; the user subsequently confirmed all four camera
+directions are correct. The broader transition/save-load matrix remains a
+separate release-validation gate.
+
+## Camera distance and height re-port
+
+Camera geometry has now been re-derived from the exact supported PSP EBOOT
+instead of using the retired Stage 4 post-input payload.
+
+MainApp owns a resident player-camera parameter table at `0x08B59F00`.
+The native camera state machine selects two 0x30-byte records:
+
+- mode 1 record at `0x08B59F10`, with position vector
+  `[0.0, 1.5, -3.5, 1.0]`;
+- mode 2 record at `0x08B59F40`, with position vector
+  `[0.0, 1.0, -3.5, 1.0]`.
+
+The state-1 path at `0x0893DF48` selects base+`0x10`; the state-2 path
+at `0x0893E024` selects base+`0x40`. Both pass record+`0x10` and
+record+`0x20` into the game's native camera transform setup at
+`0x08AE0AF0`. The structure-copy path at `0x0893DBF4` also copies the
+float at record+`0x14`.
+
+For the current isolated runtime candidates:
+
+- **Camera height** writes the Y component at `0x08B59F24` and
+  `0x08B59F54`.
+- **Camera distance** writes the signed Z component at `0x08B59F28` and
+  `0x08B59F58`. The UI remains positive, so a distance of `4.5` is stored
+  natively as `-4.5`.
+- The table signature, mode IDs, vector W components, ELF program headers,
+  LOAD sizes, and dynamic overlay arena remain unchanged.
+- No runtime hook, injected MIPS payload, or additional ELF segment is required.
+
+These mappings are substantially safer than the old Stage 4 camera path, but
+they are still runtime candidates until distance and height are tested
+independently in PPSSPP.
 
 ## Better Battle System re-port
 
@@ -111,9 +147,13 @@ Restart combat work as PSP-native reverse engineering:
 Runtime promotion gates:
 
 - Diagnostic rebuild must produce a byte-identical ISO and boot normally.
-- The resident right-stick-only candidate must boot, preserve left-stick movement,
-  rotate the camera from PPSSPP Right Analog X/Y, and survive scene/module
-  transitions plus save/load for Terra, Ventus, and Aqua.
+- The resident right-stick implementation must preserve its confirmed direction
+  and control behavior and survive scene/module transitions plus save/load for
+  Terra, Ventus, and Aqua.
+- Camera distance and camera height must each boot and visibly affect both native
+  camera modes when tested alone before combined camera testing.
+- The combined right-stick + distance + height profile must retain normal
+  movement, lock-on, scene transitions, and save/load.
 - Combat telemetry-only must boot without gameplay writes.
 - Each gameplay behavior must pass isolated runtime validation before inclusion.
 - Combined builds are allowed only after each component independently passes.
