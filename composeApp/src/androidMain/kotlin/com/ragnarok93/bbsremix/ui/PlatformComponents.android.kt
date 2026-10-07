@@ -1,18 +1,12 @@
 package com.ragnarok93.bbsremix.ui
 
 import android.graphics.BitmapFactory
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -21,14 +15,26 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.unit.dp
-import org.oneui.compose.theme.OneUITheme
+import org.oneui.compose.components.buttons.OneUiFilledButton
+import org.oneui.compose.components.progress.OneUiCircularProgress
+import org.oneui.compose.components.progress.OneUiCircularProgressSize
+import org.oneui.compose.components.progress.OneUiLinearProgress
+import org.oneui.compose.components.selection.OneUiCheckbox
+import org.oneui.compose.components.selection.OneUiSwitch
+import org.oneui.compose.components.navigation.OneUiNavigationItem
+import org.oneui.compose.components.navigation.OneUiTabStyle
+import org.oneui.compose.components.navigation.OneUiTabs
+import org.oneui.compose.components.slider.OneUiSlider
+import org.oneui.compose.components.slider.OneUiSliderMode
+import org.oneui.compose.oneui8.components.OneUI8Card
+import org.oneui.compose.oneui8.theme.OneUI8Theme
+import androidx.compose.runtime.remember
 
 @Composable
 actual fun PatcherTheme(content: @Composable () -> Unit) {
-    val dark = isSystemInDarkTheme()
-    OneUITheme {
+    OneUI8Theme(darkTheme = true) {
         MaterialTheme(
-            colorScheme = if (dark) PatcherDarkColorScheme else PatcherLightColorScheme,
+            colorScheme = PatcherDarkColorScheme,
             content = content,
         )
     }
@@ -39,14 +45,11 @@ actual fun PatcherSurface(
     modifier: Modifier,
     content: @Composable BoxScope.() -> Unit,
 ) {
-    Surface(
+    OneUI8Card(
         modifier = modifier,
-        shape = RoundedCornerShape(26.dp),
-        color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.34f)),
-        tonalElevation = 1.dp,
+        containerColor = MaterialTheme.colorScheme.surface,
     ) {
-        Box(Modifier.padding(18.dp), content = content)
+        Box(content = content)
     }
 }
 
@@ -57,15 +60,10 @@ actual fun PatcherButton(
     modifier: Modifier,
     enabled: Boolean,
 ) {
-    Button(
+    OneUiFilledButton(
         onClick = onClick,
         modifier = modifier,
         enabled = enabled,
-        shape = RoundedCornerShape(18.dp),
-        colors = ButtonDefaults.buttonColors(
-            containerColor = MaterialTheme.colorScheme.primary,
-            contentColor = MaterialTheme.colorScheme.onPrimary,
-        ),
     ) {
         Text(label)
     }
@@ -80,19 +78,80 @@ actual fun PatcherCheckbox(
     enabled: Boolean,
 ) {
     Row(modifier) {
-        Checkbox(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
+        OneUiCheckbox(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
         Text(label, modifier = Modifier.padding(top = 12.dp))
     }
 }
 
 @Composable
+actual fun PatcherSwitch(
+    checked: Boolean,
+    onCheckedChange: ((Boolean) -> Unit)?,
+    modifier: Modifier,
+    enabled: Boolean,
+) {
+    OneUiSwitch(checked = checked, onCheckedChange = onCheckedChange, modifier = modifier, enabled = enabled)
+}
+
+@Composable
 actual fun PatcherProgress(progress: Float, modifier: Modifier) {
-    LinearProgressIndicator(
-        progress = { progress.coerceIn(0f, 1f) },
+    OneUiLinearProgress(progress = progress, modifier = modifier)
+}
+
+@Composable
+actual fun PatcherSlider(
+    value: Float,
+    onValueChange: (Float) -> Unit,
+    valueRange: ClosedFloatingPointRange<Float>,
+    steps: Int,
+    enabled: Boolean,
+    modifier: Modifier,
+) {
+    OneUiSlider(
+        value = value,
+        onValueChange = onValueChange,
         modifier = modifier,
-        color = MaterialTheme.colorScheme.primary,
-        trackColor = MaterialTheme.colorScheme.surfaceVariant,
+        enabled = enabled,
+        valueRange = valueRange,
+        steps = steps,
+        mode = OneUiSliderMode.Expand,
     )
+}
+
+@Composable
+actual fun PatcherIndeterminateProgress(modifier: Modifier) {
+    OneUiCircularProgress(
+        progress = null,
+        modifier = modifier,
+        size = OneUiCircularProgressSize.Medium,
+    )
+}
+
+@Composable
+actual fun PatcherNavigationBar(
+    items: List<String>,
+    selectedIndex: Int,
+    onSelected: (Int) -> Unit,
+    modifier: Modifier,
+) {
+    val destinations = remember(items) {
+        items.mapIndexed { index, label -> OneUiNavigationItem("patcher-$index", label) }
+    }
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(OneUI8Theme.dimensions.cardRadius),
+        color = OneUI8Theme.colors.surfaceElevated,
+        tonalElevation = 4.dp,
+    ) {
+        OneUiTabs(
+            items = destinations,
+            selectedIndex = selectedIndex,
+            onSelected = onSelected,
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
+            showIcons = false,
+            style = OneUiTabStyle.Main,
+        )
+    }
 }
 
 actual fun decodeCoverArt(bytes: ByteArray): ImageBitmap? =

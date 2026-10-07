@@ -47,6 +47,12 @@ interface FileGateway {
     fun suppressDonationPrompt()
 
     fun openExternalUrl(url: String)
+
+    /** Current local date in the filename format required for exported logs. */
+    fun localDateStamp(): String
+
+    /** Current local time for user-visible operation log entries. */
+    fun localTimeStamp(): String
 }
 
 class FileGatewayException(message: String) : IllegalStateException(message)

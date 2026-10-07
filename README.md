@@ -25,7 +25,8 @@ Encrypted PSP PRX containers (`~PSP`/`~SCE`) are identified and rejected before 
 3. Enable or disable individual camera and Combat Mods. Combat Mods are grouped in an expandable category, with advanced compatibility controls nested beneath it.
 4. Select a separate output path.
 5. Patch, cancel safely, and receive a rebuilt ISO whose embedded EBOOT is reopened and checked.
-6. Use the bottom Verify Output action to pick an ISO and confirm that the selected feature markers are present.
+6. Open Logs, use Verify Output to pick an ISO, and review the embedded patch verification result. Texture installation and verification remain separate.
+7. Export the live operation log to a user-chosen location. The filename uses the detected game ID and local date; when the ISO has no valid ID, the filename clearly says the serial is unavailable.
 
 The app does not ask the user to extract EBOOT.BIN, run Python, decrypt files, or repackage an ISO. It does not upload images or collect analytics.
 
@@ -53,7 +54,7 @@ The portrait and large-screen layouts use the same dark navy, electric-blue, pal
 ## Implementation notes
 
 - `commonMain` contains the patch model, option validation, pure Kotlin SHA-256, strict patch engine, ISO9660 reader/rebuilder, bounded-memory streaming, output verification, progress, cancellation, cover-art extraction, and tests.
-- Android uses the Android-only OneUI-Compose dependency for the platform theme integration; desktop uses Compose equivalents with the same rounded-card design language.
+- Android pins the SESL8 One UI 8 Compose fork at `3d5582860ff974daa8ec0db8a515cd1fa4d50b90`, whose successful `One UI 8 Compose demo APK` run also verifies release AAR publication and its dependency metadata. The workflow publishes a demo APK and reports; the application resolves the library from the pinned JitPack commit. Desktop uses shared parity adapters for the controls that library does not publish for JVM.
 - ISO rebuilding preserves source bytes and directory metadata except for target extent/size fields and volume-space fields that must change.
 - Desktop output is atomically moved from a temporary file when the filesystem supports it. Android document-provider output is streamed only after validation; temporary staging files are cleaned on success, cancellation, and failure.
 
@@ -65,11 +66,11 @@ Use JDK 17 and the checked-in Gradle wrapper:
 ./gradlew :composeApp:allTests
 ./gradlew :composeApp:assembleDebug
 ./gradlew :composeApp:packageAppImage   # Linux
-./gradlew :composeApp:packageExe        # Windows portable .exe
+./gradlew :composeApp:createDistributable # Windows portable app image with .exe and runtime
 ./gradlew :composeApp:packageDmg        # macOS
 ```
 
-The debug and release workflows publish individual Android APK, Linux AppImage, Windows portable EXE, and macOS DMG artifacts, plus `Source.zip` and `SHA.zip`. No installer is used for Windows. Android release signing is supplied through Actions secrets when configured; otherwise the workflow continues with an unsigned artifact.
+The debug and release workflows publish individual Android APK, Linux AppImage, Windows portable app image, and macOS DMG artifacts, plus `Source.zip` and `SHA.zip`. The Windows artifact contains a runnable `.exe` with its adjacent `lib` and `runtime` directories; extract the artifact and run the `.exe` inside `bin`. No installer is used for Windows. Workflow checks inspect the Windows PE header, Linux ELF type, and macOS disk image before upload. Android release signing is supplied through Actions secrets when configured; otherwise the workflow continues with an unsigned artifact.
 
 ## Reference and validation
 

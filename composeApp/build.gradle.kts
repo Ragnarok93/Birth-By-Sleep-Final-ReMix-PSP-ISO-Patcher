@@ -52,6 +52,10 @@ kotlin {
     }
 }
 
+compose.resources {
+    packageOfResClass = "com.ragnarok93.bbsremix.resources"
+}
+
 dependencies {
     coreLibraryDesugaring(libs.desugar.jdk.libs)
 }

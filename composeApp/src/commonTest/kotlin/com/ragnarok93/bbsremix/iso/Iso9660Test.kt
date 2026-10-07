@@ -29,6 +29,7 @@ class Iso9660Test {
             assertEquals(3000L, image.eboot.size)
             assertEquals(64L, image.volumeSpaceSize)
             assertEquals("PSP_GAME/ICON0.PNG;1", image.coverArt?.path)
+            assertEquals("ULJM05775", image.discSerial)
             assertContentEquals(COVER_ART, reader.readEntry(source, image.coverArt!!))
         } finally {
             fileSystem.delete(source, mustExist = false)
@@ -157,10 +158,12 @@ class Iso9660Test {
             record("PSP_GAME", 21, SECTOR_SIZE, true),
             record("OTHER.BIN;1", 23, OTHER_BYTES.size, false),
         ))
+        val paramSfo = paramSfo("ULJM05775")
         writeDirectory(image, 21, listOf(
             record("\u0000", 21, SECTOR_SIZE, true),
             record("\u0001", 20, SECTOR_SIZE, true),
             record("ICON0.PNG;1", 25, COVER_ART.size, false),
+            record("PARAM.SFO;1", 27, paramSfo.size, false),
             record("SYSDIR", 22, SECTOR_SIZE, true),
         ))
         writeDirectory(image, 22, listOf(
@@ -173,6 +176,7 @@ class Iso9660Test {
         ByteArray(3000) { it.toByte() }.copyInto(image, 24 * SECTOR_SIZE)
         COVER_ART.copyInto(image, 25 * SECTOR_SIZE)
         KEEP_BYTES.copyInto(image, KEEP_SECTOR * SECTOR_SIZE)
+        paramSfo.copyInto(image, 27 * SECTOR_SIZE)
 
         fileSystem.sink(path).buffer().use { it.write(image) }
         return path
@@ -202,6 +206,35 @@ class Iso9660Test {
             it[32] = identifier.size.toByte()
             identifier.copyInto(it, 33)
         }
+    }
+
+    private fun paramSfo(discId: String): ByteArray {
+        val key = "DISC_ID\u0000".encodeToByteArray()
+        val value = (discId + "\u0000").encodeToByteArray()
+        val keyTableOffset = 36
+        val dataTableOffset = keyTableOffset + key.size
+        return ByteArray(dataTableOffset + value.size).also { bytes ->
+            byteArrayOf(0, 'P'.code.toByte(), 'S'.code.toByte(), 'F'.code.toByte()).copyInto(bytes)
+            writeU32(bytes, 8, keyTableOffset)
+            writeU32(bytes, 12, dataTableOffset)
+            writeU32(bytes, 16, 1)
+            writeU16(bytes, 20, 0)
+            writeU16(bytes, 22, 0x0204)
+            writeU32(bytes, 24, value.size)
+            writeU32(bytes, 28, value.size)
+            writeU32(bytes, 32, 0)
+            key.copyInto(bytes, keyTableOffset)
+            value.copyInto(bytes, dataTableOffset)
+        }
+    }
+
+    private fun writeU16(bytes: ByteArray, offset: Int, value: Int) {
+        bytes[offset] = value.toByte()
+        bytes[offset + 1] = (value ushr 8).toByte()
+    }
+
+    private fun writeU32(bytes: ByteArray, offset: Int, value: Int) {
+        for (index in 0 until 4) bytes[offset + index] = (value ushr (index * 8)).toByte()
     }
 
     private fun path(label: String): Path =

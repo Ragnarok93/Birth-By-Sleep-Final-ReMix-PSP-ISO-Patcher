@@ -18,6 +18,10 @@ import okio.Path
 import okio.Path.Companion.toPath
 import okio.buffer
 import java.util.UUID
+import java.time.LocalDate
+import java.time.LocalTime
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 import kotlin.coroutines.resume
 
 class AndroidFileGateway(
@@ -142,6 +146,10 @@ class AndroidFileGateway(
             activity.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
         }
     }
+
+    override fun localDateStamp(): String = LocalDate.now().format(DateTimeFormatter.ofPattern("MMddyyyy", Locale.US))
+
+    override fun localTimeStamp(): String = LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss", Locale.US))
 
     private fun displayName(uri: Uri): String {
         val cursor: Cursor? = resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)

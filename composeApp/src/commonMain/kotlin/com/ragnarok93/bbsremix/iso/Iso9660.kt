@@ -45,6 +45,7 @@ data class IsoImageInfo(
     val root: IsoDirectoryEntry,
     val eboot: IsoDirectoryEntry,
     val coverArt: IsoDirectoryEntry?,
+    val discSerial: String?,
 )
 
 class IsoFormatException(message: String) : IllegalArgumentException(message)
@@ -85,6 +86,7 @@ class Iso9660Reader(
         val eboot = findTarget(path, root, sectorSize, TARGET_PATH, required = true)
             ?: throw IsoFormatException("Required ISO path " + TARGET_PATH + " was not found.")
         val coverArt = findTarget(path, root, sectorSize, COVER_ART_PATH, required = false)
+        val paramSfo = findTarget(path, root, sectorSize, PARAM_SFO_PATH, required = false)
         if (eboot.isDirectory) {
             throw IsoFormatException("Required ISO path $TARGET_PATH resolves to a directory, not EBOOT.BIN.")
         }
@@ -96,6 +98,9 @@ class Iso9660Reader(
             root = root,
             eboot = eboot,
             coverArt = coverArt,
+            discSerial = paramSfo
+                ?.takeIf { it.size in 1L..MAX_PARAM_SFO_BYTES }
+                ?.let { entry -> runCatching { parseDiscId(readEntry(path, entry)) }.getOrNull() },
         )
     }
 
@@ -280,6 +285,8 @@ class Iso9660Reader(
         const val TERMINATOR_DESCRIPTOR = 255
         const val TARGET_PATH = "PSP_GAME/SYSDIR/EBOOT.BIN"
         const val COVER_ART_PATH = "PSP_GAME/ICON0.PNG"
+        const val PARAM_SFO_PATH = "PSP_GAME/PARAM.SFO"
+        const val MAX_PARAM_SFO_BYTES = 1024L * 1024L
         val CD001 = byteArrayOf('C'.code.toByte(), 'D'.code.toByte(), '0'.code.toByte(), '0'.code.toByte(), '1'.code.toByte())
     }
 }

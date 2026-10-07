@@ -16,6 +16,10 @@ import java.awt.Frame
 import java.io.File
 import java.net.URI
 import java.util.UUID
+import java.time.LocalDate
+import java.time.LocalTime
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 import java.util.prefs.Preferences
 
 class DesktopFileGateway(
@@ -33,7 +37,7 @@ class DesktopFileGateway(
     }
 
     override suspend fun pickOutput(suggestedName: String): PlatformOutputSelection? = withContext(Dispatchers.Main) {
-        val dialog = FileDialog(null as Frame?, "Save patched ISO", FileDialog.SAVE)
+        val dialog = FileDialog(null as Frame?, "Save output file", FileDialog.SAVE)
         dialog.file = suggestedName
         dialog.isVisible = true
         val file = dialog.file ?: return@withContext null
@@ -97,6 +101,10 @@ class DesktopFileGateway(
             if (Desktop.isDesktopSupported()) Desktop.getDesktop().browse(URI(url))
         }
     }
+
+    override fun localDateStamp(): String = LocalDate.now().format(DateTimeFormatter.ofPattern("MMddyyyy", Locale.US))
+
+    override fun localTimeStamp(): String = LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss", Locale.US))
 
     private fun copy(
         source: Path,

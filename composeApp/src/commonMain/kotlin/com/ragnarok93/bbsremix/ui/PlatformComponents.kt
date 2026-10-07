@@ -7,6 +7,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.unit.dp
 
 internal val PatcherDarkColorScheme = darkColorScheme(
     primary = Color(0xFF258BFF),
@@ -77,8 +78,37 @@ expect fun PatcherCheckbox(
 )
 
 @Composable
+expect fun PatcherSwitch(
+    checked: Boolean,
+    onCheckedChange: ((Boolean) -> Unit)?,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+)
+
+@Composable
 expect fun PatcherProgress(
     progress: Float,
+    modifier: Modifier = Modifier,
+)
+
+@Composable
+expect fun PatcherSlider(
+    value: Float,
+    onValueChange: (Float) -> Unit,
+    valueRange: ClosedFloatingPointRange<Float>,
+    steps: Int,
+    enabled: Boolean,
+    modifier: Modifier = Modifier,
+)
+
+@Composable
+expect fun PatcherIndeterminateProgress(modifier: Modifier = Modifier)
+
+@Composable
+expect fun PatcherNavigationBar(
+    items: List<String>,
+    selectedIndex: Int,
+    onSelected: (Int) -> Unit,
     modifier: Modifier = Modifier,
 )
 

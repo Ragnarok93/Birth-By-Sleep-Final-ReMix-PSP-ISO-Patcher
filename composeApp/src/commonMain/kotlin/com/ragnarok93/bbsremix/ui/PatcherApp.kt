@@ -2,7 +2,9 @@ package com.ragnarok93.bbsremix.ui
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -13,18 +15,18 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -34,6 +36,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -41,8 +44,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import com.ragnarok93.bbsremix.iso.IsoPatchResult
@@ -64,12 +69,17 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okio.Path
+import okio.FileSystem
+import okio.buffer
+import com.ragnarok93.bbsremix.resources.Res
+import org.jetbrains.compose.resources.painterResource
 
 private const val REPOSITORY_URL =
     "https://github.com/Ragnarok93/Birth-By-Sleep-Final-ReMix-PSP-ISO-Patcher"
 private const val LICENSE_URL =
     "https://github.com/Ragnarok93/Birth-By-Sleep-Final-ReMix-PSP-ISO-Patcher/blob/main/LICENSE"
 private const val PLACEHOLDER_KOFI_URL = "https://ko-fi.com/"
+private val PatcherNestedCornerShape = RoundedCornerShape(22.dp)
 
 @Composable
 fun PatcherApp(
@@ -88,36 +98,69 @@ fun PatcherApp(
         var status by remember { mutableStateOf<PatcherStatus>(PatcherStatus.Empty) }
         var progress by remember { mutableStateOf<PatchProgress?>(null) }
         var activeJob by remember { mutableStateOf<Job?>(null) }
-        var optionInputsValid by remember { mutableStateOf(true) }
+        var activeOperation by remember { mutableStateOf<String?>(null) }
         var showKoFiPrompt by remember { mutableStateOf(fileGateway.shouldShowDonationPrompt()) }
+        val logEntries = remember { mutableStateListOf<String>() }
+        var lastProgressLogKey by remember { mutableStateOf("") }
 
-        fun start(operation: suspend (CancellationToken) -> Unit) {
-            activeJob?.cancel()
+        fun appendLog(message: String) {
+            logEntries += "[${fileGateway.localTimeStamp()}] $message"
+            if (logEntries.size > 2000) logEntries.removeAt(0)
+        }
+
+        fun start(label: String, operation: suspend (CancellationToken) -> Unit) {
+            if (activeJob != null) return
+            activeOperation = label
+            progress = null
+            lastProgressLogKey = ""
+            status = PatcherStatus.Busy(label)
+            appendLog("$label started.")
             val job = scope.launch {
                 val token = CoroutineCancellationToken(coroutineContext[Job]!!)
                 try {
                     operation(token)
+                    appendLog("$label finished.")
                 } catch (_: PatchCancelledException) {
                     status = PatcherStatus.Cancelled
+                    appendLog("$label cancelled.")
                 } catch (_: CancellationException) {
                     status = PatcherStatus.Cancelled
+                    appendLog("$label cancelled.")
                 } catch (error: Exception) {
                     status = PatcherStatus.Failure(error.message ?: "The operation failed.")
+                    appendLog("$label failed: ${error.message ?: "The operation failed."}")
                 } finally {
-                    if (activeJob == coroutineContext[Job]) activeJob = null
+                    if (activeJob == coroutineContext[Job]) {
+                        activeJob = null
+                        activeOperation = null
+                        if (status is PatcherStatus.Busy) {
+                            status = if (preflight?.eboot?.supported == true) PatcherStatus.Ready else PatcherStatus.Empty
+                        }
+                    }
                 }
             }
             activeJob = job
         }
 
         fun report(value: PatchProgress) {
-            progress = value
-            status = PatcherStatus.Busy(value.detail ?: value.phase.name)
+            scope.launch {
+                if (activeOperation == null) return@launch
+                progress = value
+                val label = value.detail ?: value.phase.name
+                status = PatcherStatus.Busy(label)
+                val bucket = if (value.total > 0L) ((value.completed * 100L / value.total) / 10L) * 10L else value.completed
+                val key = "${value.phase}|$label|$bucket"
+                if (key != lastProgressLogKey) {
+                    lastProgressLogKey = key
+                    val amount = if (value.total > 0L) " ($bucket%)" else ""
+                    appendLog("${value.phase}: $label$amount")
+                }
+            }
         }
 
         fun preflightSource() {
             val sourcePath = stagedSource ?: return
-            start { token ->
+            start("Verify source ISO") { token ->
                 val result = withContext(Dispatchers.Default) {
                     patchingService.preflight(sourcePath, options, token, ProgressReporter(::report))
                 }
@@ -128,13 +171,17 @@ fun PatcherApp(
                 } else {
                     PatcherStatus.Failure(result.eboot.problems.joinToString(" "))
                 }
+                appendLog("Source ISO identified as ${result.image.discSerial ?: "disc serial unavailable"}.")
             }
         }
 
         fun selectSource() {
-            start { token ->
-                val selected = fileGateway.pickSource() ?: return@start
-                stagedSource?.let { fileGateway.deleteTemp(it) }
+            start("Select ISO") { token ->
+                val selected = fileGateway.pickSource() ?: run {
+                    appendLog("ISO selection cancelled.")
+                    return@start
+                }
+                val previousStagedSource = stagedSource
                 val staged = fileGateway.createTempPath("bbs-source", ".iso")
                 try {
                     withContext(Dispatchers.Default) {
@@ -145,6 +192,7 @@ fun PatcherApp(
                     }
                     source = selected
                     stagedSource = staged
+                    previousStagedSource?.let { fileGateway.deleteTemp(it) }
                     output = null
                     preflight = result
                     verification = null
@@ -153,6 +201,7 @@ fun PatcherApp(
                     } else {
                         PatcherStatus.Failure(result.eboot.problems.joinToString(" "))
                     }
+                    appendLog("Selected ${selected.displayName}; game ID ${result.image.discSerial ?: "unavailable"}.")
                 } catch (error: Throwable) {
                     fileGateway.deleteTemp(staged)
                     throw error
@@ -163,7 +212,7 @@ fun PatcherApp(
         fun selectOutput() {
             val sourceName = source?.displayName ?: "Birth-By-Sleep-Final-ReMix"
             val suggested = sourceName.substringBeforeLast('.', sourceName) + ".final-remix.iso"
-            start { output = fileGateway.pickOutput(suggested) }
+            start("Choose ISO output") { output = fileGateway.pickOutput(suggested) }
         }
 
         fun verifySource() {
@@ -172,8 +221,11 @@ fun PatcherApp(
         }
 
         fun verifyOutput() {
-            start { token ->
-                val selected = fileGateway.pickSource() ?: return@start
+            start("Verify Output") { token ->
+                val selected = fileGateway.pickSource() ?: run {
+                    appendLog("Output verification picker cancelled.")
+                    return@start
+                }
                 val staged = fileGateway.createTempPath("bbs-verify", ".iso")
                 try {
                     withContext(Dispatchers.Default) {
@@ -184,6 +236,7 @@ fun PatcherApp(
                     }
                     verification = result
                     status = PatcherStatus.Verification(result)
+                    appendLog("ISO verification: ${result.status} — ${result.message}")
                 } finally {
                     fileGateway.deleteTemp(staged)
                 }
@@ -196,14 +249,17 @@ fun PatcherApp(
             val outputSelection = output ?: return
             if (fileGateway.isSameSourceAndOutput(sourceSelection, outputSelection)) {
                 status = PatcherStatus.Failure("The output must be a separate ISO and must not overwrite the source image.")
+                appendLog("Patch ISO refused: output points to the source image.")
                 return
             }
             if (!outputSelection.displayName.endsWith(".iso", ignoreCase = true)) {
                 status = PatcherStatus.Failure("Choose an output filename ending in .iso.")
+                appendLog("Patch ISO refused: output filename must end in .iso.")
                 return
             }
-            start { token ->
+            start("Patch ISO") { token ->
                 val temporary = fileGateway.createTempPath("bbs-output", ".iso")
+                var outputCommitted = false
                 try {
                     val result = withContext(Dispatchers.Default) {
                         patchingService.patchTo(sourcePath, temporary, options, token, ProgressReporter(::report))
@@ -211,10 +267,12 @@ fun PatcherApp(
                     withContext(Dispatchers.Default) {
                         fileGateway.commitOutput(temporary, outputSelection, token, ProgressReporter(::report))
                     }
+                    outputCommitted = true
                     status = PatcherStatus.Complete(result, outputSelection.location)
+                    appendLog("Patched ISO committed to ${outputSelection.location}.")
                 } finally {
                     fileGateway.deleteTemp(temporary)
-                    if (stagedSource == sourcePath) {
+                    if (outputCommitted && stagedSource == sourcePath) {
                         fileGateway.deleteTemp(sourcePath)
                         stagedSource = null
                     }
@@ -222,13 +280,40 @@ fun PatcherApp(
             }
         }
 
+        fun cancelCurrentOperation() {
+            val label = activeOperation ?: return
+            appendLog("Cancellation requested for $label.")
+            activeJob?.cancel()
+        }
+
+        fun exportLog() {
+            val serial = preflight?.image?.discSerial
+            val fileName = logExportFileName(serial, fileGateway.localDateStamp())
+            start("Export Log") { token ->
+                if (serial == null) appendLog("Disc serial unavailable; exporting with an explicit unavailable-serial filename.")
+                val destination = fileGateway.pickOutput(fileName) ?: run {
+                    appendLog("Log export destination picker cancelled.")
+                    return@start
+                }
+                val temporary = fileGateway.createTempPath("bbs-log", ".log")
+                try {
+                    val content = logEntries.joinToString(separator = "\n", postfix = "\n")
+                    FileSystem.SYSTEM.sink(temporary, mustCreate = true).buffer().use { it.writeUtf8(content) }
+                    fileGateway.commitOutput(temporary, destination, token, ProgressReporter(::report))
+                    appendLog("Log exported to ${destination.location}.")
+                } finally {
+                    fileGateway.deleteTemp(temporary)
+                }
+            }
+        }
+
         val canPatch = stagedSource != null &&
             preflight?.eboot?.supported == true &&
-            optionInputsValid &&
             options.validate().isEmpty()
         val busy = activeJob != null
 
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+            PatcherBackground(Modifier.fillMaxSize())
             val compact = maxWidth < 820.dp
             if (compact) {
                 Column(Modifier.fillMaxSize()) {
@@ -246,13 +331,22 @@ fun PatcherApp(
                                 onSelectSource = ::selectSource,
                                 onVerifySource = ::verifySource,
                                 onOptionsChanged = { options = it },
-                                onInputsValidChanged = { optionInputsValid = it },
                                 onSelectOutput = ::selectOutput,
                                 onPatch = ::patchIso,
-                                onVerifyOutput = ::verifyOutput,
+                                onCancel = ::cancelCurrentOperation,
+                                isPatching = activeOperation == "Patch ISO",
                                 compact = true,
                             )
 
+                            AppPage.HD_TEXTURES -> HdTexturesPage(compact = true)
+                            AppPage.LOGS -> LogsPage(
+                                entries = logEntries,
+                                status = status,
+                                progress = progress,
+                                busy = busy,
+                                onVerifyOutput = ::verifyOutput,
+                                onExportLog = ::exportLog,
+                            )
                             AppPage.INFO -> InfoPage(
                                 onOpenUrl = fileGateway::openExternalUrl,
                                 compact = true,
@@ -278,13 +372,22 @@ fun PatcherApp(
                                 onSelectSource = ::selectSource,
                                 onVerifySource = ::verifySource,
                                 onOptionsChanged = { options = it },
-                                onInputsValidChanged = { optionInputsValid = it },
                                 onSelectOutput = ::selectOutput,
                                 onPatch = ::patchIso,
-                                onVerifyOutput = ::verifyOutput,
+                                onCancel = ::cancelCurrentOperation,
+                                isPatching = activeOperation == "Patch ISO",
                                 compact = false,
                             )
 
+                            AppPage.HD_TEXTURES -> HdTexturesPage(compact = false)
+                            AppPage.LOGS -> LogsPage(
+                                entries = logEntries,
+                                status = status,
+                                progress = progress,
+                                busy = busy,
+                                onVerifyOutput = ::verifyOutput,
+                                onExportLog = ::exportLog,
+                            )
                             AppPage.INFO -> InfoPage(
                                 onOpenUrl = fileGateway::openExternalUrl,
                                 compact = false,
@@ -324,10 +427,10 @@ private fun PatcherPage(
     onSelectSource: () -> Unit,
     onVerifySource: () -> Unit,
     onOptionsChanged: (PatchOptions) -> Unit,
-    onInputsValidChanged: (Boolean) -> Unit,
     onSelectOutput: () -> Unit,
     onPatch: () -> Unit,
-    onVerifyOutput: () -> Unit,
+    onCancel: () -> Unit,
+    isPatching: Boolean,
     compact: Boolean,
 ) {
     Column(
@@ -341,33 +444,28 @@ private fun PatcherPage(
         if (compact) {
             SourceCard(source, status, preflight, progress, onSelectSource, onVerifySource, busy)
             DetectedGamePane(preflight, compact = true)
-            OptionsCard(options, onOptionsChanged, busy, onInputsValidChanged)
-            OutputCard(output, onSelectOutput, onPatch, busy, canPatch)
+            OptionsCard(options, onOptionsChanged, busy)
+            OutputCard(output, onSelectOutput, onPatch, onCancel, busy, canPatch, isPatching, progress)
         } else {
             Row(
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(18.dp),
                 verticalAlignment = Alignment.Top,
             ) {
-                Column(
-                    Modifier.weight(0.9f),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                ) {
+                Box(Modifier.weight(1f)) {
                     SourceCard(source, status, preflight, progress, onSelectSource, onVerifySource, busy)
-                    DetectedGamePane(preflight, compact = false)
-                    OutputCard(output, onSelectOutput, onPatch, busy, canPatch)
                 }
-                Column(
-                    Modifier.weight(1.1f),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                ) {
-                    OptionsCard(options, onOptionsChanged, busy, onInputsValidChanged)
-                    StatusCard(status, progress)
-                }
+                Box(Modifier.weight(1f)) { DetectedGamePane(preflight, compact = false) }
             }
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                OptionsCard(options, onOptionsChanged, busy, Modifier.fillMaxWidth(0.88f))
+            }
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                OutputCard(output, onSelectOutput, onPatch, onCancel, busy, canPatch, isPatching, progress, Modifier.fillMaxWidth(0.72f))
+            }
+            StatusCard(status, progress)
         }
         if (compact) StatusCard(status, progress)
-        VerifyOutputFooter(onVerifyOutput, busy)
     }
 }
 
@@ -393,6 +491,102 @@ private fun PageHeader() {
 }
 
 @Composable
+private fun PatcherBackground(modifier: Modifier = Modifier) {
+    Box(modifier) {
+        Image(
+            painter = painterResource(Res.drawable.app_background),
+            contentDescription = null,
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Crop,
+        )
+        Box(Modifier.fillMaxSize().background(Color(0xD9071425)))
+    }
+}
+
+@Composable
+private fun HdTexturesPage(compact: Boolean) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = if (compact) 18.dp else 28.dp, vertical = 22.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        Text("HD Textures", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold)
+        PatcherSurface(Modifier.fillMaxWidth()) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("PPSSPP texture profiles", style = MaterialTheme.typography.titleLarge)
+                Text(
+                    "Select a game ISO in Setup to identify its game ID. The matching profile, controller layout, Aqua compatibility, and texture destination will be shown here.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun LogsPage(
+    entries: List<String>,
+    status: PatcherStatus,
+    progress: PatchProgress?,
+    busy: Boolean,
+    onVerifyOutput: () -> Unit,
+    onExportLog: () -> Unit,
+) {
+    val logScrollState = rememberScrollState()
+    LaunchedEffect(entries.size) {
+        logScrollState.animateScrollTo(logScrollState.maxValue)
+    }
+    Column(
+        Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 18.dp, vertical = 22.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        Text("Logs", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold)
+        StatusCard(status, progress)
+        PatcherSurface(Modifier.fillMaxWidth()) {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 180.dp, max = 500.dp)
+                    .verticalScroll(logScrollState),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                if (entries.isEmpty()) {
+                    Text("Operation details will appear here as work progresses.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                } else {
+                    entries.forEach { entry ->
+                        Text(entry, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
+                    }
+                }
+            }
+        }
+        VerifyOutputFooter(onVerifyOutput, busy)
+        PatcherSurface(Modifier.fillMaxWidth()) {
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("Export Log", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "Save the operation log using the detected game ID and local date.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                PatcherButton("Export Log", onExportLog, enabled = !busy)
+            }
+        }
+    }
+}
+
+@Composable
 private fun SourceCard(
     source: PlatformFileSelection?,
     status: PatcherStatus,
@@ -404,7 +598,7 @@ private fun SourceCard(
 ) {
     PatcherSurface(Modifier.fillMaxWidth()) {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("Game files", style = MaterialTheme.typography.titleLarge)
+            Text("1. Game Files", style = MaterialTheme.typography.titleLarge)
             Row(
                 Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -453,11 +647,12 @@ private fun DetectedGamePane(
             Row(
                 Modifier
                     .fillMaxWidth()
+                    .clip(PatcherNestedCornerShape)
                     .clickable { expanded = !expanded },
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(Modifier.weight(1f)) {
-                    Text("Detected game", style = MaterialTheme.typography.titleLarge)
+                    Text("2. Detected Game", style = MaterialTheme.typography.titleLarge)
                     Text(
                         if (expanded) "ISO metadata and cover art" else "Tap to expand",
                         style = MaterialTheme.typography.bodySmall,
@@ -507,7 +702,7 @@ private fun DetectedGamePane(
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold,
                         )
-                        Text("Game ID  ULJM-05775", style = MaterialTheme.typography.bodyMedium)
+                        Text("Game ID  ${preflight?.image?.discSerial ?: "Not available"}", style = MaterialTheme.typography.bodyMedium)
                         Text(
                             if (preflight?.image?.coverArt != null) {
                                 "Cover art loaded from PSP_GAME/ICON0.PNG"
@@ -545,16 +740,14 @@ private fun OptionsCard(
     options: PatchOptions,
     onOptionsChanged: (PatchOptions) -> Unit,
     busy: Boolean,
-    onInputsValidChanged: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     var combatExpanded by remember { mutableStateOf(true) }
     var advancedExpanded by remember { mutableStateOf(false) }
-    var distanceValid by remember { mutableStateOf(true) }
-    var heightValid by remember { mutableStateOf(true) }
 
-    PatcherSurface(Modifier.fillMaxWidth()) {
+    PatcherSurface(modifier.fillMaxWidth()) {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("Patch options", style = MaterialTheme.typography.titleLarge)
+            Text("3. Patch Options", style = MaterialTheme.typography.titleLarge)
             Text(
                 "Enable the features you want. Each toggle maps directly to one patch capability.",
                 style = MaterialTheme.typography.bodySmall,
@@ -575,16 +768,13 @@ private fun OptionsCard(
                 enabled = !busy,
                 onCheckedChange = { onOptionsChanged(options.copy(cameraDistanceEnabled = it)) },
             )
-            NumberSetting(
-                label = "Distance",
+            SliderSetting(
+                label = "Camera Distance",
                 value = options.cameraDistance,
                 range = PatchOptions.CAMERA_DISTANCE_RANGE,
+                steps = 109,
                 enabled = !busy && options.cameraDistanceEnabled,
                 onValueChange = { onOptionsChanged(options.copy(cameraDistance = it)) },
-                onValidityChanged = {
-                    distanceValid = it
-                    onInputsValidChanged(distanceValid && heightValid)
-                },
             )
             FeatureToggle(
                 title = "Camera height",
@@ -593,16 +783,13 @@ private fun OptionsCard(
                 enabled = !busy,
                 onCheckedChange = { onOptionsChanged(options.copy(cameraHeightEnabled = it)) },
             )
-            NumberSetting(
-                label = "Height",
+            SliderSetting(
+                label = "Camera Height",
                 value = options.cameraHeight,
                 range = PatchOptions.CAMERA_HEIGHT_RANGE,
+                steps = 39,
                 enabled = !busy && options.cameraHeightEnabled,
                 onValueChange = { onOptionsChanged(options.copy(cameraHeight = it)) },
-                onValidityChanged = {
-                    heightValid = it
-                    onInputsValidChanged(distanceValid && heightValid)
-                },
             )
 
             HorizontalDivider()
@@ -698,6 +885,7 @@ private fun FeatureToggle(
     Row(
         Modifier
             .fillMaxWidth()
+            .clip(PatcherNestedCornerShape)
             .toggleable(
                 enabled = enabled,
                 value = checked,
@@ -715,7 +903,12 @@ private fun FeatureToggle(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        Switch(checked = checked, onCheckedChange = null, enabled = enabled)
+        PatcherSwitch(
+            checked = checked,
+            onCheckedChange = null,
+            modifier = Modifier.padding(start = 8.dp),
+            enabled = enabled,
+        )
     }
 }
 
@@ -730,6 +923,7 @@ private fun ExpandableRow(
     Row(
         Modifier
             .fillMaxWidth()
+            .clip(PatcherNestedCornerShape)
             .clickable(enabled = enabled) { onExpandedChange(!expanded) }
             .padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -747,39 +941,31 @@ private fun ExpandableRow(
 }
 
 @Composable
-private fun NumberSetting(
+private fun SliderSetting(
     label: String,
     value: Float,
     range: ClosedFloatingPointRange<Float>,
+    steps: Int,
     enabled: Boolean,
     onValueChange: (Float) -> Unit,
-    onValidityChanged: (Boolean) -> Unit,
 ) {
-    var text by remember(value) { mutableStateOf(value.toString()) }
-    val parsed = text.toFloatOrNull()
-    val invalid = parsed == null || parsed !in range
-    LaunchedEffect(enabled, invalid) {
-        onValidityChanged(!enabled || !invalid)
+    val tenths = (value * 10f).toInt()
+    val formattedValue = "${tenths / 10}.${kotlin.math.abs(tenths % 10)}"
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(label, style = MaterialTheme.typography.bodyMedium)
+            Spacer(Modifier.weight(1f))
+            Text(formattedValue, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+        }
+        PatcherSlider(
+            value = value,
+            onValueChange = { onValueChange((it * 10f).toInt() / 10f) },
+            valueRange = range,
+            steps = steps,
+            enabled = enabled,
+            modifier = Modifier.fillMaxWidth(),
+        )
     }
-    OutlinedTextField(
-        value = text,
-        onValueChange = { next ->
-            text = next
-            val number = next.toFloatOrNull()
-            val valid = number != null && number in range
-            onValidityChanged(valid)
-            number?.takeIf { it in range }?.let(onValueChange)
-        },
-        label = { Text(label) },
-        enabled = enabled,
-        isError = enabled && invalid,
-        supportingText = if (enabled && invalid) {
-            { Text("Enter a value from " + range.start + " to " + range.endInclusive + ".") }
-        } else null,
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-        singleLine = true,
-        modifier = Modifier.fillMaxWidth(),
-    )
 }
 
 @Composable
@@ -787,12 +973,16 @@ private fun OutputCard(
     output: PlatformOutputSelection?,
     onSelect: () -> Unit,
     onPatch: () -> Unit,
+    onCancel: () -> Unit,
     busy: Boolean,
     canPatch: Boolean,
+    isPatching: Boolean,
+    progress: PatchProgress?,
+    modifier: Modifier = Modifier,
 ) {
-    PatcherSurface(Modifier.fillMaxWidth()) {
+    PatcherSurface(modifier.fillMaxWidth()) {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("Patch", style = MaterialTheme.typography.titleLarge)
+            Text("4. Patch", style = MaterialTheme.typography.titleLarge)
             Text(
                 output?.displayName ?: "Choose a separate output ISO path.",
                 style = MaterialTheme.typography.bodyMedium,
@@ -801,6 +991,24 @@ private fun OutputCard(
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 PatcherButton("Choose output…", onSelect, enabled = !busy && canPatch)
                 PatcherButton("Patch ISO", onPatch, enabled = !busy && canPatch && output != null)
+            }
+            if (isPatching) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    PatcherIndeterminateProgress(Modifier.size(44.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("Patching ISO", style = MaterialTheme.typography.titleSmall)
+                        Text(
+                            progress?.detail ?: "Preparing patch pipeline…",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    TextButton(onClick = onCancel) { Text("Cancel") }
+                }
             }
         }
     }
@@ -820,7 +1028,7 @@ private fun VerifyOutputFooter(
             Column(Modifier.weight(1f)) {
                 Text("Verify output", style = MaterialTheme.typography.titleMedium)
                 Text(
-                    "Choose any ISO to confirm that the selected Final ReMix features were applied.",
+                    "Choose an ISO to verify the embedded Final ReMix executable. Texture verification is separate.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -837,8 +1045,8 @@ private fun StatusCard(status: PatcherStatus, progress: PatchProgress?) {
         PatcherStatus.Ready,
         -> Unit
 
-        PatcherStatus.Cancelled -> MessageCard("Cancelled", "No completed output was committed.")
-        is PatcherStatus.Busy -> if (progress == null) MessageCard("Working", status.label)
+        PatcherStatus.Cancelled -> MessageCard("Cancelled", "The operation was cancelled. Previously completed outputs remain available.")
+        is PatcherStatus.Busy -> MessageCard("In progress", progress?.detail ?: status.label)
         is PatcherStatus.Failure -> MessageCard("Unable to continue", status.message)
         is PatcherStatus.Complete -> MessageCard(
             "Patched ISO ready",
@@ -877,20 +1085,15 @@ private fun BottomNavigation(
     page: AppPage,
     onPageSelected: (AppPage) -> Unit,
 ) {
-    Surface(
-        tonalElevation = 4.dp,
-        color = MaterialTheme.colorScheme.surface,
-    ) {
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-        ) {
-            NavigationItem("Setup", page == AppPage.PATCHER) { onPageSelected(AppPage.PATCHER) }
-            NavigationItem("Info", page == AppPage.INFO) { onPageSelected(AppPage.INFO) }
-        }
+    val pages = remember {
+        listOf(AppPage.PATCHER, AppPage.HD_TEXTURES, AppPage.LOGS, AppPage.INFO)
     }
+    PatcherNavigationBar(
+        items = listOf("Setup", "HD Textures", "Logs", "Info"),
+        selectedIndex = pages.indexOf(page).coerceAtLeast(0),
+        onSelected = { index -> pages.getOrNull(index)?.let(onPageSelected) },
+        modifier = Modifier.fillMaxWidth(),
+    )
 }
 
 @Composable
@@ -916,6 +1119,8 @@ private fun DesktopNavigationRail(
             )
             Spacer(Modifier.weight(1f))
             NavigationItem("Setup", page == AppPage.PATCHER) { onPageSelected(AppPage.PATCHER) }
+            NavigationItem("HD Textures", page == AppPage.HD_TEXTURES) { onPageSelected(AppPage.HD_TEXTURES) }
+            NavigationItem("Logs", page == AppPage.LOGS) { onPageSelected(AppPage.LOGS) }
             NavigationItem("Info", page == AppPage.INFO) { onPageSelected(AppPage.INFO) }
         }
     }
@@ -925,18 +1130,25 @@ private fun DesktopNavigationRail(
 private fun NavigationItem(
     label: String,
     selected: Boolean,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
     TextButton(
         onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(18.dp),
+        modifier = modifier.fillMaxWidth().clip(PatcherNestedCornerShape),
+        shape = PatcherNestedCornerShape,
+        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
         colors = ButtonDefaults.textButtonColors(
             containerColor = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
             contentColor = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
         ),
     ) {
-        Text(label)
+        Text(
+            label,
+            style = MaterialTheme.typography.labelSmall,
+            softWrap = true,
+            textAlign = TextAlign.Center,
+        )
     }
 }
 
@@ -1027,6 +1239,8 @@ private fun KoFiPrompt(
 
 private enum class AppPage {
     PATCHER,
+    HD_TEXTURES,
+    LOGS,
     INFO,
 }
 
