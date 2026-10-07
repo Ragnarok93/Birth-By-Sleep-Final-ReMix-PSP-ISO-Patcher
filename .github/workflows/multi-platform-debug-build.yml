@@ -48,12 +48,12 @@ jobs:
             os: ubuntu-latest
             gradle_command: sh ./gradlew
             package_task: :composeApp:packageAppImage
-            artifact_glob: composeApp/build/compose/binaries/main/appimage/*.AppImage
+            artifact_glob: dist/Birth-By-Sleep-Final-ReMix-PSP-ISO-Patcher.AppImage
           - platform: Windows
             os: windows-latest
             gradle_command: .\\gradlew.bat
             package_task: :composeApp:packageExe
-            artifact_glob: composeApp/build/compose/binaries/main/exe/*.exe
+            artifact_glob: dist/Birth-By-Sleep-Final-ReMix-PSP-ISO-Patcher.exe
           - platform: macOS
             os: macos-latest
             gradle_command: sh ./gradlew
@@ -74,6 +74,28 @@ jobs:
         run: ${{ matrix.gradle_command }} :composeApp:desktopTest --stacktrace
       - name: Build desktop application (${{ matrix.platform }})
         run: ${{ matrix.gradle_command }} ${{ matrix.package_task }} --stacktrace
+      - name: Normalize Linux application artifact
+        if: matrix.platform == 'Linux'
+        shell: bash
+        run: |
+          mkdir -p dist
+          candidate="$(find composeApp/build/compose/binaries/main -type f -iname '*.appimage' -print -quit)"
+          if [ -z "$candidate" ]; then
+            find composeApp/build/compose/binaries/main -maxdepth 5 -print
+            exit 1
+          fi
+          cp "$candidate" dist/Birth-By-Sleep-Final-ReMix-PSP-ISO-Patcher.AppImage
+      - name: Normalize Windows application artifact
+        if: matrix.platform == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          $candidate = Get-ChildItem -Path composeApp/build/compose/binaries/main -Recurse -File -Filter *.exe | Select-Object -First 1
+          if ($null -eq $candidate) {
+            Get-ChildItem -Path composeApp/build/compose/binaries/main -Recurse
+            exit 1
+          }
+          Copy-Item $candidate.FullName dist/Birth-By-Sleep-Final-ReMix-PSP-ISO-Patcher.exe
       - name: Upload desktop application (${{ matrix.platform }})
         if: always()
         uses: actions/upload-artifact@v4.6.2
