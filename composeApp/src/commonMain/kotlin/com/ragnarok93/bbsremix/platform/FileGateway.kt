@@ -41,6 +41,12 @@ interface FileGateway {
     suspend fun deleteTemp(path: Path)
 
     fun isSameSourceAndOutput(source: PlatformFileSelection, output: PlatformOutputSelection): Boolean
+
+    fun shouldShowDonationPrompt(): Boolean
+
+    fun suppressDonationPrompt()
+
+    fun openExternalUrl(url: String)
 }
 
 class FileGatewayException(message: String) : IllegalStateException(message)
