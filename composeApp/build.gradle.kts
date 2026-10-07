@@ -105,7 +105,7 @@ compose.desktop {
                 org.jetbrains.compose.desktop.application.dsl.TargetFormat.Exe,
                 org.jetbrains.compose.desktop.application.dsl.TargetFormat.AppImage,
             )
-            packageName = "Birth By Sleep Final ReMix PSP ISO Patcher"
+            packageName = "Birth By Sleep - Final ReMix PSP ISO Patcher"
             packageVersion = "1.0.0"
             description = "Direct ISO patcher for Birth By Sleep - Final ReMix PSP images."
         }
