@@ -1,5 +1,5 @@
 {
-  "profile_sha256": "229902a8aa7d5bfcdcd481cb85fda2a50b80e626178c280f34d11a634841b724",
+  "profile_sha256": "9b26207c2b6aecf3e16c0a5aabf9457c4be8a8fb4ef4a491765c1ce965fe92ea",
   "source_eboot_sha256": "8c8947e83b829199f82370c4c638856718886d9a0a525892fed22ce6a8b26ca7",
   "patched_eboot_sha256": null,
   "ppsspp_version": null,
@@ -93,5 +93,12 @@
     "tested_build_head": "2f880f6e0eabaa7098e0300080557027f450ed88",
     "reported_at": "2026-10-07",
     "evidence_reference": "User runtime report: Diagnostic rebuild passed"
+  },
+  "right_stick_previous_candidate": {
+    "result": "functional_with_reversed_axes",
+    "camera_control_modes": "both in-game camera control options functioned without control interference",
+    "correction": "Current v2 profile inverts both right-stick axes while preserving the resident in-place architecture.",
+    "reported_at": "2026-10-07",
+    "evidence_reference": "User runtime report: right-stick camera functional; X/Y polarity reversed"
   }
 }
