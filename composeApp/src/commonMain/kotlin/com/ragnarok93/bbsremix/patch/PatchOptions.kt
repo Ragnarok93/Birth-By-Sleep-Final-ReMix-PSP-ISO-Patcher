@@ -35,7 +35,7 @@ data class PatchOptions(
         get() = rightStickCamera || appliesCameraDistance || appliesCameraHeight || combatFeatures
 
     fun validate(): List<PatchOptionError> = buildList {
-        if (appliesCameraDistance || appliesCameraHeight || combatFeatures) {
+        if (combatFeatures) {
             add(PatchOptionError.UnvalidatedPspPortFeature)
         }
         if (cameraDistance !in CAMERA_DISTANCE_RANGE) {
@@ -61,7 +61,7 @@ data class PatchOptions(
 
 sealed class PatchOptionError(val message: String) {
     data object UnvalidatedPspPortFeature : PatchOptionError(
-        "PC-derived camera/combat ports are disabled pending PSP-native re-derivation and runtime validation."
+        "Better Battle System combat ports remain disabled pending PSP-native re-derivation and runtime validation."
     )
 
     data class CameraDistanceOutOfRange(val value: Float) : PatchOptionError(
