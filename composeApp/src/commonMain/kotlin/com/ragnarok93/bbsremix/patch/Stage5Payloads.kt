@@ -1,6 +1,11 @@
 package com.ragnarok93.bbsremix.patch
 
-/** Generated non-game payloads. Run reference/sync_payloads.py after editing the Python oracle. */
+/**
+ * Legacy Stage 2/4/5 research payload bytes kept for reproducibility and parity
+ * checks. The supported PSP-native right-stick profile does not write these
+ * blobs: their historical VAs overlap MainApp's dynamic .overlays arena.
+ * Run reference/sync_payloads.py after editing the Python oracle.
+ */
 internal object Stage5Payloads {
     const val S2_FILE_OFFSET = 0x0036BE80
     const val S2_VA = 0x08B6EE80
