@@ -21,8 +21,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
-import org.jetbrains.compose.ui.graphics.toComposeImageBitmap
-import org.jetbrains.skia.Image
+import org.jetbrains.compose.resources.decodeToImageBitmap
 
 private val RemixBlue = Color(0xFF1E8FFF)
 private val RemixBlueSoft = Color(0xFF6AAEFF)
