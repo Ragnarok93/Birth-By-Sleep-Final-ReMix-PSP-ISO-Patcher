@@ -10,74 +10,121 @@ permissions:
 
 jobs:
   android-debug:
-    name: Android debug (ubuntu / ${{ github.event_name }})
+    name: Android debug APK
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout source (Android)
-        uses: actions/checkout@v4.2.2
-      - name: Set up JDK 17 (Android)
-        uses: actions/setup-java@v4.7.1
+      - uses: actions/checkout@v4.2.2
+      - uses: actions/setup-java@v4.7.1
         with:
           distribution: temurin
           java-version: '17'
-      - name: Set up Android SDK (Android)
-        uses: android-actions/setup-android@v3.2.2
+      - uses: android-actions/setup-android@v3.2.2
         with:
           packages: platform-tools
-      - name: Set up Gradle (Android)
-        uses: gradle/actions/setup-gradle@v4.4.1
-      - name: Run Android debug unit tests (Android)
-        run: sh ./gradlew :composeApp:testDebugUnitTest --stacktrace
-      - name: Build Android debug APK (Android)
-        run: sh ./gradlew :composeApp:assembleDebug --stacktrace
-      - name: Upload Android debug APK (Android)
-        if: always()
-        uses: actions/upload-artifact@v4.6.2
+      - uses: gradle/actions/setup-gradle@v4.4.1
+      - name: Test and build Android debug
+        run: |
+          ./gradlew :composeApp:testDebugUnitTest :composeApp:assembleDebug --stacktrace
+          mkdir -p dist
+          cp "$(find composeApp/build/outputs/apk/debug -name '*.apk' -type f | head -n 1)"             dist/Birth-By-Sleep-Final-ReMix-PSP-ISO-Patcher-Android-Debug.apk
+      - uses: actions/upload-artifact@v4.6.2
         with:
-          name: android-debug-apk
-          path: composeApp/build/outputs/apk/debug/*.apk
-          if-no-files-found: warn
+          name: Android-Debug
+          path: dist/Birth-By-Sleep-Final-ReMix-PSP-ISO-Patcher-Android-Debug.apk
+          if-no-files-found: error
 
-  desktop-debug:
-    name: ${{ matrix.platform }} desktop debug
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: Linux
-            os: ubuntu-latest
-            gradle_command: sh ./gradlew
-            package_task: :composeApp:packageDeb
-            artifact_glob: composeApp/build/compose/binaries/main/deb/*.deb
-          - platform: Windows
-            os: windows-latest
-            gradle_command: .\\gradlew.bat
-            package_task: :composeApp:packageMsi
-            artifact_glob: composeApp/build/compose/binaries/main/msi/*.msi
-          - platform: macOS
-            os: macos-latest
-            gradle_command: sh ./gradlew
-            package_task: :composeApp:packageDmg
-            artifact_glob: composeApp/build/compose/binaries/main/dmg/*.dmg
-    runs-on: ${{ matrix.os }}
+  windows-debug:
+    name: Windows portable EXE
+    runs-on: windows-latest
     steps:
-      - name: Checkout source (${{ matrix.platform }})
-        uses: actions/checkout@v4.2.2
-      - name: Set up JDK 17 (${{ matrix.platform }})
-        uses: actions/setup-java@v4.7.1
+      - uses: actions/checkout@v4.2.2
+      - uses: actions/setup-java@v4.7.1
         with:
           distribution: temurin
           java-version: '17'
-      - name: Set up Gradle (${{ matrix.platform }})
-        uses: gradle/actions/setup-gradle@v4.4.1
-      - name: Run shared desktop tests (${{ matrix.platform }})
-        run: ${{ matrix.gradle_command }} :composeApp:desktopTest --stacktrace
-      - name: Build desktop installer (${{ matrix.platform }})
-        run: ${{ matrix.gradle_command }} ${{ matrix.package_task }} --stacktrace
-      - name: Upload desktop installer (${{ matrix.platform }})
-        if: always()
-        uses: actions/upload-artifact@v4.6.2
+      - uses: gradle/actions/setup-gradle@v4.4.1
+      - name: Test and build Windows app image
+        run: .\gradlew.bat :composeApp:desktopTest :composeApp:createDistributable --stacktrace
+      - name: Package portable Windows executable
+        shell: powershell
+        run: .\packaging\package-windows-portable.ps1 -Configuration Debug
+      - uses: actions/upload-artifact@v4.6.2
         with:
-          name: desktop-debug-${{ matrix.platform }}
-          path: ${{ matrix.artifact_glob }}
-          if-no-files-found: warn
+          name: Windows-Debug
+          path: dist/Birth-By-Sleep-Final-ReMix-PSP-ISO-Patcher-Windows-x64-Debug.exe
+          if-no-files-found: error
+
+  linux-debug:
+    name: Linux AppImage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.2.2
+      - uses: actions/setup-java@v4.7.1
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4.4.1
+      - name: Test and build Linux app image
+        run: ./gradlew :composeApp:desktopTest :composeApp:createDistributable --stacktrace
+      - name: Package Linux AppImage
+        run: |
+          chmod +x packaging/package-linux-appimage.sh
+          packaging/package-linux-appimage.sh Debug
+      - uses: actions/upload-artifact@v4.6.2
+        with:
+          name: Linux-Debug
+          path: dist/Birth-By-Sleep-Final-ReMix-PSP-ISO-Patcher-Linux-x86_64-Debug.AppImage
+          if-no-files-found: error
+
+  macos-debug:
+    name: macOS DMG
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4.2.2
+      - uses: actions/setup-java@v4.7.1
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4.4.1
+      - name: Test and build macOS DMG
+        run: |
+          ./gradlew :composeApp:desktopTest :composeApp:packageDmg --stacktrace
+          mkdir -p dist
+          cp "$(find composeApp/build/compose/binaries/main/dmg -name '*.dmg' -type f | head -n 1)"             dist/Birth-By-Sleep-Final-ReMix-PSP-ISO-Patcher-macOS-Debug.dmg
+      - uses: actions/upload-artifact@v4.6.2
+        with:
+          name: macOS-Debug
+          path: dist/Birth-By-Sleep-Final-ReMix-PSP-ISO-Patcher-macOS-Debug.dmg
+          if-no-files-found: error
+
+  source-debug:
+    name: Source archive
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.2.2
+      - name: Create Source.zip
+        run: git archive --format=zip --output=Source.zip HEAD
+      - uses: actions/upload-artifact@v4.6.2
+        with:
+          name: Source
+          path: Source.zip
+          if-no-files-found: error
+
+  checksums-debug:
+    name: SHA archive
+    needs: [android-debug, windows-debug, linux-debug, macos-debug, source-debug]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4.3.0
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Create SHA.zip
+        run: |
+          find artifacts -type f -print0 | sort -z | xargs -0 sha256sum | sed 's#  artifacts/#  #' > SHA256SUMS.txt
+          zip -j SHA.zip SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4.6.2
+        with:
+          name: SHA
+          path: SHA.zip
+          if-no-files-found: error
