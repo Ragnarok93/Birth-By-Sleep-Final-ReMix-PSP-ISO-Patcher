@@ -85,5 +85,13 @@
         "evidence_reference": null
       }
     }
+  },
+  "diagnostic_rebuild": {
+    "result": "pass",
+    "byte_identical": true,
+    "source_eboot_sha256": "8c8947e83b829199f82370c4c638856718886d9a0a525892fed22ce6a8b26ca7",
+    "tested_build_head": "2f880f6e0eabaa7098e0300080557027f450ed88",
+    "reported_at": "2026-10-07",
+    "evidence_reference": "User runtime report: Diagnostic rebuild passed"
   }
 }
