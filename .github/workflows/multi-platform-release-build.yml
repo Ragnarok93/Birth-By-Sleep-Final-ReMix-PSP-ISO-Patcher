@@ -43,7 +43,7 @@ jobs:
           echo "ANDROID_KEY_PASSWORD=$ANDROID_KEY_PASSWORD" >> "$GITHUB_ENV"
       - name: Test and build Android release
         run: |
-          ./gradlew :composeApp:testDebugUnitTest :composeApp:assembleRelease --stacktrace
+          sh ./gradlew :composeApp:testDebugUnitTest :composeApp:assembleRelease --stacktrace
           mkdir -p dist
           APK="$(find composeApp/build/outputs/apk/release -name '*.apk' -type f | head -n 1)"
           cp "$APK" "dist/Birth-By-Sleep-Final-ReMix-PSP-ISO-Patcher-Android-Release-${{ steps.signing.outputs.artifact_suffix }}.apk"
@@ -85,7 +85,7 @@ jobs:
           java-version: '17'
       - uses: gradle/actions/setup-gradle@v4.4.1
       - name: Test and build Linux app image
-        run: ./gradlew :composeApp:desktopTest :composeApp:createDistributable --stacktrace
+        run: sh ./gradlew :composeApp:desktopTest :composeApp:createDistributable --stacktrace
       - name: Package Linux AppImage
         run: |
           chmod +x packaging/package-linux-appimage.sh
@@ -108,7 +108,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4.4.1
       - name: Test and build macOS DMG
         run: |
-          ./gradlew :composeApp:desktopTest :composeApp:packageDmg --stacktrace
+          sh ./gradlew :composeApp:desktopTest :composeApp:packageDmg --stacktrace
           mkdir -p dist
           cp "$(find composeApp/build/compose/binaries/main/dmg -name '*.dmg' -type f | head -n 1)"             dist/Birth-By-Sleep-Final-ReMix-PSP-ISO-Patcher-macOS-Release.dmg
       - uses: actions/upload-artifact@v4.6.2
