@@ -7,9 +7,11 @@ package com.ragnarok93.bbsremix.patch
  * This intentionally does not allocate code in MainApp's .overlays arena and
  * does not add/extend an ELF LOAD segment. PPSSPP exposes the second analog
  * stick in SceCtrlData bytes 10/11 (analog[1][0/1], historically Rsrv[0/1]).
- * MainApp's existing input update copies the final sample into two otherwise
- * unreferenced padding bytes, and only the native camera-axis call sites tag
- * their existing analog getter calls with a magic selector.
+ * MainApp's existing input update captures the final sample into two otherwise
+ * unreferenced padding bytes. The captured pair has bit 7 flipped on each axis,
+ * producing signed-centered bytes; the tagged camera getters signed-load and
+ * negate them so stick direction matches camera direction. Only native camera
+ * axis call sites use the magic selector.
  */
 internal object PspNativeRightStickPatch {
     const val OVERLAY_ARENA_VA = 0x08B6EE7C
@@ -44,9 +46,9 @@ internal object PspNativeRightStickPatch {
         WordPatch(0x088162F8, 0x27BDFFF0, 0x34035253, "right-X selector magic"),
         WordPatch(0x088162FC, 0xAFBF0000.toInt(), 0x14830074, "right-X default branch"),
         WordPatch(0x08816300, 0x0E205934, 0x3C0208B4, "right-X resident base"),
-        WordPatch(0x08816304, 0x00000000, 0x9042199A.toInt(), "right-X captured byte"),
+        WordPatch(0x08816304, 0x00000000, 0x8042199A.toInt(), "right-X signed captured byte"),
         WordPatch(0x08816308, 0x8FBF0000.toInt(), 0x03E00008, "right-X return"),
-        WordPatch(0x0881630C, 0x03E00008, 0x2442FF80, "right-X center in delay slot"),
+        WordPatch(0x0881630C, 0x03E00008, 0x00021023, "right-X invert in delay slot"),
         WordPatch(0x08816310, 0x27BD0010, 0x00000000, "right-X tail padding"),
 
         // Raw Y getter. Untagged callers branch directly to the original
@@ -54,19 +56,20 @@ internal object PspNativeRightStickPatch {
         WordPatch(0x08816314, 0x27BDFFF0, 0x34035253, "right-Y selector magic"),
         WordPatch(0x08816318, 0xAFBF0000.toInt(), 0x14830077, "right-Y default branch"),
         WordPatch(0x0881631C, 0x0E20593E, 0x3C0208B4, "right-Y resident base"),
-        WordPatch(0x08816320, 0x00000000, 0x9042199B.toInt(), "right-Y captured byte"),
+        WordPatch(0x08816320, 0x00000000, 0x8042199B.toInt(), "right-Y signed captured byte"),
         WordPatch(0x08816324, 0x8FBF0000.toInt(), 0x03E00008, "right-Y return"),
-        WordPatch(0x08816328, 0x03E00008, 0x2442FF80, "right-Y center in delay slot"),
+        WordPatch(0x08816328, 0x03E00008, 0x00021023, "right-Y invert in delay slot"),
         WordPatch(0x0881632C, 0x27BD0010, 0x00000000, "right-Y tail padding"),
 
         // MainApp input update. $t2 points one record past the final 16-byte
-        // CtrlData sample when the loop exits, so -6/-5 are final sample
-        // analog[1][0/1]. Left analog remains stored at 0x08B41980/84.
-        WordPatch(0x0881683C, 0x3C0408B4, 0x9145FFFA.toInt(), "capture right-X from CtrlData+10"),
-        WordPatch(0x08816840, 0x3C0508B4, 0x9146FFFB.toInt(), "capture right-Y from CtrlData+11"),
+        // CtrlData sample when the loop exits, so -6 is a naturally aligned
+        // halfword containing analog[1][0/1]. XOR 0x8080 maps each unsigned
+        // 0..255 axis to a signed-centered byte without adding instructions.
+        // Left analog remains stored at 0x08B41980/84.
+        WordPatch(0x0881683C, 0x3C0408B4, 0x9545FFFA.toInt(), "capture right-stick XY halfword"),
+        WordPatch(0x08816840, 0x3C0508B4, 0x38A58080, "center right-stick XY bytes"),
         WordPatch(0x08816848, 0xACA71970.toInt(), 0xAC871970.toInt(), "reuse resident input-state base"),
-        WordPatch(0x0881684C, 0x3C0408B4, 0xA085199A.toInt(), "store captured right-X"),
-        WordPatch(0x08816854, 0x3C0408B4, 0xA086199B.toInt(), "store captured right-Y"),
+        WordPatch(0x0881684C, 0x3C0408B4, 0xA485199A.toInt(), "store centered right-stick XY"),
 
         // RemasteredControls-equivalent camera behavior.
         WordPatch(0x08940FEC, 0x508000BA, 0x00000000, "remove L modifier from camera"),
@@ -81,10 +84,7 @@ internal object PspNativeRightStickPatch {
         WordPatch(0x0898F8A4, 0x00000000, RIGHT_STICK_SELECTOR, "right-stick Y selector 2"),
     )
 
-    val bytePatches = listOf(
-        BytePatch(RIGHT_STICK_X_BYTE_VA, 0x00, 0x80, "right-X neutral initialization"),
-        BytePatch(RIGHT_STICK_Y_BYTE_VA, 0x00, 0x80, "right-Y neutral initialization"),
-    )
+    val bytePatches = emptyList<BytePatch>()
 
     val requiredUnchangedWords = listOf(
         RequiredWord(0x08816688, 0x0E2C5B4E, "native controller poll call"),
