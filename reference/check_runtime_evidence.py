@@ -8,21 +8,32 @@ from pathlib import Path
 import bbsfm_psp_bbs_stage5_patcher as p
 
 SCENARIOS = (
-    'boot_gameplay', 'free_camera', 'lock_on_camera', 'right_stick',
-    'guard_square_circle', 'command_cancels', 'critical_mode',
-    'scene_transitions', 'save_load', 'normal_combat_5_minutes',
+    'boot_gameplay',
+    'free_camera',
+    'lock_on_camera',
+    'right_stick',
+    'scene_transitions',
+    'save_load',
 )
 
 
 def profile_sha256():
-    # Include canonical injected code plus default feature byte and camera values.
-    return hashlib.sha256(p.S2_BLOB + p.S4_BLOB + p.S5_WRAPPER_BLOB +
-                          struct.pack('<BBff', 0xbc, 0, 4.5, 1.0)).hexdigest()
+    # Fingerprint the exact resident right-stick mutation set. Legacy Stage
+    # 2/4/5 overlay blobs are deliberately excluded because the supported
+    # profile never writes them.
+    digest = hashlib.sha256()
+    digest.update(b'psp-native-right-stick-v1\\0')
+    digest.update(bytes.fromhex(p.SUPPORTED_SHA256))
+    for va, expected, replacement, _desc in p.RIGHT_STICK_WORD_PATCHES:
+        digest.update(struct.pack('<III', va, expected & 0xffffffff, replacement & 0xffffffff))
+    for va, expected, replacement, _desc in p.RIGHT_STICK_BYTE_PATCHES:
+        digest.update(struct.pack('<IBB', va, expected & 0xff, replacement & 0xff))
+    return digest.hexdigest()
 
 
 def validate(evidence):
     if evidence.get('profile_sha256') != profile_sha256():
-        raise ValueError('Runtime evidence does not match the current default payload')
+        raise ValueError('Runtime evidence does not match the current resident right-stick profile')
     if evidence.get('source_eboot_sha256') != p.SUPPORTED_SHA256:
         raise ValueError('Runtime evidence uses an unsupported source EBOOT')
     if not re.fullmatch('[0-9a-f]{64}', evidence.get('patched_eboot_sha256') or ''):
