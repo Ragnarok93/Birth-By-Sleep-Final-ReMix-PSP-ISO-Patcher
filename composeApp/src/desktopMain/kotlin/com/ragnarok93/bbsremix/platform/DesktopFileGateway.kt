@@ -43,7 +43,7 @@ class DesktopFileGateway(
 
     override suspend fun createTempPath(prefix: String, suffix: String): Path {
         val root = System.getProperty("java.io.tmpdir").toPath()
-        return root / "$prefix-\${UUID.randomUUID()}$suffix"
+        return root / "$prefix-${UUID.randomUUID()}$suffix"
     }
 
     override suspend fun stageSource(
