@@ -362,7 +362,6 @@ class Stage5EbootPatchEngine : EbootPatchEngine {
         val PRX_MAGIC = byteArrayOf('~'.code.toByte(), 'P'.code.toByte(), 'S'.code.toByte(), 'P'.code.toByte())
         val SCE_MAGIC = byteArrayOf('~'.code.toByte(), 'S'.code.toByte(), 'C'.code.toByte(), 'E'.code.toByte())
         val cameraPatches = listOf(
-            CameraPatch(0x08816688, 0x0e2c5b4e, jal(Stage5Payloads.S2_CAPTURE_PAD_VA), "capture second analog"),
             CameraPatch(0x08940fec, 0x508000ba, 0, "remove L modifier from camera"),
             CameraPatch(0x0898f68c, 0x1c80000b, 0, "force Type-B horizontal camera"),
             CameraPatch(0x0898f850, 0x1c80000b, 0, "force Type-B vertical camera"),
