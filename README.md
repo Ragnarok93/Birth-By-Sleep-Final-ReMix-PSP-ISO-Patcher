@@ -2,7 +2,7 @@
 
 Kotlin Multiplatform + Compose Multiplatform app for applying the Birth By Sleep - Final ReMix patch set to a supported Kingdom Hearts: Birth by Sleep Final Mix PSP ISO.
 
-The app accepts an `.iso` as its only patch input. It locates `PSP_GAME/SYSDIR/EBOOT.BIN`, validates the supported decrypted EBOOT fingerprint, applies the selected features, rebuilds the ISO, reopens the result, and commits a separate output image. The source image is never overwritten.
+The app accepts an `.iso` as its patch input and validates the supported decrypted English-patched EBOOT fingerprint. Gameplay ISO patch output is temporarily disabled while the PSP-native hooks are re-derived: the previous injected payloads were placed in MainApp's dynamic overlay arena and are not runtime-safe. The current diagnostic path rebuilds the image with the original EBOOT unchanged and requires the complete output ISO to remain byte-identical. The source image is never overwritten.
 
 ## Supported image profile
 
@@ -24,9 +24,10 @@ Encrypted PSP PRX containers (`~PSP`/`~SCE`) are identified and rejected before 
 2. Review the expandable Detected Game pane. When present, the patcher loads PSP cover art from `PSP_GAME/ICON0.PNG`.
 3. Enable or disable individual camera and Combat Mods. Combat Mods are grouped in an expandable category, with advanced compatibility controls nested beneath it.
 4. Select a separate output path.
-5. Patch, cancel safely, and receive a rebuilt ISO whose embedded EBOOT is reopened and checked.
-6. Open Logs, use Verify Output to pick an ISO, and review the embedded patch verification result. Texture installation and verification remain separate.
-7. Export the live operation log to a user-chosen location. The filename uses the detected game ID and local date; when the ISO has no valid ID, the filename clearly says the serial is unavailable.
+5. Run **Diagnostic rebuild**. The original EBOOT is written unchanged and the complete output must compare byte-for-byte equal to the staged source.
+6. Gameplay **Patch ISO** remains disabled until the PSP-native hooks pass runtime validation.
+7. Open Logs, use Verify Output to inspect an ISO, and keep texture installation/verification separate.
+8. Export the live operation log to a user-chosen location. The filename uses the detected game ID and local date; when the ISO has no valid ID, the filename clearly says the serial is unavailable.
 
 The app does not ask the user to extract EBOOT.BIN, run Python, decrypt files, or repackage an ISO. It does not upload images or collect analytics.
 
