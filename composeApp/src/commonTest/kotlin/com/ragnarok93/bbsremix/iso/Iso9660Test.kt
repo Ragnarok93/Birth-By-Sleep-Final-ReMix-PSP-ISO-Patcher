@@ -28,6 +28,8 @@ class Iso9660Test {
             assertEquals(24L, image.eboot.extentSector)
             assertEquals(3000L, image.eboot.size)
             assertEquals(64L, image.volumeSpaceSize)
+            assertEquals("PSP_GAME/ICON0.PNG;1", image.coverArt?.path)
+            assertContentEquals(COVER_ART, reader.readEntry(source, image.coverArt!!))
         } finally {
             fileSystem.delete(source, mustExist = false)
         }
@@ -158,6 +160,7 @@ class Iso9660Test {
         writeDirectory(image, 21, listOf(
             record("\u0000", 21, SECTOR_SIZE, true),
             record("\u0001", 20, SECTOR_SIZE, true),
+            record("ICON0.PNG;1", 25, COVER_ART.size, false),
             record("SYSDIR", 22, SECTOR_SIZE, true),
         ))
         writeDirectory(image, 22, listOf(
@@ -168,6 +171,7 @@ class Iso9660Test {
         ))
         OTHER_BYTES.copyInto(image, 23 * SECTOR_SIZE)
         ByteArray(3000) { it.toByte() }.copyInto(image, 24 * SECTOR_SIZE)
+        COVER_ART.copyInto(image, 25 * SECTOR_SIZE)
         KEEP_BYTES.copyInto(image, KEEP_SECTOR * SECTOR_SIZE)
 
         fileSystem.sink(path).buffer().use { it.write(image) }
@@ -220,6 +224,10 @@ class Iso9660Test {
         const val VOLUME_SECTORS = 64
         const val KEEP_SECTOR = 26
         val OTHER_BYTES = "unrelated-file".encodeToByteArray()
+        val COVER_ART = byteArrayOf(
+            0x89.toByte(), 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+            0x63, 0x6f, 0x76, 0x65, 0x72,
+        )
         val KEEP_BYTES = "keep-this-file".encodeToByteArray()
 
         fun writeBoth(bytes: ByteArray, offset: Int, value: Long) {
