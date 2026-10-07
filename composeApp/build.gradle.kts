@@ -34,6 +34,11 @@ kotlin {
             implementation(kotlin("test"))
             implementation(libs.kotlinx.coroutines.test)
         }
+        val androidUnitTest by getting {
+            dependencies {
+                implementation(libs.robolectric)
+            }
+        }
         androidMain.dependencies {
             implementation(libs.androidx.activity.compose)
             implementation(libs.oneui.compose)
@@ -93,6 +98,10 @@ android {
         getByName("release") {
             if (hasCiSigning) signingConfig = signingConfigs.getByName("ciRelease")
         }
+    }
+
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
     }
 
     packaging {

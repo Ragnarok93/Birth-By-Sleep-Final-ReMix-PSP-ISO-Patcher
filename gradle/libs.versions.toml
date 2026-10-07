@@ -8,6 +8,7 @@ activityCompose = "1.10.1"
 oneuiCompose = "1fe97b4e5a4ad559a7252376fad650a64310b229"
 desugarJdkLibs = "2.1.5"
 junit = "4.13.2"
+robolectric = "4.14.1"
 
 [libraries]
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
@@ -18,6 +19,7 @@ androidx-activity-compose = { module = "androidx.activity:activity-compose", ver
 oneui-compose = { module = "com.github.Ragnarok93.oneui-compose:lib", version.ref = "oneuiCompose" }
 desugar-jdk-libs = { module = "com.android.tools:desugar_jdk_libs", version.ref = "desugarJdkLibs" }
 junit = { module = "junit:junit", version.ref = "junit" }
+robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
 
 [plugins]
 androidApplication = { id = "com.android.application", version.ref = "agp" }
