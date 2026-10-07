@@ -11,12 +11,28 @@ import com.ragnarok93.bbsremix.patch.PatchProgress
 import com.ragnarok93.bbsremix.patch.PatchValidationException
 import com.ragnarok93.bbsremix.patch.ProgressReporter
 import com.ragnarok93.bbsremix.patch.Stage5EbootPatchEngine
+import com.ragnarok93.bbsremix.patch.sha256Hex
 import okio.FileSystem
 import okio.Path
 
 data class IsoPreflight(
     val image: IsoImageInfo,
     val eboot: EbootInspection,
+    val coverArt: ByteArray?,
+)
+
+enum class IsoVerificationStatus {
+    VERIFIED_PATCHED,
+    UNPATCHED,
+    INCOMPATIBLE,
+    MALFORMED,
+}
+
+data class IsoVerificationResult(
+    val status: IsoVerificationStatus,
+    val message: String,
+    val embeddedEbootSha256: String? = null,
+    val outputSize: Long? = null,
 )
 
 data class IsoPatchResult(
@@ -42,14 +58,72 @@ class IsoPatchingService(
     ): IsoPreflight {
         options.requireValid()
         cancellation.throwIfCancelled()
-        val sourceSize = fileSystem.metadata(source).size ?: 0L
+        val sourceSize = fileSystem.metadata(source).size
+            ?: throw IsoFormatException("Unable to determine ISO size.")
         progress.report(PatchProgress(PatchPhase.INSPECTING, 0L, sourceSize, "Reading ISO9660 directory records"))
         val image = reader.inspect(source)
         cancellation.throwIfCancelled()
         progress.report(PatchProgress(PatchPhase.STAGING_EBOOT, 0L, image.eboot.size, "Reading PSP_GAME/SYSDIR/EBOOT.BIN"))
         val eboot = engine.inspect(reader.readEntry(source, image.eboot), options)
+        val coverArt = image.coverArt
+            ?.takeIf { it.size in 1L..MAX_COVER_ART_BYTES }
+            ?.let { entry -> runCatching { reader.readEntry(source, entry) }.getOrNull() }
         progress.report(PatchProgress(PatchPhase.STAGING_EBOOT, image.eboot.size, image.eboot.size, "EBOOT preflight complete"))
-        return IsoPreflight(image, eboot)
+        return IsoPreflight(image, eboot, coverArt)
+    }
+
+    fun verifyOutput(
+        output: Path,
+        options: PatchOptions,
+        cancellation: CancellationToken = NeverCancelled,
+        progress: ProgressReporter = NoProgress,
+    ): IsoVerificationResult {
+        try {
+            options.requireValid()
+            cancellation.throwIfCancelled()
+            progress.report(PatchProgress(PatchPhase.VALIDATING_OUTPUT, 0L, 1L, "Reading selected output ISO"))
+            val image = reader.inspect(output)
+            val embedded = reader.readEntry(output, image.eboot)
+            cancellation.throwIfCancelled()
+            val hash = sha256Hex(embedded)
+            val inspection = engine.inspect(embedded, options)
+            val patched = engine.verifyPatched(embedded, options)
+            val outputSize = fileSystem.metadata(output).size
+            val result = when {
+                inspection.supported -> IsoVerificationResult(
+                    status = IsoVerificationStatus.UNPATCHED,
+                    message = "The ISO is a supported source image, but the selected Final ReMix features are not applied.",
+                    embeddedEbootSha256 = hash,
+                    outputSize = outputSize,
+                )
+                patched.verified -> IsoVerificationResult(
+                    status = IsoVerificationStatus.VERIFIED_PATCHED,
+                    message = "The ISO contains a valid EBOOT patched with the selected Final ReMix features.",
+                    embeddedEbootSha256 = hash,
+                    outputSize = outputSize,
+                )
+                else -> IsoVerificationResult(
+                    status = IsoVerificationStatus.INCOMPATIBLE,
+                    message = "The ISO is readable, but its embedded EBOOT does not match the selected Final ReMix configuration.",
+                    embeddedEbootSha256 = hash,
+                    outputSize = outputSize,
+                )
+            }
+            progress.report(PatchProgress(PatchPhase.VALIDATING_OUTPUT, 1L, 1L, result.message))
+            return result
+        } catch (error: com.ragnarok93.bbsremix.patch.PatchCancelledException) {
+            throw error
+        } catch (error: IsoFormatException) {
+            return IsoVerificationResult(
+                status = IsoVerificationStatus.MALFORMED,
+                message = error.message ?: "The selected file is not a valid ISO9660 image.",
+            )
+        } catch (error: IllegalArgumentException) {
+            return IsoVerificationResult(
+                status = IsoVerificationStatus.INCOMPATIBLE,
+                message = error.message ?: "The selected output could not be verified.",
+            )
+        }
     }
 
     fun patchTo(
@@ -69,7 +143,7 @@ class IsoPatchingService(
         try {
             cancellation.throwIfCancelled()
             val originalEboot = reader.readEntry(source, preflight.image.eboot)
-            progress.report(PatchProgress(PatchPhase.PATCHING_EBOOT, 0L, originalEboot.size.toLong(), "Applying Better Battle System"))
+            progress.report(PatchProgress(PatchPhase.PATCHING_EBOOT, 0L, originalEboot.size.toLong(), "Applying selected Final ReMix features"))
             val patched = engine.patch(originalEboot, options)
             progress.report(PatchProgress(PatchPhase.PATCHING_EBOOT, patched.bytes.size.toLong(), patched.bytes.size.toLong(), "EBOOT patch validated"))
 
@@ -99,5 +173,9 @@ class IsoPatchingService(
             if (destinationWasAbsent) fileSystem.delete(destination, mustExist = false)
             throw error
         }
+    }
+
+    private companion object {
+        const val MAX_COVER_ART_BYTES = 4L * 1024L * 1024L
     }
 }
