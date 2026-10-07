@@ -47,13 +47,13 @@ jobs:
           - platform: Linux
             os: ubuntu-latest
             gradle_command: sh ./gradlew
-            package_task: :composeApp:packageDeb
-            artifact_glob: composeApp/build/compose/binaries/main/deb/*.deb
+            package_task: :composeApp:packageAppImage
+            artifact_glob: composeApp/build/compose/binaries/main/appimage/*.AppImage
           - platform: Windows
             os: windows-latest
             gradle_command: .\\gradlew.bat
-            package_task: :composeApp:packageMsi
-            artifact_glob: composeApp/build/compose/binaries/main/msi/*.msi
+            package_task: :composeApp:packageExe
+            artifact_glob: composeApp/build/compose/binaries/main/exe/*.exe
           - platform: macOS
             os: macos-latest
             gradle_command: sh ./gradlew
@@ -72,12 +72,45 @@ jobs:
         uses: gradle/actions/setup-gradle@v4.4.1
       - name: Run shared desktop tests (${{ matrix.platform }})
         run: ${{ matrix.gradle_command }} :composeApp:desktopTest --stacktrace
-      - name: Build desktop installer (${{ matrix.platform }})
+      - name: Build desktop application (${{ matrix.platform }})
         run: ${{ matrix.gradle_command }} ${{ matrix.package_task }} --stacktrace
-      - name: Upload desktop installer (${{ matrix.platform }})
+      - name: Upload desktop application (${{ matrix.platform }})
         if: always()
         uses: actions/upload-artifact@v4.6.2
         with:
           name: desktop-debug-${{ matrix.platform }}
           path: ${{ matrix.artifact_glob }}
           if-no-files-found: warn
+
+  source-sha-debug:
+    name: Source and checksums (debug)
+    needs: [android-debug, desktop-debug]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source (debug source archive)
+        uses: actions/checkout@v4.2.2
+      - name: Download application artifacts (debug)
+        uses: actions/download-artifact@v4.3.0
+        with:
+          path: release-files
+          merge-multiple: true
+      - name: Create Source.zip and SHA.zip (debug)
+        run: |
+          git archive --format=zip --output=release-files/Source.zip HEAD
+          (
+            cd release-files
+            find . -maxdepth 1 -type f ! -name 'SHA256SUMS.txt' ! -name 'SHA.zip' -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS.txt
+            zip -q SHA.zip SHA256SUMS.txt
+          )
+      - name: Upload Source.zip (debug)
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: source-debug
+          path: release-files/Source.zip
+          if-no-files-found: error
+      - name: Upload SHA.zip (debug)
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: sha-debug
+          path: release-files/SHA.zip
+          if-no-files-found: error
