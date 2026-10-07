@@ -1,5 +1,7 @@
 package com.ragnarok93.bbsremix.patch
 
+import kotlin.math.abs
+
 class Stage5EbootPatchEngine : EbootPatchEngine {
     override fun inspect(data: ByteArray, options: PatchOptions): EbootInspection {
         val problems = mutableListOf<String>()
@@ -17,15 +19,15 @@ class Stage5EbootPatchEngine : EbootPatchEngine {
         )
 
         if (representation == EbootRepresentation.ENCRYPTED_PRX) {
-            problems += "EBOOT.BIN is an encrypted PSP PRX; the supported Stage 5 input is the exact decrypted English-patched ELF."
+            problems += "EBOOT.BIN is an encrypted PSP PRX; the supported input is the exact decrypted English-patched ELF."
         } else if (representation != EbootRepresentation.DECRYPTED_ELF) {
             problems += "EBOOT.BIN is neither the supported decrypted ELF nor a recognized PSP PRX container."
         }
         if (data.size != SUPPORTED_SIZE) {
-            problems += "Unsupported EBOOT size ${data.size}; expected $SUPPORTED_SIZE bytes."
+            problems += "Unsupported EBOOT size \${data.size}; expected $SUPPORTED_SIZE bytes."
         }
         if (fingerprint.sha256 != SUPPORTED_SHA256) {
-            problems += "Unsupported EBOOT SHA-256 ${fingerprint.sha256}; expected $SUPPORTED_SHA256."
+            problems += "Unsupported EBOOT SHA-256 \${fingerprint.sha256}; expected $SUPPORTED_SHA256."
         }
 
         if (data.size >= E_PHNUM_OFFSET + 2 && data.readShortLe(E_PHNUM_OFFSET) != 2) {
@@ -44,9 +46,8 @@ class Stage5EbootPatchEngine : EbootPatchEngine {
             problems += "The reserved third program-header slot is not zero-filled."
         }
 
-        val cameraControls = options.rightStickCamera
         val postInput = options.combatFeatures || options.appliesCameraDistance
-        if (cameraControls) {
+        if (options.rightStickCamera) {
             validateCameraPayload(data, problems)
         }
         if (postInput) {
@@ -96,6 +97,142 @@ class Stage5EbootPatchEngine : EbootPatchEngine {
         )
     }
 
+    override fun verifyPatched(data: ByteArray, options: PatchOptions): PatchVerification {
+        val problems = mutableListOf<String>()
+        problems += options.validate().map { it.message }
+        if (!options.hasSelectedFeature) return PatchVerification(false, problems)
+
+        val postInput = options.combatFeatures || options.appliesCameraDistance
+        if (data.size < SUPPORTED_SIZE) {
+            problems += "The embedded EBOOT is smaller than the supported input profile."
+            return PatchVerification(false, problems)
+        }
+
+        if (options.rightStickCamera) {
+            requireRange(data, Stage5Payloads.S2_FILE_OFFSET, Stage5Payloads.s2Blob.size, problems)
+            if (data.size >= PH0_MEMSZ_OFFSET + 4 &&
+                (data.readIntLe(PH0_FILESZ_OFFSET) != Stage5Payloads.s2NewSegmentSize ||
+                    data.readIntLe(PH0_MEMSZ_OFFSET) != Stage5Payloads.s2NewSegmentSize)
+            ) {
+                problems += "The right-stick camera segment is not enabled."
+            }
+            if (data.size >= Stage5Payloads.S2_FILE_OFFSET + Stage5Payloads.s2Blob.size &&
+                !data.copyOfRange(
+                    Stage5Payloads.S2_FILE_OFFSET,
+                    Stage5Payloads.S2_FILE_OFFSET + Stage5Payloads.s2Blob.size,
+                ).contentEquals(Stage5Payloads.s2Blob)
+            ) {
+                problems += "The right-stick camera payload is missing or altered."
+            }
+            cameraPatches.forEach { (virtualAddress, _, replacement, description) ->
+                val offset = fileOffset(virtualAddress)
+                if (offset < 0 || offset + 4 > data.size || data.readIntLe(offset) != replacement) {
+                    problems += "$description is not enabled in the output EBOOT."
+                }
+            }
+        } else {
+            if (data.size >= PH0_MEMSZ_OFFSET + 4 &&
+                (data.readIntLe(PH0_FILESZ_OFFSET) != OLD_SEGMENT_SIZE ||
+                    data.readIntLe(PH0_MEMSZ_OFFSET) != OLD_SEGMENT_SIZE)
+            ) {
+                problems += "The output EBOOT contains an unselected right-stick camera segment."
+            }
+            if (data.size >= Stage5Payloads.S2_FILE_OFFSET + Stage5Payloads.s2Blob.size &&
+                !data.isZero(
+                    Stage5Payloads.S2_FILE_OFFSET,
+                    Stage5Payloads.S2_FILE_OFFSET + Stage5Payloads.s2Blob.size,
+                )
+            ) {
+                problems += "The output EBOOT contains an unselected right-stick camera payload."
+            }
+        }
+
+        if (postInput) {
+            requireRange(data, Stage5Payloads.S4_FILE_OFFSET, Stage5Payloads.S5_SEGMENT_PAD, problems)
+            if (data.size >= E_PHNUM_OFFSET + 2 && data.readShortLe(E_PHNUM_OFFSET) != 3) {
+                problems += "The Stage 5 program header is missing."
+            }
+            val expectedHeader = intArrayOf(
+                1,
+                Stage5Payloads.S4_FILE_OFFSET,
+                Stage5Payloads.S4_VA,
+                Stage5Payloads.S4_VA,
+                Stage5Payloads.S5_SEGMENT_PAD,
+                Stage5Payloads.S5_SEGMENT_PAD,
+                7,
+                0x1000,
+            )
+            expectedHeader.forEachIndexed { index, expected ->
+                val offset = THIRD_PHDR_OFFSET + index * 4
+                if (offset + 4 > data.size || data.readIntLe(offset) != expected) {
+                    problems += "The Stage 5 program header does not match the selected configuration."
+                }
+            }
+            val hookOffset = fileOffset(POST_INPUT_HOOK.first)
+            if (hookOffset < 0 || hookOffset + 4 > data.size ||
+                data.readIntLe(hookOffset) != jal(Stage5Payloads.S5_WRAPPER_VA)
+            ) {
+                problems += "The Stage 5 runtime hook is missing."
+            }
+            val configOffset = Stage5Payloads.S4_FILE_OFFSET + Stage5Payloads.S4_CONFIG_OFFSET
+            if (configOffset >= data.size ||
+                (data[configOffset].toInt() and 0xff) != makeConfig(options)
+            ) {
+                problems += "The Stage 5 feature configuration does not match the selected toggles."
+            }
+            val distanceOffset = Stage5Payloads.S4_FILE_OFFSET + Stage5Payloads.S4_CAMERA_DISTANCE_OFFSET
+            if (distanceOffset + 4 > data.size ||
+                abs(data.readFloatLe(distanceOffset) - options.cameraDistance) > 0.0001f
+            ) {
+                problems += "The camera-distance configuration does not match the selected value."
+            }
+            val wrapperOffset = Stage5Payloads.S4_FILE_OFFSET + Stage5Payloads.S5_WRAPPER_OFFSET
+            if (wrapperOffset + Stage5Payloads.s5WrapperBlob.size > data.size ||
+                !data.copyOfRange(
+                    wrapperOffset,
+                    wrapperOffset + Stage5Payloads.s5WrapperBlob.size,
+                ).contentEquals(Stage5Payloads.s5WrapperBlob)
+            ) {
+                problems += "The Stage 5 wrapper is missing or altered."
+            }
+            val passiveOffset = Stage5Payloads.S4_FILE_OFFSET + Stage5Payloads.S5_PASSIVES_CONFIG_OFFSET
+            val expectedPassive = if (options.combatFeatures && options.criticalModePassives) 1 else 0
+            if (passiveOffset >= data.size || (data[passiveOffset].toInt() and 0xff) != expectedPassive) {
+                problems += "The Critical Mode passive configuration does not match the selected toggle."
+            }
+        } else if (data.size >= E_PHNUM_OFFSET + 2 && data.readShortLe(E_PHNUM_OFFSET) != 2) {
+            problems += "The output EBOOT contains an unselected Stage 5 segment."
+        }
+
+        if (options.appliesCameraHeight) {
+            val freeOffset = fileOffset(Stage5Payloads.CAMERA_FREE_HEIGHT_VA)
+            val lockOffset = fileOffset(Stage5Payloads.CAMERA_LOCK_HEIGHT_VA)
+            if (freeOffset + 4 > data.size || abs(data.readFloatLe(freeOffset) - options.cameraHeight) > 0.0001f) {
+                problems += "The free-camera height does not match the selected value."
+            }
+            if (lockOffset + 4 > data.size || abs(data.readFloatLe(lockOffset) - options.cameraHeight) > 0.0001f) {
+                problems += "The lock-on camera height does not match the selected value."
+            }
+        } else {
+            val freeOffset = fileOffset(Stage5Payloads.CAMERA_FREE_HEIGHT_VA)
+            val lockOffset = fileOffset(Stage5Payloads.CAMERA_LOCK_HEIGHT_VA)
+            if (freeOffset + 4 > data.size || abs(data.readFloatLe(freeOffset) - Stage5Payloads.CAMERA_FREE_HEIGHT_ORIG) > 0.0001f) {
+                problems += "The output EBOOT contains an unselected free-camera height change."
+            }
+            if (lockOffset + 4 > data.size || abs(data.readFloatLe(lockOffset) - Stage5Payloads.CAMERA_LOCK_HEIGHT_ORIG) > 0.0001f) {
+                problems += "The output EBOOT contains an unselected lock-on height change."
+            }
+        }
+
+        return PatchVerification(problems.isEmpty(), problems.distinct())
+    }
+
+    private fun requireRange(data: ByteArray, offset: Int, size: Int, problems: MutableList<String>) {
+        if (offset < 0 || size < 0 || offset > data.size || size > data.size - offset) {
+            problems += "The output EBOOT is too small for the selected patch payload."
+        }
+    }
+
     private fun validateCameraPayload(data: ByteArray, problems: MutableList<String>) {
         val payloadEnd = Stage5Payloads.S2_FILE_OFFSET + Stage5Payloads.s2Blob.size
         if (payloadEnd > NEXT_ORIGINAL_LOAD_FILE_OFFSET || payloadEnd > data.size) {
@@ -109,7 +246,7 @@ class Stage5EbootPatchEngine : EbootPatchEngine {
             val offset = fileOffset(virtualAddress)
             if (offset < 0 || offset + 4 > data.size || data.readIntLe(offset) != expected) {
                 val found = if (offset >= 0 && offset + 4 <= data.size) data.readIntLe(offset).toUInt().toString(16) else "out-of-range"
-                problems += "$description mismatch at VA 0x${virtualAddress.toString(16)} (got 0x$found)."
+                problems += "$description mismatch at VA 0x\${virtualAddress.toString(16)} (got 0x$found)."
             }
         }
     }
@@ -128,12 +265,12 @@ class Stage5EbootPatchEngine : EbootPatchEngine {
         val free = fileOffset(Stage5Payloads.CAMERA_FREE_HEIGHT_VA)
         val lock = fileOffset(Stage5Payloads.CAMERA_LOCK_HEIGHT_VA)
         if (free < 0 || free + 4 > data.size ||
-            kotlin.math.abs(data.readFloatLe(free) - Stage5Payloads.CAMERA_FREE_HEIGHT_ORIG) > 0.000001f
+            abs(data.readFloatLe(free) - Stage5Payloads.CAMERA_FREE_HEIGHT_ORIG) > 0.000001f
         ) {
             problems += "The free-camera height constant does not match the reference EBOOT."
         }
         if (lock < 0 || lock + 4 > data.size ||
-            kotlin.math.abs(data.readFloatLe(lock) - Stage5Payloads.CAMERA_LOCK_HEIGHT_ORIG) > 0.000001f
+            abs(data.readFloatLe(lock) - Stage5Payloads.CAMERA_LOCK_HEIGHT_ORIG) > 0.000001f
         ) {
             problems += "The lock-on camera height constant does not match the reference EBOOT."
         }
@@ -213,7 +350,7 @@ class Stage5EbootPatchEngine : EbootPatchEngine {
         val PRX_MAGIC = byteArrayOf('~'.code.toByte(), 'P'.code.toByte(), 'S'.code.toByte(), 'P'.code.toByte())
         val SCE_MAGIC = byteArrayOf('~'.code.toByte(), 'S'.code.toByte(), 'C'.code.toByte(), 'E'.code.toByte())
         val cameraPatches = listOf(
-            CameraPatch(0x08816688, 0x0e2c5b4e, jal(Stage5Payloads.S2_CAPTURE_PAD_VA), "capture PPSSPP second analog"),
+            CameraPatch(0x08816688, 0x0e2c5b4e, jal(Stage5Payloads.S2_CAPTURE_PAD_VA), "capture second analog"),
             CameraPatch(0x08940fec, 0x508000ba, 0, "remove L modifier from camera"),
             CameraPatch(0x0898f68c, 0x1c80000b, 0, "force Type-B horizontal camera"),
             CameraPatch(0x0898f850, 0x1c80000b, 0, "force Type-B vertical camera"),
