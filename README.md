@@ -6,7 +6,7 @@ The app accepts an `.iso` as its only patch input. It locates `PSP_GAME/SYSDIR/E
 
 ## Supported image profile
 
-The current verified profile is an ISO9660 image containing the decrypted English-patched EBOOT used by the reference patcher:
+The current supported source fingerprint is an ISO9660 image containing the decrypted English-patched EBOOT used by the reference patcher:
 
 | Check | Required value |
 | --- | --- |
@@ -104,3 +104,13 @@ The exact patched bytes still require a valid user-owned decrypted EBOOT fixture
 ## License
 
 This project remains under the repository's GPL-3.0 license. OneUI-Compose is consumed as an Android dependency and retains its own license and notices.
+
+
+## Runtime validation status
+
+The current patch is a conservative candidate: the right-stick capture wrapper
+preserves its buffer and return state across the original call; unvalidated
+hit-aware, invincibility, and Critical ability/passive writes are disabled.
+Verify Output checks structure and bytes. Gameplay validation is pending, and
+release packaging requires the evidence matrix documented in
+[Runtime remediation](docs/runtime-remediation.md).

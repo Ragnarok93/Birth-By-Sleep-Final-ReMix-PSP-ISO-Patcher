@@ -9,7 +9,19 @@ permissions:
   contents: read
 
 jobs:
+  payload-audit:
+    name: MIPS ABI and Python/Kotlin payload parity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.2.2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m unittest discover -s reference -p 'test_*.py'
+      - run: python reference/sync_payloads.py --check
+
   android-debug:
+    needs: payload-audit
     name: Android debug (ubuntu / ${{ github.event_name }})
     runs-on: ubuntu-latest
     steps:
@@ -50,6 +62,7 @@ jobs:
           if-no-files-found: error
 
   desktop-debug:
+    needs: payload-audit
     name: ${{ matrix.platform }} desktop debug
     strategy:
       fail-fast: false

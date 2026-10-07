@@ -51,3 +51,12 @@ The app reports the first relevant structural reason, including:
 - program-header, code-cave, hook, or camera-constant mismatch;
 - invalid option ranges;
 - existing output path, cancellation, or rebuilt-image validation failure.
+
+
+## Runtime crash remediation
+
+See [runtime-remediation.md](runtime-remediation.md) for the frozen failing
+reference, hook ABI contracts, conservative configuration, automated audits,
+and required PPSSPP matrix. A structural match is not gameplay validation.
+Release packaging requires recorded runtime evidence; debug builds can be used
+to collect it. All gameplay evidence is currently pending.
