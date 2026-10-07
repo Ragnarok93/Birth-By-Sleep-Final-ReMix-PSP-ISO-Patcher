@@ -225,7 +225,7 @@ fun PatcherApp(
 
         fun selectOutput() {
             val sourceName = source?.displayName ?: "Birth-By-Sleep-Final-ReMix"
-            val suggested = sourceName.substringBeforeLast('.', sourceName) + ".diagnostic-rebuild.iso"
+            val suggested = sourceName.substringBeforeLast('.', sourceName) + ".psp-native-rightstick.iso"
             start("Choose ISO output") { output = fileGateway.pickOutput(suggested) }
         }
 
@@ -440,7 +440,7 @@ fun PatcherApp(
         }
 
         val canWriteOutput = stagedSource != null && preflight?.eboot?.supported == true
-        val runtimePatchingAvailable = false
+        val runtimePatchingAvailable = true
         val canPatch = canWriteOutput &&
             options.validate().isEmpty() &&
             runtimePatchingAvailable
@@ -678,12 +678,12 @@ private fun PageHeader() {
             fontWeight = FontWeight.SemiBold,
         )
         Text(
-            text = "PSP-native gameplay hooks are being revalidated.",
+            text = "PSP-native right-stick camera candidate is ready for runtime testing.",
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.primary,
         )
         Text(
-            text = "Gameplay patch output is temporarily disabled after the previous payloads were found inside the MainApp overlay arena. Diagnostic rebuild remains available to validate the ISO pipeline without changing game code.",
+            text = "The supported patch profile now uses only resident MainApp code/data and leaves ELF program headers plus the dynamic overlay arena untouched. Combat and PC-derived camera geometry remain disabled pending PSP-native validation.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -1055,14 +1055,14 @@ private fun OptionsCard(
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("3. Patch Options", style = MaterialTheme.typography.titleLarge)
             Text(
-                "PSP-native revalidation is in progress. Only the right-stick candidate is currently patchable.",
+                "Only the resident PSP-native right-stick camera candidate is currently patchable. Combat and camera geometry remain unavailable.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
             FeatureToggle(
                 title = "Right-stick camera control",
-                description = "PSP-native candidate using direct SceCtrlData right-analog reads; gameplay validation pending.",
+                description = "Resident in-place PSP patch using PPSSPP SceCtrlData analog[1]; no overlay payload or extra ELF segment. Runtime validation pending.",
                 checked = options.rightStickCamera,
                 enabled = !busy,
                 onCheckedChange = { onOptionsChanged(options.copy(rightStickCamera = it)) },
@@ -1298,7 +1298,7 @@ private fun OutputCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
-                "Gameplay patching is temporarily disabled while the hooks are re-derived from the English-patched PSP executable. Diagnostic rebuild writes the original EBOOT unchanged and requires the complete ISO to remain byte-identical.",
+                "Patch ISO currently supports the PSP-native right-stick-only profile. Diagnostic rebuild writes the original EBOOT unchanged and requires the complete ISO to remain byte-identical.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -1350,7 +1350,7 @@ private fun VerifyOutputFooter(
             Column(Modifier.weight(1f)) {
                 Text("Verify output", style = MaterialTheme.typography.titleMedium)
                 Text(
-                    "Check payload structure and selected settings. Gameplay validation is separate.",
+                    "Check the resident right-stick patch structure, unchanged ELF layout, and selected settings. Gameplay validation is separate.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
