@@ -97,7 +97,7 @@ class DesktopFileGateway(
         }
         cancellation.throwIfCancelled()
         fileSystem.atomicMove(temporary, destinationPath)
-        progress.report(PatchProgress(PatchPhase.COMMITTING_OUTPUT, 1L, 1L, "Patched ISO committed"))
+        progress.report(PatchProgress(PatchPhase.COMMITTING_OUTPUT, 1L, 1L, "Output ISO committed"))
     }
 
     override suspend fun deleteTemp(path: Path) {
