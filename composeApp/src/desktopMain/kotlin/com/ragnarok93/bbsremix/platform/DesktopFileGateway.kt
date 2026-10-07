@@ -14,12 +14,23 @@ import java.awt.FileDialog
 import java.awt.Frame
 import java.io.File
 import java.util.UUID
+import java.util.prefs.Preferences
 
 class DesktopFileGateway(
     private val fileSystem: FileSystem = FileSystem.SYSTEM,
 ) : FileGateway {
+    private val preferences = Preferences.userRoot().node("com/ragnarok93/bbsremix")
     override suspend fun pickSource(): PlatformFileSelection? = withContext(Dispatchers.Main) {
         val dialog = FileDialog(null as Frame?, "Select a Birth By Sleep Final Mix ISO", FileDialog.LOAD)
+        dialog.filenameFilter = java.io.FilenameFilter { _, name -> name.endsWith(".iso", ignoreCase = true) }
+        dialog.isVisible = true
+        val file = dialog.file ?: return@withContext null
+        val path = File(dialog.directory, file).absoluteFile
+        PlatformFileSelection(path.name, path.absolutePath, path.absolutePath.toPath())
+    }
+
+    override suspend fun pickVerificationTarget(): PlatformFileSelection? = withContext(Dispatchers.Main) {
+        val dialog = FileDialog(null as Frame?, "Verify patched output ISO", FileDialog.LOAD)
         dialog.filenameFilter = java.io.FilenameFilter { _, name -> name.endsWith(".iso", ignoreCase = true) }
         dialog.isVisible = true
         val file = dialog.file ?: return@withContext null
@@ -70,6 +81,13 @@ class DesktopFileGateway(
         fileSystem.delete(path, mustExist = false)
     }
 
+    override fun isDonationPromptDisabled(): Boolean =
+        preferences.getBoolean(DONATION_PROMPT_DISABLED, false)
+
+    override fun setDonationPromptDisabled(disabled: Boolean) {
+        preferences.putBoolean(DONATION_PROMPT_DISABLED, disabled)
+    }
+
     override fun isSameSourceAndOutput(source: PlatformFileSelection, output: PlatformOutputSelection): Boolean {
         val sourcePath = source.token as? Path ?: return false
         val outputPath = output.token as? Path ?: return false
@@ -108,5 +126,6 @@ class DesktopFileGateway(
 
     private companion object {
         const val COPY_BUFFER_SIZE = 1024 * 1024
+        const val DONATION_PROMPT_DISABLED = "donation_prompt_disabled"
     }
 }

@@ -11,23 +11,19 @@ permissions:
 
 jobs:
   android-release:
-    name: Android release (signed when configured)
+    name: Android release APK
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout source (Android release)
-        uses: actions/checkout@v4.2.2
-      - name: Set up JDK 17 (Android release)
-        uses: actions/setup-java@v4.7.1
+      - uses: actions/checkout@v4.2.2
+      - uses: actions/setup-java@v4.7.1
         with:
           distribution: temurin
           java-version: '17'
-      - name: Set up Android SDK (Android release)
-        uses: android-actions/setup-android@v3.2.2
+      - uses: android-actions/setup-android@v3.2.2
         with:
           packages: platform-tools
-      - name: Set up Gradle (Android release)
-        uses: gradle/actions/setup-gradle@v4.4.1
-      - name: Configure Android signing (Android release)
+      - uses: gradle/actions/setup-gradle@v4.4.1
+      - name: Configure Android signing
         id: signing
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -38,81 +34,135 @@ jobs:
           if [ -n "$ANDROID_KEYSTORE_BASE64" ] && [ -n "$ANDROID_KEYSTORE_PASSWORD" ] && [ -n "$ANDROID_KEY_ALIAS" ] && [ -n "$ANDROID_KEY_PASSWORD" ]; then
             printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/bbs-release.jks"
             echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/bbs-release.jks" >> "$GITHUB_ENV"
-            echo "android_artifact_suffix=signed" >> "$GITHUB_OUTPUT"
-            echo "Android release signing configured."
+            echo "artifact_suffix=signed" >> "$GITHUB_OUTPUT"
           else
-            echo "android_artifact_suffix=unsigned" >> "$GITHUB_OUTPUT"
-            echo "Android signing secrets are absent; producing an unsigned release APK."
+            echo "artifact_suffix=unsigned" >> "$GITHUB_OUTPUT"
           fi
           echo "ANDROID_KEYSTORE_PASSWORD=$ANDROID_KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
           echo "ANDROID_KEY_ALIAS=$ANDROID_KEY_ALIAS" >> "$GITHUB_ENV"
           echo "ANDROID_KEY_PASSWORD=$ANDROID_KEY_PASSWORD" >> "$GITHUB_ENV"
-      - name: Build Android release APK (Android release)
-        run: sh ./gradlew :composeApp:assembleRelease --stacktrace
-      - name: Upload Android release APK (Android release)
-        uses: actions/upload-artifact@v4.6.2
+      - name: Test and build Android release
+        run: |
+          sh ./gradlew :composeApp:testDebugUnitTest :composeApp:assembleRelease --stacktrace
+          mkdir -p dist
+          APK="$(find composeApp/build/outputs/apk/release -name '*.apk' -type f | head -n 1)"
+          cp "$APK" "dist/Birth-By-Sleep-Final-ReMix-PSP-ISO-Patcher-Android-Release-${{ steps.signing.outputs.artifact_suffix }}.apk"
+      - uses: actions/upload-artifact@v4.6.2
         with:
-          name: android-release-${{ steps.signing.outputs.android_artifact_suffix }}
-          path: composeApp/build/outputs/apk/release/*.apk
+          name: Android-Release
+          path: dist/Birth-By-Sleep-Final-ReMix-PSP-ISO-Patcher-Android-Release-*.apk
           if-no-files-found: error
 
-  desktop-release:
-    name: ${{ matrix.platform }} desktop release
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: Linux
-            os: ubuntu-latest
-            gradle_command: sh ./gradlew
-            package_task: :composeApp:packageDeb
-            artifact_glob: composeApp/build/compose/binaries/main/deb/*.deb
-          - platform: Windows
-            os: windows-latest
-            gradle_command: .\\gradlew.bat
-            package_task: :composeApp:packageMsi
-            artifact_glob: composeApp/build/compose/binaries/main/msi/*.msi
-          - platform: macOS
-            os: macos-latest
-            gradle_command: sh ./gradlew
-            package_task: :composeApp:packageDmg
-            artifact_glob: composeApp/build/compose/binaries/main/dmg/*.dmg
-    runs-on: ${{ matrix.os }}
+  windows-release:
+    name: Windows portable EXE
+    runs-on: windows-latest
     steps:
-      - name: Checkout source (${{ matrix.platform }} release)
-        uses: actions/checkout@v4.2.2
-      - name: Set up JDK 17 (${{ matrix.platform }} release)
-        uses: actions/setup-java@v4.7.1
+      - uses: actions/checkout@v4.2.2
+      - uses: actions/setup-java@v4.7.1
         with:
           distribution: temurin
           java-version: '17'
-      - name: Set up Gradle (${{ matrix.platform }} release)
-        uses: gradle/actions/setup-gradle@v4.4.1
-      - name: Build desktop release installer (${{ matrix.platform }})
-        run: ${{ matrix.gradle_command }} ${{ matrix.package_task }} --stacktrace
-      - name: Upload desktop release installer (${{ matrix.platform }})
-        uses: actions/upload-artifact@v4.6.2
+      - uses: gradle/actions/setup-gradle@v4.4.1
+      - name: Test and build Windows app image
+        run: .\gradlew.bat :composeApp:desktopTest :composeApp:createDistributable --stacktrace
+      - name: Package portable Windows executable
+        shell: powershell
+        run: .\packaging\package-windows-portable.ps1 -Configuration Release
+      - uses: actions/upload-artifact@v4.6.2
         with:
-          name: desktop-release-${{ matrix.platform }}
-          path: ${{ matrix.artifact_glob }}
+          name: Windows-Release
+          path: dist/Birth-By-Sleep-Final-ReMix-PSP-ISO-Patcher-Windows-x64-Release.exe
+          if-no-files-found: error
+
+  linux-release:
+    name: Linux AppImage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.2.2
+      - uses: actions/setup-java@v4.7.1
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4.4.1
+      - name: Test and build Linux app image
+        run: sh ./gradlew :composeApp:desktopTest :composeApp:createDistributable --stacktrace
+      - name: Package Linux AppImage
+        run: |
+          chmod +x packaging/package-linux-appimage.sh
+          packaging/package-linux-appimage.sh Release
+      - uses: actions/upload-artifact@v4.6.2
+        with:
+          name: Linux-Release
+          path: dist/Birth-By-Sleep-Final-ReMix-PSP-ISO-Patcher-Linux-x86_64-Release.AppImage
+          if-no-files-found: error
+
+  macos-release:
+    name: macOS DMG
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4.2.2
+      - uses: actions/setup-java@v4.7.1
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4.4.1
+      - name: Test and build macOS DMG
+        run: |
+          sh ./gradlew :composeApp:desktopTest :composeApp:packageDmg --stacktrace
+          mkdir -p dist
+          cp "$(find composeApp/build/compose/binaries/main/dmg -name '*.dmg' -type f | head -n 1)"             dist/Birth-By-Sleep-Final-ReMix-PSP-ISO-Patcher-macOS-Release.dmg
+      - uses: actions/upload-artifact@v4.6.2
+        with:
+          name: macOS-Release
+          path: dist/Birth-By-Sleep-Final-ReMix-PSP-ISO-Patcher-macOS-Release.dmg
+          if-no-files-found: error
+
+  source-release:
+    name: Source archive
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.2.2
+      - name: Create Source.zip
+        run: git archive --format=zip --output=Source.zip HEAD
+      - uses: actions/upload-artifact@v4.6.2
+        with:
+          name: Source
+          path: Source.zip
+          if-no-files-found: error
+
+  checksums-release:
+    name: SHA archive
+    needs: [android-release, windows-release, linux-release, macos-release, source-release]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4.3.0
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Create SHA.zip
+        run: |
+          find artifacts -type f -print0 | sort -z | xargs -0 sha256sum | sed 's#  artifacts/#  #' > SHA256SUMS.txt
+          zip -j SHA.zip SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4.6.2
+        with:
+          name: SHA
+          path: SHA.zip
           if-no-files-found: error
 
   attach-release-assets:
-    name: Attach release assets (version tag)
+    name: Attach release assets
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [android-release, desktop-release]
+    needs: [checksums-release]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - name: Download release artifacts (release)
-        uses: actions/download-artifact@v4.3.0
+      - uses: actions/download-artifact@v4.3.0
         with:
-          path: release-artifacts
+          path: release-assets
           merge-multiple: true
-      - name: Attach artifacts to GitHub Release (release)
-        uses: softprops/action-gh-release@v2.2.2
+      - uses: softprops/action-gh-release@v2.2.2
         with:
           tag_name: ${{ github.ref_name }}
           generate_release_notes: true
-          files: release-artifacts/**/*
+          files: release-assets/*

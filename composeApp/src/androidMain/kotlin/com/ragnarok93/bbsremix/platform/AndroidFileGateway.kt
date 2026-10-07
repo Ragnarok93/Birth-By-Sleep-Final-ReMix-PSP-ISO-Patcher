@@ -23,6 +23,7 @@ class AndroidFileGateway(
     private val fileSystem: FileSystem = FileSystem.SYSTEM,
 ) : FileGateway {
     private val resolver: ContentResolver = activity.contentResolver
+    private val preferences = activity.getSharedPreferences("bbs-remix-patcher", android.content.Context.MODE_PRIVATE)
     private val cacheRoot: Path = activity.cacheDir.absolutePath.toPath() / "bbs-patcher"
 
     private var sourceContinuation: kotlinx.coroutines.CancellableContinuation<PlatformFileSelection?>? = null
@@ -127,6 +128,13 @@ class AndroidFileGateway(
     override fun isSameSourceAndOutput(source: PlatformFileSelection, output: PlatformOutputSelection): Boolean =
         (source.token as? Uri)?.toString() == (output.token as? Uri)?.toString()
 
+    override fun isDonationPromptDisabled(): Boolean =
+        preferences.getBoolean(DONATION_PROMPT_DISABLED, false)
+
+    override fun setDonationPromptDisabled(disabled: Boolean) {
+        preferences.edit().putBoolean(DONATION_PROMPT_DISABLED, disabled).apply()
+    }
+
     private fun displayName(uri: Uri): String {
         val cursor: Cursor? = resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
         cursor?.use {
@@ -137,5 +145,6 @@ class AndroidFileGateway(
 
     private companion object {
         const val COPY_BUFFER_SIZE = 1024 * 1024
+        const val DONATION_PROMPT_DISABLED = "donation_prompt_disabled"
     }
 }

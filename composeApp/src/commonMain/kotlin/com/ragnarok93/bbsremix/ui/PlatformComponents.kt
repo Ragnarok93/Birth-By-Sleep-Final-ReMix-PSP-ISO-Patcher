@@ -35,3 +35,9 @@ expect fun PatcherProgress(
     progress: Float,
     modifier: Modifier = Modifier,
 )
+
+@Composable
+expect fun GameCoverArt(
+    pngBytes: ByteArray?,
+    modifier: Modifier = Modifier,
+)

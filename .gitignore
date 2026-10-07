@@ -17,3 +17,9 @@ EBOOT.BIN
 *.deb
 *.apk
 *.aab
+
+*.AppImage
+*.exe
+Source.zip
+SHA.zip
+dist/

@@ -22,6 +22,8 @@ interface FileGateway {
 
     suspend fun pickOutput(suggestedName: String): PlatformOutputSelection?
 
+    suspend fun pickVerificationTarget(): PlatformFileSelection? = pickSource()
+
     suspend fun createTempPath(prefix: String, suffix: String): Path
 
     suspend fun stageSource(
@@ -41,6 +43,10 @@ interface FileGateway {
     suspend fun deleteTemp(path: Path)
 
     fun isSameSourceAndOutput(source: PlatformFileSelection, output: PlatformOutputSelection): Boolean
+
+    fun isDonationPromptDisabled(): Boolean = false
+
+    fun setDonationPromptDisabled(disabled: Boolean) = Unit
 }
 
 class FileGatewayException(message: String) : IllegalStateException(message)

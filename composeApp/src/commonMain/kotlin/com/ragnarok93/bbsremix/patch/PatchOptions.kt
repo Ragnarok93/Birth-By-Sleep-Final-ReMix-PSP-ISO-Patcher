@@ -1,13 +1,7 @@
 package com.ragnarok93.bbsremix.patch
 
-enum class PatchMode {
-    COMBINED,
-    CAMERA_ONLY,
-    COMBAT_ONLY,
-}
-
 data class PatchOptions(
-    val mode: PatchMode = PatchMode.COMBINED,
+    val rightStickCameraEnabled: Boolean = true,
     val cameraDistanceEnabled: Boolean = true,
     val cameraDistance: Float = 4.5f,
     val cameraHeightEnabled: Boolean = true,
@@ -22,16 +16,23 @@ data class PatchOptions(
     val criticalModePassives: Boolean = true,
 ) {
     val rightStickCamera: Boolean
-        get() = mode != PatchMode.COMBAT_ONLY
+        get() = rightStickCameraEnabled
 
     val combatFeatures: Boolean
-        get() = mode != PatchMode.CAMERA_ONLY
+        get() = strictSteamExclusions ||
+            hitAwareCancels ||
+            invincibilityWindows ||
+            extendedDefense ||
+            commandCancels ||
+            telemetry ||
+            criticalModeAbilities ||
+            criticalModePassives
 
     val appliesCameraDistance: Boolean
-        get() = cameraDistanceEnabled && mode != PatchMode.COMBAT_ONLY
+        get() = cameraDistanceEnabled
 
     val appliesCameraHeight: Boolean
-        get() = cameraHeightEnabled && mode != PatchMode.COMBAT_ONLY
+        get() = cameraHeightEnabled
 
     fun validate(): List<PatchOptionError> = buildList {
         if (cameraDistance !in CAMERA_DISTANCE_RANGE) {
