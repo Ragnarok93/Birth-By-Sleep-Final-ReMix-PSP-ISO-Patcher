@@ -47,6 +47,29 @@ Defaults are enabled for right-stick camera control, camera distance `4.5`, came
 
 Camera distance accepts `1.0–12.0`; camera height accepts `0.0–4.0`. The engine refuses unsupported size/hash, ELF program-header layout, occupied code caves, unexpected instruction bytes, invalid option values, malformed ISO directory records, ambiguous target paths, and output validation mismatches.
 
+
+## Texture packs
+
+The texture installer uses a manifest pinned to [AkiraJkr/Birth-by-Sleep-HD-ReMix](https://github.com/AkiraJkr/Birth-by-Sleep-HD-ReMix) commit `b858f34debbd7bd5b17e989cc194ab05a836c2b5` (v1.5.1).
+
+| Serial | Game profile | Coverage |
+| --- | --- | --- |
+| `ULJM05775` | Japanese Final Mix with the English patch | Complete |
+| `ULES01441` | European original release | Partial |
+| `ULUS10505` | North American original release | Partial |
+
+The manifest contains 4,903 core PNGs, plus `.nomedia` and `textures.ini`. Optional additions provide 15 regional button swaps and three HD portraits; selecting both additions brings the expanded install plan to 557,373,270 bytes.
+
+The installer targets `PSP/TEXTURES/<serial>` in the selected PPSSPP data tree. It checks the exact archive root, planned sizes, and Git blob SHA-1 values before installation. Files are staged, existing files are not overwritten, and staging is removed after cancellation or failure. Texture verification is separate from ISO patch verification.
+
+## VCDIFF
+
+`commonMain` includes a bounded-memory decoder for the VCDIFF default code table: ADD, RUN, and COPY instructions with SELF, HERE, NEAR, and SAME address modes; source and target windows; and Adler-32 checks. It skips an xdelta application header and validates declared lengths and source/target bounds.
+
+The decoder rejects custom code tables and secondary-compressed sections. Default limits cap each window at 16 MiB, delta data at 64 MiB, and total output at 2,000,000,000 bytes.
+
+The Aqua model patch remains disabled. The available patch cannot be matched safely to an ISO using the supported EBOOT fingerprint alone; enabling it requires a verified full source-ISO fingerprint.
+
 ## UI and links
 
 The portrait and large-screen layouts use the same dark navy, electric-blue, pale-blue, and success-green visual language. The Info page exposes Source Code, the GNU License File, and a placeholder Ko-fi link. A first-run Ko-fi placeholder prompt can be dismissed or disabled with “Do not show again.”
@@ -54,7 +77,7 @@ The portrait and large-screen layouts use the same dark navy, electric-blue, pal
 ## Implementation notes
 
 - `commonMain` contains the patch model, option validation, pure Kotlin SHA-256, strict patch engine, ISO9660 reader/rebuilder, bounded-memory streaming, output verification, progress, cancellation, cover-art extraction, and tests.
-- Android pins the SESL8 One UI 8 Compose fork at `1fe97b4e5a4ad559a7252376fad650a64310b229`, whose successful `One UI 8 Compose demo APK` run also verifies release AAR publication and its dependency metadata. The workflow publishes a demo APK and reports; the application resolves the library from the pinned JitPack commit. Desktop uses shared parity adapters for the controls that library does not publish for JVM.
+- Android UI wrappers use the SESL8 One UI 8 Compose fork pinned at `1fe97b4e5a4ad559a7252376fad650a64310b229`; desktop uses shared parity adapters for the controls that library does not publish for JVM. The app depends on the fork's `lib` artifact from JitPack. At this branch revision, Android CI receives HTTP 404 for that artifact and stops during dependency resolution, before app source compilation. A successful fork demo-APK workflow does not establish that the JitPack artifact is available.
 - ISO rebuilding preserves source bytes and directory metadata except for target extent/size fields and volume-space fields that must change.
 - Desktop output is atomically moved from a temporary file when the filesystem supports it. Android document-provider output is streamed only after validation; temporary staging files are cleaned on success, cancellation, and failure.
 
