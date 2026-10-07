@@ -18,6 +18,11 @@ data class EbootInspection(
     val problems: List<String>,
 )
 
+data class PatchVerification(
+    val verified: Boolean,
+    val problems: List<String> = emptyList(),
+)
+
 data class PatchedEboot(
     val bytes: ByteArray,
     val input: EbootFingerprint,
@@ -31,7 +36,11 @@ data class PatchedEboot(
 
 interface EbootPatchEngine {
     fun inspect(data: ByteArray, options: PatchOptions): EbootInspection
+
     fun patch(data: ByteArray, options: PatchOptions): PatchedEboot
+
+    fun verifyPatched(data: ByteArray, options: PatchOptions): PatchVerification =
+        PatchVerification(false, listOf("This patch engine does not expose patched-output verification."))
 }
 
 class PatchValidationException(message: String) : IllegalArgumentException(message)
