@@ -121,8 +121,7 @@ class Stage5EbootPatchEngineTest {
         PspNativeRightStickPatch.requiredUnchangedWords.forEach {
             image.writeIntLe(fileOffset(it.virtualAddress), it.expected)
         }
-        image.writeFloatLe(Stage5Payloads.CAMERA_FREE_HEIGHT_VA - VA_FILE_DELTA, 1.5f)
-        image.writeFloatLe(Stage5Payloads.CAMERA_LOCK_HEIGHT_VA - VA_FILE_DELTA, 1.0f)
+        seedCameraGeometry(image)
 
         val headerBefore = image.copyOfRange(0, 0x100)
         val overlayBefore = image.copyOfRange(
@@ -151,6 +150,65 @@ class Stage5EbootPatchEngineTest {
     }
 
     @Test
+    fun camera_geometry_uses_native_mode_vectors_and_preserves_elf_layout() {
+        val image = ByteArray(3_589_832)
+        image.copyAt(0, byteArrayOf(0x7f, 0x45, 0x4c, 0x46))
+        image.writeShortLe(E_PHNUM_OFFSET, 2)
+        image.writeIntLe(PH0_FILESZ_OFFSET, OLD_SEGMENT_SIZE)
+        image.writeIntLe(PH0_MEMSZ_OFFSET, OLD_SEGMENT_SIZE)
+        seedCameraGeometry(image)
+
+        val headerBefore = image.copyOfRange(0, 0x100)
+        val overlayBefore = image.copyOfRange(
+            Stage5Payloads.S2_FILE_OFFSET,
+            Stage5Payloads.S2_FILE_OFFSET + Stage5Payloads.s2Blob.size,
+        )
+        val options = PatchOptions(
+            rightStickCamera = false,
+            cameraDistanceEnabled = true,
+            cameraDistance = 4.5f,
+            cameraHeightEnabled = true,
+            cameraHeight = 1.0f,
+        )
+
+        PspNativeCameraGeometryPatch.apply(image, options)
+
+        assertEquals(
+            -4.5f,
+            image.readFloatLe(PspNativeCameraGeometryPatch.MODE1_DISTANCE_VA - VA_FILE_DELTA),
+        )
+        assertEquals(
+            -4.5f,
+            image.readFloatLe(PspNativeCameraGeometryPatch.MODE2_DISTANCE_VA - VA_FILE_DELTA),
+        )
+        assertEquals(
+            1.0f,
+            image.readFloatLe(PspNativeCameraGeometryPatch.MODE1_HEIGHT_VA - VA_FILE_DELTA),
+        )
+        assertEquals(
+            1.0f,
+            image.readFloatLe(PspNativeCameraGeometryPatch.MODE2_HEIGHT_VA - VA_FILE_DELTA),
+        )
+
+        assertEquals(2, image.readShortLe(E_PHNUM_OFFSET))
+        assertEquals(OLD_SEGMENT_SIZE, image.readIntLe(PH0_FILESZ_OFFSET))
+        assertEquals(OLD_SEGMENT_SIZE, image.readIntLe(PH0_MEMSZ_OFFSET))
+        assertTrue(headerBefore.contentEquals(image.copyOfRange(0, 0x100)))
+        assertTrue(
+            overlayBefore.contentEquals(
+                image.copyOfRange(
+                    Stage5Payloads.S2_FILE_OFFSET,
+                    Stage5Payloads.S2_FILE_OFFSET + Stage5Payloads.s2Blob.size,
+                ),
+            ),
+        )
+
+        val problems = mutableListOf<String>()
+        PspNativeCameraGeometryPatch.verifyPatched(image, options, problems)
+        assertTrue(problems.isEmpty(), problems.joinToString())
+    }
+
+    @Test
     fun right_stick_profile_verifies_without_a_legacy_overlay_payload() {
         val options = PatchOptions()
         val image = ByteArray(3_589_832)
@@ -168,8 +226,7 @@ class Stage5EbootPatchEngineTest {
         PspNativeRightStickPatch.requiredUnchangedWords.forEach {
             image.writeIntLe(fileOffset(it.virtualAddress), it.expected)
         }
-        image.writeFloatLe(Stage5Payloads.CAMERA_FREE_HEIGHT_VA - VA_FILE_DELTA, 1.5f)
-        image.writeFloatLe(Stage5Payloads.CAMERA_LOCK_HEIGHT_VA - VA_FILE_DELTA, 1.0f)
+        seedCameraGeometry(image)
 
         val result = engine.verifyPatched(image, options)
         assertTrue(result.verified, result.problems.joinToString())
@@ -180,6 +237,33 @@ class Stage5EbootPatchEngineTest {
                 Stage5Payloads.S2_FILE_OFFSET + Stage5Payloads.s2Blob.size,
             ).all { it == 0.toByte() },
         )
+    }
+
+    private fun seedCameraGeometry(image: ByteArray) {
+        image.writeIntLe(
+            PspNativeCameraGeometryPatch.CAMERA_TABLE_VA - VA_FILE_DELTA,
+            PspNativeCameraGeometryPatch.CAMERA_TABLE_SIGNATURE,
+        )
+        image.writeIntLe(PspNativeCameraGeometryPatch.MODE1_RECORD_VA - VA_FILE_DELTA, 1)
+        image.writeIntLe(PspNativeCameraGeometryPatch.MODE2_RECORD_VA - VA_FILE_DELTA, 2)
+        image.writeFloatLe(
+            PspNativeCameraGeometryPatch.MODE1_HEIGHT_VA - VA_FILE_DELTA,
+            PspNativeCameraGeometryPatch.MODE1_HEIGHT_ORIGINAL,
+        )
+        image.writeFloatLe(
+            PspNativeCameraGeometryPatch.MODE1_DISTANCE_VA - VA_FILE_DELTA,
+            PspNativeCameraGeometryPatch.MODE1_DISTANCE_ORIGINAL,
+        )
+        image.writeFloatLe(
+            PspNativeCameraGeometryPatch.MODE2_HEIGHT_VA - VA_FILE_DELTA,
+            PspNativeCameraGeometryPatch.MODE2_HEIGHT_ORIGINAL,
+        )
+        image.writeFloatLe(
+            PspNativeCameraGeometryPatch.MODE2_DISTANCE_VA - VA_FILE_DELTA,
+            PspNativeCameraGeometryPatch.MODE2_DISTANCE_ORIGINAL,
+        )
+        image.writeFloatLe(PspNativeCameraGeometryPatch.MODE1_RECORD_VA + 0x1C - VA_FILE_DELTA, 1.0f)
+        image.writeFloatLe(PspNativeCameraGeometryPatch.MODE2_RECORD_VA + 0x1C - VA_FILE_DELTA, 1.0f)
     }
 
     private fun branchTarget(pc: Int, instruction: Int): Int {
