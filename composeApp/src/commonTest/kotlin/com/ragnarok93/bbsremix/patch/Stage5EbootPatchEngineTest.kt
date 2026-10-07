@@ -73,17 +73,22 @@ class Stage5EbootPatchEngineTest {
         assertEquals(0x8042199A.toInt(), replacements[0x08816304])
         assertEquals(0x00021023, replacements[0x0881630C])
         assertEquals(0x8042199B.toInt(), replacements[0x08816320])
-        assertEquals(0x00021023, replacements[0x08816328])
+        assertEquals(0x00000000, replacements[0x08816328])
 
-        fun transformed(raw: Int): Int {
+        fun centered(raw: Int): Int {
             val stored = raw xor 0x80
-            val signed = if (stored < 0x80) stored else stored - 0x100
-            return -signed
+            return if (stored < 0x80) stored else stored - 0x100
         }
 
-        assertEquals(0, transformed(0x80))
-        assertTrue(transformed(0x00) > 0)
-        assertTrue(transformed(0xFF) < 0)
+        fun transformedX(raw: Int): Int = -centered(raw)
+        fun transformedY(raw: Int): Int = centered(raw)
+
+        assertEquals(0, transformedX(0x80))
+        assertEquals(0, transformedY(0x80))
+        assertTrue(transformedX(0x00) > 0)
+        assertTrue(transformedX(0xFF) < 0)
+        assertTrue(transformedY(0x00) < 0)
+        assertTrue(transformedY(0xFF) > 0)
     }
 
     @Test
