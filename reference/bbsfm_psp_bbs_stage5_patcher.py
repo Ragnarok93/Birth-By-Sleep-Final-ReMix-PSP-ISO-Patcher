@@ -246,88 +246,53 @@ def add_stage5(out:bytearray,cfg:int,camera_distance:float,critical_passives:boo
     if len(out)<S4_FILE_OFF: out.extend(b'\0'*(S4_FILE_OFF-len(out)))
     out.extend(blob)
 
-def patch(data:bytes,camera_controls:bool,post_input:bool,cfg:int,camera_distance:float,camera_height_enabled:bool,camera_height:float,critical_passives:bool)->bytearray:
-    verify(data,camera_controls,post_input)
-    if camera_height_enabled: verify_camera_height(data)
+def patch(data:bytes,camera_controls:bool=True,post_input:bool=False,cfg:int=0,camera_distance:float=4.5,camera_height_enabled:bool=False,camera_height:float=1.0,critical_passives:bool=False)->bytearray:
+    if not camera_controls:
+        raise ValueError('The current supported research profile is right-stick camera only')
+    if post_input or camera_height_enabled or critical_passives or cfg:
+        raise ValueError('PC-derived camera/combat paths are disabled pending PSP-native re-derivation')
+    verify(data,True,False)
     out=bytearray(data)
-    if camera_controls:
-        for va,exp,rep,desc in RIGHT_STICK_WORD_PATCHES:
-            p32(out,foff(va),rep)
-        for va,exp,rep,desc in RIGHT_STICK_BYTE_PATCHES:
-            out[foff(va)] = rep
-    if post_input:
-        p32(out,foff(POST_INPUT_HOOK[0]),jal(S5_WRAPPER_VA))
-        add_stage5(out,cfg,camera_distance,critical_passives)
-    if camera_height_enabled:
-        pf32(out,foff(CAMERA_FREE_HEIGHT_VA),camera_height)
-        pf32(out,foff(CAMERA_LOCK_HEIGHT_VA),camera_height)
+    for va,exp,rep,desc in RIGHT_STICK_WORD_PATCHES:
+        p32(out,foff(va),rep)
+    for va,exp,rep,desc in RIGHT_STICK_BYTE_PATCHES:
+        out[foff(va)] = rep
+    # Resident-only invariant: do not modify program-header layout or the legacy
+    # overlay payload region.
+    if u16(out,E_PHNUM_OFF)!=2:
+        raise ValueError('right-stick patch changed ELF program-header count')
+    if u32(out,PH0_FILESZ_OFF)!=OLD_SEGMENT_SIZE or u32(out,PH0_MEMSZ_OFF)!=OLD_SEGMENT_SIZE:
+        raise ValueError('right-stick patch changed LOAD #0 size')
+    if any(out[S2_FILE_OFF:S2_FILE_OFF+len(S2_BLOB)]):
+        raise ValueError('right-stick patch wrote into the dynamic overlay arena')
     return out
 
 def main():
-    ap=argparse.ArgumentParser(description='BBSFM ULJM-05775 Birth By Sleep - Final ReMix Stage 5 + right-stick + camera distance/height patcher')
-    ap.add_argument('input',type=Path,help='ORIGINAL decrypted EBOOT.BIN')
+    ap=argparse.ArgumentParser(
+        description='BBSFM ULJM-05775 PSP-native resident right-stick camera patcher'
+    )
+    ap.add_argument('input',type=Path,help='ORIGINAL decrypted English-patched EBOOT.BIN')
     ap.add_argument('output',nargs='?',type=Path)
-    mode=ap.add_mutually_exclusive_group()
-    mode.add_argument('--camera-only',action='store_true',help='Right-stick + camera distance/height only; no combat changes')
-    mode.add_argument('--combat-only',action='store_true',help='Combat only; no right-stick or camera distance/height changes')
-    ap.add_argument('--camera-distance',type=float,default=4.5,metavar='DIST',help='Absolute normal-player-camera distance; default 4.5')
-    ap.add_argument('--no-camera-distance',action='store_true',help='Disable camera-distance override')
-    ap.add_argument('--camera-height',type=float,default=1.0,metavar='HEIGHT',help='Normal + lock-on camera height; default 1.0 (Steam mod target)')
-    ap.add_argument('--no-camera-height',action='store_true',help='Disable camera-height override')
-    ap.add_argument('--strict-steam',action='store_true',help='Disable extra Finish/Event/Network/Shootlock category guard')
-    ap.add_argument('--no-hit-aware',action='store_true')
-    ap.add_argument('--no-iframes',action='store_true')
-    ap.add_argument('--no-extended-defense',action='store_true')
-    ap.add_argument('--no-command-cancel',action='store_true')
-    ap.add_argument('--no-telemetry',action='store_true')
-    ap.add_argument('--no-critical-abilities',action='store_true',help='Compatibility flag; advanced writes are already disabled')
-    ap.add_argument('--no-critical-passives',action='store_true',help='Compatibility flag; advanced writes are already disabled')
     ap.add_argument('--verify-only',action='store_true')
     args=ap.parse_args()
 
-    if not (1.0 <= args.camera_distance <= 12.0):
-        ap.error('--camera-distance must be between 1.0 and 12.0')
-    if not (0.0 <= args.camera_height <= 4.0):
-        ap.error('--camera-height must be between 0.0 and 4.0')
-
-    camera_controls=not args.combat_only
-    combat=not args.camera_only
-    camera_distance=(not args.no_camera_distance) and (not args.combat_only)
-    camera_height_enabled=(not args.no_camera_height) and (not args.combat_only)
-    post_input=combat or camera_distance
-    cfg=make_config(args,combat,camera_distance)
-    critical_passives = False  # disabled until PSP ownership/state semantics are demonstrated
-
-    data=args.input.read_bytes(); verify(data,camera_controls,post_input)
-    if camera_height_enabled: verify_camera_height(data)
+    data=args.input.read_bytes()
+    verify(data,True,False)
     print('Supported source fingerprint verified:',SUPPORTED_SHA256)
-    print('Profile: PSP-native in-place right-stick candidate; gameplay validation pending')
-    print('Right-stick camera:', 'ON' if camera_controls else 'off')
-    print('Camera distance:', f'ON ({args.camera_distance:g})' if camera_distance else 'off')
-    print('Camera height:', f'ON ({args.camera_height:g})' if camera_height_enabled else 'off')
-    print('Stage 5 combat:', 'ON' if combat else 'off')
-    print('Critical passives:', 'ON (0x04008300)' if critical_passives else 'off')
-    if post_input:
-        print(f'Config byte: 0x{cfg:02X} @ VA 0x{S4_CONFIG_VA:08X}')
-        print(f'Stage 5 wrapper: 0x{S5_WRAPPER_VA:08X}; passive config: 0x{S5_PASSIVES_CONFIG_VA:08X}')
-        if camera_distance:
-            print(f'Camera distance value: {args.camera_distance:g} @ VA 0x{S4_CAMERA_DISTANCE_VA:08X}')
-        if cfg & 0x10:
-            print(f'Telemetry snapshot: 0x{S4_TELEMETRY_VA:08X}; ring: 0x{S4_RING_VA:08X}')
-    if args.verify_only: return 0
+    print('Profile: PSP-native resident right-stick candidate; gameplay validation pending')
+    print('ELF layout: unchanged (2 program headers; LOAD #0 is not extended)')
+    print('Overlay arena: untouched')
+    if args.verify_only:
+        return 0
 
-    out=patch(data,camera_controls,post_input,cfg,args.camera_distance,camera_height_enabled,args.camera_height,critical_passives)
-    if args.output:
-        dst=args.output
-    else:
-        suffix='.bbs-stage5.BIN' if combat and camera_controls else '.stage5-combat.BIN' if combat else '.camera-stage5.BIN'
-        if camera_controls and not post_input: suffix='.rightstick.BIN'
-        dst=args.input.with_name(args.input.stem + suffix)
+    out=patch(data)
+    dst=args.output or args.input.with_name(args.input.stem + '.psp-native-rightstick.BIN')
     dst.write_bytes(out)
     print('Wrote:',dst)
     print('Patched SHA-256:',sha(out))
     print('Output size:',len(out))
-    if camera_controls: print('PPSSPP: bind your physical right stick to Right Analog X/Y. No overlay payload or extra ELF segment is used.')
+    print('PPSSPP: bind your physical right stick to Right Analog X/Y.')
     return 0
+
 if __name__=='__main__': raise SystemExit(main())
 
