@@ -51,10 +51,11 @@ NEXT_ORIGINAL_LOAD_FILE_OFF = 0x0036C000
 # PPSSPP exposes the second stick in CtrlData.analog[1], which occupies the two
 # bytes historically named SceCtrlData.Rsrv[0]/Rsrv[1] at offsets 10/11.
 # MainApp already reads four CtrlData records in its resident input routine.
-# We copy the final sample's right-analog bytes into two otherwise-unreferenced
-# padding bytes at 0x08B4199A/0x08B4199B, then use a magic a0 selector on only
-# the two native camera-axis call paths. The existing float-normalization
-# wrappers remain intact and continue to service all normal left-stick callers.
+# We capture the final sample's right-analog bytes into two otherwise-unreferenced
+# padding bytes at 0x08B4199A/0x08B4199B. The pair is loaded as a halfword and
+# XORed with 0x8080 so each axis is stored as a signed-centered byte. Tagged
+# camera getters signed-load and negate that centered value so physical stick
+# direction matches camera direction. Normal left-stick callers remain native.
 RIGHT_STICK_MAGIC = 0x5253  # ASCII "RS"
 RIGHT_STICK_X_BYTE_VA = 0x08B4199A
 RIGHT_STICK_Y_BYTE_VA = 0x08B4199B
@@ -67,9 +68,9 @@ RIGHT_STICK_WORD_PATCHES = [
     (0x088162F8, 0x27BDFFF0, 0x34035253, 'right-X selector magic'),
     (0x088162FC, 0xAFBF0000, 0x14830074, 'right-X default branch'),
     (0x08816300, 0x0E205934, 0x3C0208B4, 'right-X resident base'),
-    (0x08816304, 0x00000000, 0x9042199A, 'right-X captured byte'),
+    (0x08816304, 0x00000000, 0x8042199A, 'right-X signed captured byte'),
     (0x08816308, 0x8FBF0000, 0x03E00008, 'right-X return'),
-    (0x0881630C, 0x03E00008, 0x2442FF80, 'right-X center in delay slot'),
+    (0x0881630C, 0x03E00008, 0x00021023, 'right-X invert in delay slot'),
     (0x08816310, 0x27BD0010, 0x00000000, 'right-X tail padding'),
 
     # Raw Y getter: same scheme, preserving the native left-Y getter at
@@ -77,18 +78,18 @@ RIGHT_STICK_WORD_PATCHES = [
     (0x08816314, 0x27BDFFF0, 0x34035253, 'right-Y selector magic'),
     (0x08816318, 0xAFBF0000, 0x14830077, 'right-Y default branch'),
     (0x0881631C, 0x0E20593E, 0x3C0208B4, 'right-Y resident base'),
-    (0x08816320, 0x00000000, 0x9042199B, 'right-Y captured byte'),
+    (0x08816320, 0x00000000, 0x8042199B, 'right-Y signed captured byte'),
     (0x08816324, 0x8FBF0000, 0x03E00008, 'right-Y return'),
-    (0x08816328, 0x03E00008, 0x2442FF80, 'right-Y center in delay slot'),
+    (0x08816328, 0x03E00008, 0x00021023, 'right-Y invert in delay slot'),
     (0x0881632C, 0x27BD0010, 0x00000000, 'right-Y tail padding'),
 
-    # Capture analog[1][0/1] from the final CtrlData record while preserving
-    # the game's normal left analog values in 0x08B41980/0x08B41984.
-    (0x0881683C, 0x3C0408B4, 0x9145FFFA, 'capture right-X from CtrlData+10'),
-    (0x08816840, 0x3C0508B4, 0x9146FFFB, 'capture right-Y from CtrlData+11'),
+    # Capture analog[1][0/1] from the final CtrlData record as one aligned
+    # halfword, flip bit 7 in each byte to form signed-centered axes, and store
+    # both bytes together. The game's normal left analog state is preserved.
+    (0x0881683C, 0x3C0408B4, 0x9545FFFA, 'capture right-stick XY halfword'),
+    (0x08816840, 0x3C0508B4, 0x38A58080, 'center right-stick XY bytes'),
     (0x08816848, 0xACA71970, 0xAC871970, 'reuse resident input-state base'),
-    (0x0881684C, 0x3C0408B4, 0xA085199A, 'store captured right-X'),
-    (0x08816854, 0x3C0408B4, 0xA086199B, 'store captured right-Y'),
+    (0x0881684C, 0x3C0408B4, 0xA485199A, 'store centered right-stick XY'),
 
     # RemasteredControls-equivalent camera selection.
     (0x08940FEC, 0x508000BA, 0x00000000, 'remove L modifier from camera'),
@@ -103,10 +104,7 @@ RIGHT_STICK_WORD_PATCHES = [
     (0x0898F8A4, 0x00000000, RIGHT_STICK_SELECTOR, 'right-stick Y selector 2'),
 ]
 
-RIGHT_STICK_BYTE_PATCHES = [
-    (RIGHT_STICK_X_BYTE_VA, 0x00, 0x80, 'right-X neutral initialization'),
-    (RIGHT_STICK_Y_BYTE_VA, 0x00, 0x80, 'right-Y neutral initialization'),
-]
+RIGHT_STICK_BYTE_PATCHES = []
 
 # Dormant legacy overlay payload, retained only so historical payload-parity
 # tooling can continue to reproduce prior research artifacts.
