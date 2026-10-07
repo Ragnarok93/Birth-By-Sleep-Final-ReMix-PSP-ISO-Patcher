@@ -10,7 +10,6 @@ class PatchOptionsTest {
     fun defaults_match_reference_patcher() {
         val options = PatchOptions()
 
-        assertEquals(PatchMode.COMBINED, options.mode)
         assertTrue(options.rightStickCamera)
         assertTrue(options.combatFeatures)
         assertTrue(options.appliesCameraDistance)
@@ -28,18 +27,36 @@ class PatchOptionsTest {
     }
 
     @Test
-    fun modes_disable_only_the_features_disabled_by_reference_script() {
-        val cameraOnly = PatchOptions(mode = PatchMode.CAMERA_ONLY)
-        assertTrue(cameraOnly.rightStickCamera)
-        assertFalse(cameraOnly.combatFeatures)
-        assertTrue(cameraOnly.appliesCameraDistance)
-        assertTrue(cameraOnly.appliesCameraHeight)
+    fun camera_features_are_independently_toggleable() {
+        val options = PatchOptions(
+            rightStickCameraEnabled = false,
+            cameraDistanceEnabled = true,
+            cameraHeightEnabled = false,
+        )
 
-        val combatOnly = PatchOptions(mode = PatchMode.COMBAT_ONLY)
-        assertFalse(combatOnly.rightStickCamera)
-        assertTrue(combatOnly.combatFeatures)
-        assertFalse(combatOnly.appliesCameraDistance)
-        assertFalse(combatOnly.appliesCameraHeight)
+        assertFalse(options.rightStickCamera)
+        assertTrue(options.appliesCameraDistance)
+        assertFalse(options.appliesCameraHeight)
+    }
+
+    @Test
+    fun combat_features_are_independently_toggleable() {
+        val none = PatchOptions(
+            strictSteamExclusions = false,
+            hitAwareCancels = false,
+            invincibilityWindows = false,
+            extendedDefense = false,
+            commandCancels = false,
+            telemetry = false,
+            criticalModeAbilities = false,
+            criticalModePassives = false,
+        )
+        assertFalse(none.combatFeatures)
+
+        assertTrue(none.copy(hitAwareCancels = true).combatFeatures)
+        assertTrue(none.copy(invincibilityWindows = true).combatFeatures)
+        assertTrue(none.copy(criticalModeAbilities = true).combatFeatures)
+        assertTrue(none.copy(criticalModePassives = true).combatFeatures)
     }
 
     @Test
