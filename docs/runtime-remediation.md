@@ -61,3 +61,12 @@ trusted. If it boots, subsequent failures are isolated to EBOOT modifications.
 
 Structural ELF/ISO/hash checks remain necessary but are never labeled gameplay
 validation.
+
+
+## Current diagnostic gate
+
+The app now blocks gameplay patch output and exposes a no-op **Diagnostic rebuild**.
+It writes the original EBOOT unchanged, verifies its directory extent/size, and
+requires the complete rebuilt ISO to compare byte-for-byte equal to the staged
+source before committing the result. This isolates ISO-rebuild correctness from
+gameplay-code correctness.
