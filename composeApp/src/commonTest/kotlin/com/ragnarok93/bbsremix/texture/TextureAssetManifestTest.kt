@@ -66,6 +66,10 @@ class TextureAssetManifestTest {
 
     @Test
     fun stripsOnlyThePinnedArchiveRootAndRejectsUnsafeEntries() {
+        assertEquals(
+            "Birth-by-Sleep-HD-ReMix-b858f34debbd7bd5b17e989cc194ab05a836c2b5/",
+            TextureAssetManifest.archiveRootPrefix,
+        )
         val valid = TextureAssetManifest.archiveRootPrefix + "Worlds/Test/sample.png"
         assertEquals("Worlds/Test/sample.png", TextureAssetManifest.normalizeArchiveEntry(valid, false))
         assertEquals("", TextureAssetManifest.normalizeArchiveEntry(TextureAssetManifest.archiveRootPrefix, true))

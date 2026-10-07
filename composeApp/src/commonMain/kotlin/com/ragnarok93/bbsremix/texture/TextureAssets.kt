@@ -88,17 +88,17 @@ object TextureAssetManifest {
     )
 
     val archiveRootPrefix: String
-        get() = "Birth-by-Sleep-HD-ReMix-\${TextureProfileCatalog.UPSTREAM_COMMIT}/"
+        get() = "Birth-by-Sleep-HD-ReMix-${TextureProfileCatalog.UPSTREAM_COMMIT}/"
 
     suspend fun load(): List<TextureAssetRecord> {
         val bytes = Res.readBytes(RESOURCE_PATH)
         val content = bytes.decodeToString()
         val lines = content.lineSequence().toList()
         require(lines.size >= 4) { "The pinned texture asset manifest is incomplete." }
-        require(lines[0] == "# repository=\${TextureProfileCatalog.UPSTREAM_REPOSITORY}") {
+        require(lines[0] == "# repository=${TextureProfileCatalog.UPSTREAM_REPOSITORY}") {
             "The texture asset manifest repository does not match the configured upstream."
         }
-        require(lines[1] == "# commit=\${TextureProfileCatalog.UPSTREAM_COMMIT}") {
+        require(lines[1] == "# commit=${TextureProfileCatalog.UPSTREAM_COMMIT}") {
             "The texture asset manifest commit does not match the configured upstream."
         }
         val records = parse(lines.drop(2).joinToString("\n"))
