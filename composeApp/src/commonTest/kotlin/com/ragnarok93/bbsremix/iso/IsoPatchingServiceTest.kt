@@ -4,10 +4,25 @@ import com.ragnarok93.bbsremix.patch.PatchOptions
 import okio.FileSystem
 import okio.buffer
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class IsoPatchingServiceTest {
+    @Test
+    fun verify_output_reports_malformed_iso() {
+        val fileSystem = FileSystem.SYSTEM
+        val output = FileSystem.SYSTEM_TEMPORARY_DIRECTORY / "bbs-service-malformed.iso"
+        fileSystem.delete(output, mustExist = false)
+        fileSystem.sink(output).buffer().use { it.write("not an ISO".encodeToByteArray()) }
+        try {
+            val result = IsoPatchingService(fileSystem).verifyOutput(output, PatchOptions())
+            assertEquals(IsoVerificationStatus.MALFORMED, result.status)
+        } finally {
+            fileSystem.delete(output, mustExist = false)
+        }
+    }
+
     @Test
     fun unsupported_eboot_fails_before_output_creation() {
         val fileSystem = FileSystem.SYSTEM
