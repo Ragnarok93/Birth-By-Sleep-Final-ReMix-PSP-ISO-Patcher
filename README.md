@@ -70,3 +70,5 @@ The exact patched bytes still require a valid user-owned decrypted EBOOT fixture
 ## License
 
 This project remains under the repository's GPL-3.0 license. OneUI-Compose is consumed as an Android dependency and retains its own license and notices.
+
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/F0P5267KSR)
