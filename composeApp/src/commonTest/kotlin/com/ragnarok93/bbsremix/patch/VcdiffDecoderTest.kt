@@ -17,7 +17,7 @@ class VcdiffDecoderTest {
                     data = "abc!".encodeToByteArray(),
                     instructions = byteArrayOf(1, 4),
                     addresses = byteArrayOf(),
-                    checksum = 0x02720148,
+                    checksum = 0x03950148,
                 ),
             ),
         )
@@ -75,9 +75,9 @@ class VcdiffDecoderTest {
                     sourceLength = 8,
                     sourcePosition = 0,
                     targetLength = 5,
-                    data = byteArrayOf(),
+                    data = byteArrayOf('A'.code.toByte()),
                     instructions = byteArrayOf(20, 1, 1),
-                    addresses = byteArrayOf(0, 1),
+                    addresses = byteArrayOf(0),
                 ),
             ),
         )
@@ -138,13 +138,13 @@ class VcdiffDecoderTest {
         windows: List<ByteArray>,
     ): ByteArray {
         val result = mutableListOf<Byte>()
-        result += byteArrayOf(0xd6.toByte(), 0xc3.toByte(), 0xc4.toByte(), 0)
+        result.addAll(byteArrayOf(0xd6.toByte(), 0xc3.toByte(), 0xc4.toByte(), 0).toList())
         result += headerIndicator.toByte()
         if (headerIndicator and 0x04 != 0) {
             result += varInt(applicationHeader.size.toLong())
             result += applicationHeader.toList()
         }
-        windows.forEach(result::addAll)
+        windows.forEach { result.addAll(it.toList()) }
         return result.toByteArray()
     }
 
@@ -160,7 +160,7 @@ class VcdiffDecoderTest {
     ): ByteArray {
         val delta = mutableListOf<Byte>()
         delta += varInt(targetLength)
-        delta += 0
+        delta += 0.toByte()
         delta += varInt(data.size.toLong())
         delta += varInt(instructions.size.toLong())
         delta += varInt(addresses.size.toLong())
