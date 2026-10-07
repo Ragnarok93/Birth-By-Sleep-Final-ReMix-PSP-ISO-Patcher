@@ -1,4 +1,4 @@
-# Implementation Plan: Birth By Sleep Final ReMix PSP ISO Patcher
+# Implementation Plan: Birth By Sleep - Final ReMix PSP ISO Patcher
 
 ## Overview
 
@@ -39,19 +39,19 @@ Build a focused Kotlin Multiplatform + Compose Multiplatform application for And
 - [x] Implement adaptive Compose UI for source selection, preflight, patch options, output selection, progress/cancel, and completion/error states.
 - [x] Use Android document picker/content URIs and platform desktop file dialogs without broad storage permissions.
 - [x] Apply Android OneUI-Compose components directly where compatible and provide shared desktop equivalents.
-- [ ] Extract optional PSP cover art from the ISO and show it in a collapsible Detected Game pane.
-- [ ] Add output verification with a separate file picker and a result state that distinguishes valid patched output, unpatched input, incompatible input, and malformed ISO.
-- [ ] Replace the redundant mode selector with independently toggleable camera and combat feature rows. Group combat features under an expandable Combat Mods section with contextual submenus/secondary controls where needed; place toggles on the trailing/right side.
-- [ ] Add the Info page with repository/license links and an isolated placeholder donation link; show a first-run donation dialog with dismiss and do-not-show-again actions.
-- [ ] Apply the concept palette through semantic Material/OneUI tokens, defaulting to the dark visual treatment while respecting system theme behavior. Refine compact and large-screen layouts without adding redundant navigation.
+- [x] Extract optional PSP cover art from the ISO and show it in a collapsible Detected Game pane.
+- [x] Add output verification with a separate file picker and a result state that distinguishes valid patched output, unpatched input, incompatible input, and malformed ISO.
+- [x] Replace the redundant mode selector with independently toggleable camera and combat feature rows. Group combat features under an expandable Combat Mods section with contextual submenus/secondary controls where needed; place toggles on the trailing/right side.
+- [x] Add the Info page with repository/license links and an isolated placeholder donation link; show a first-run donation dialog with dismiss and do-not-show-again actions.
+- [x] Apply the concept palette through semantic Material/OneUI tokens, defaulting to the dark visual treatment while respecting system theme behavior. Refine compact and large-screen layouts without adding redundant navigation.
 
 ### Phase 5: Documentation and CI
 
 - [x] Document supported image/version requirements, encrypted/unsupported errors, patch semantics, local-only parity validation, and build commands.
-- [ ] Update user-facing naming throughout source, docs, metadata, and runtime copy; remove obsolete branding references without adding migration commentary.
-- [ ] Produce portable Windows `.exe` and Linux `.AppImage` artifacts. Keep macOS `.dmg` and Android APK outputs available.
-- [ ] Make both debug and release workflows upload one artifact per platform plus `Source.zip` and `SHA.zip`; do not wrap individual application artifacts in platform zip packages.
-- [ ] Run focused tests, full shared tests, and available desktop/Android builds; record any validation requiring a user-owned ISO.
+- [x] Update user-facing naming throughout source, docs, metadata, and runtime copy; remove obsolete branding references without adding migration commentary.
+- [x] Produce portable Windows `.exe` and Linux `.AppImage` artifacts. Keep macOS `.dmg` and Android APK outputs available.
+- [x] Make both debug and release workflows upload one artifact per platform plus `Source.zip` and `SHA.zip`; do not wrap individual application artifacts in platform zip packages.
+- [x] Run focused tests, full shared tests, and available desktop/Android builds; record any validation requiring a user-owned ISO.
 
 ## Checkpoints
 
