@@ -64,12 +64,14 @@ code/data:
 
 - The original controller poll at `0x08816688` remains unchanged.
 - After MainApp processes its four 16-byte controller records, the final
-  sample's right-X/right-Y bytes are copied into resident padding
-  `0x08B4199A/0x08B4199B`, initialized to neutral `0x80`.
+  sample's right-X/right-Y bytes are loaded together, XORed with `0x8080`,
+  and stored in resident padding `0x08B4199A/0x08B4199B`. The original
+  zero-filled bytes are therefore already the neutral centered state.
 - The existing raw X/Y getter entry points are rewritten as small resident
   dispatchers. Untagged callers branch directly to the original left-stick
-  getters at `0x088164D0/0x088164F8`; tagged camera calls read the captured
-  right-stick byte and subtract 128.
+  getters at `0x088164D0/0x088164F8`; tagged camera calls signed-load the
+  centered right-stick byte and negate it. This corrects the runtime-observed
+  reversed horizontal and vertical camera directions.
 - The four original float camera JALs remain unchanged. Their previously empty
   delay slots load selector `0x5253` so only those camera calls request the
   right stick.
@@ -79,9 +81,12 @@ code/data:
   `0x08B6EE7C+` dynamic overlay memory is untouched.
 
 This removes the address-lifetime collision responsible for the old
-`0x08B6EE80` payload failure. It is still a runtime **candidate**, not a
-validated release feature, until it boots and survives title/gameplay/module
-transitions in PPSSPP.
+`0x08B6EE80` payload failure. Runtime testing of the first resident candidate
+confirmed that right-stick camera control works and remains compatible with both
+in-game camera-control options without interfering with other controls. That
+candidate exposed reversed X/Y polarity; the current v2 profile corrects both
+axes and remains pending confirmation plus the remaining transition/save-load
+matrix.
 
 ## Better Battle System re-port
 
