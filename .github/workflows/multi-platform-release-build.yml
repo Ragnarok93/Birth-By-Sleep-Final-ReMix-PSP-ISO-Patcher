@@ -106,6 +106,7 @@ jobs:
           cp -a "$app_root"/. "$app_dir"/
           cp packaging/linux/AppRun "$app_dir/AppRun"
           cp packaging/linux/bbs-remix.desktop "$app_dir/usr/share/applications/bbs-remix.desktop"
+          cp packaging/linux/bbs-remix.desktop "$app_dir/bbs-remix.desktop"
           chmod +x "$app_dir/AppRun"
           icon="$(find "$app_root" -type f -iname '*.png' -print -quit)"
           if [ -z "$icon" ]; then
