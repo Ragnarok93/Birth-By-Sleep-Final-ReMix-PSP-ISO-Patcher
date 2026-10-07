@@ -23,7 +23,7 @@ class AndroidFileGateway(
     private val fileSystem: FileSystem = FileSystem.SYSTEM,
 ) : FileGateway {
     private val resolver: ContentResolver = activity.contentResolver
-    private val preferences = activity.getSharedPreferences("bbs-remix-patcher", ComponentActivity.MODE_PRIVATE)
+    private val preferences = activity.getSharedPreferences("bbs-remix-patcher", android.content.Context.MODE_PRIVATE)
     private val cacheRoot: Path = activity.cacheDir.absolutePath.toPath() / "bbs-patcher"
 
     private var sourceContinuation: kotlinx.coroutines.CancellableContinuation<PlatformFileSelection?>? = null
