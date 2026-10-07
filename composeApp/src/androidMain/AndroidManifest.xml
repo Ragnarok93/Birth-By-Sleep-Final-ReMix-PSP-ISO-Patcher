@@ -1,6 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application
-        android:label="Birth By Sleep Final ReMix PSP ISO Patcher"
+        android:label="Birth By Sleep - Final ReMix PSP ISO Patcher"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
         <activity
             android:name=".MainActivity"
