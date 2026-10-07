@@ -44,6 +44,7 @@ data class IsoImageInfo(
     val volumeDescriptorOffsets: List<Long>,
     val root: IsoDirectoryEntry,
     val eboot: IsoDirectoryEntry,
+    val coverArt: IsoDirectoryEntry?,
 )
 
 class IsoFormatException(message: String) : IllegalArgumentException(message)
@@ -81,7 +82,9 @@ class Iso9660Reader(
             path = "",
         )
         if (!root.isDirectory) throw IsoFormatException("The ISO root record is not a directory.")
-        val eboot = findTarget(path, root, sectorSize)
+        val eboot = findTarget(path, root, sectorSize, TARGET_PATH, required = true)
+            ?: throw IsoFormatException("Required ISO path " + TARGET_PATH + " was not found.")
+        val coverArt = findTarget(path, root, sectorSize, COVER_ART_PATH, required = false)
         if (eboot.isDirectory) {
             throw IsoFormatException("Required ISO path $TARGET_PATH resolves to a directory, not EBOOT.BIN.")
         }
@@ -92,6 +95,7 @@ class Iso9660Reader(
             volumeDescriptorOffsets = descriptors.map { it.offset },
             root = root,
             eboot = eboot,
+            coverArt = coverArt,
         )
     }
 
@@ -151,28 +155,49 @@ class Iso9660Reader(
         return result
     }
 
-    private fun findTarget(path: Path, root: IsoDirectoryEntry, sectorSize: Int): IsoDirectoryEntry {
-        val segments = TARGET_PATH.split('/').map { it.uppercase() }
+    private fun findTarget(
+        path: Path,
+        root: IsoDirectoryEntry,
+        sectorSize: Int,
+        targetPath: String,
+        required: Boolean,
+    ): IsoDirectoryEntry? {
+        val segments = targetPath.split('/').map { it.uppercase() }
         var current = root
         val visitedDirectories = mutableSetOf<Long>()
         for ((index, segment) in segments.withIndex()) {
             if (!current.isDirectory) {
-                throw IsoFormatException("${current.path.ifEmpty { "/" }} is not a directory while locating $TARGET_PATH.")
+                if (required) {
+                    throw IsoFormatException(
+                        current.path.ifEmpty { "/" } + " is not a directory while locating " + targetPath + ".",
+                    )
+                }
+                return null
             }
             if (!visitedDirectories.add(current.dataOffset)) {
-                throw IsoFormatException("Directory cycle encountered while locating $TARGET_PATH.")
+                throw IsoFormatException("Directory cycle encountered while locating " + targetPath + ".")
             }
             val matches = readDirectory(path, current).filter { normalizeName(it.name) == segment }
             if (matches.isEmpty()) {
-                throw IsoFormatException("Required ISO path $TARGET_PATH was not found (missing $segment).")
+                if (required) {
+                    throw IsoFormatException(
+                        "Required ISO path " + targetPath + " was not found (missing " + segment + ").",
+                    )
+                }
+                return null
             }
             if (matches.size != 1) {
-                throw IsoFormatException("ISO path $TARGET_PATH is ambiguous: $segment appears ${matches.size} times.")
+                throw IsoFormatException(
+                    "ISO path " + targetPath + " is ambiguous: " + segment + " appears " + matches.size + " times.",
+                )
             }
             current = matches.single()
             if (index == segments.lastIndex) return current
         }
-        throw IsoFormatException("Required ISO path $TARGET_PATH was not found.")
+        if (required) {
+            throw IsoFormatException("Required ISO path " + targetPath + " was not found.")
+        }
+        return null
     }
 
     private fun readVolumeDescriptors(path: Path, sourceSize: Long): List<Descriptor> {
@@ -254,6 +279,7 @@ class Iso9660Reader(
         const val SUPPLEMENTARY_DESCRIPTOR = 2
         const val TERMINATOR_DESCRIPTOR = 255
         const val TARGET_PATH = "PSP_GAME/SYSDIR/EBOOT.BIN"
+        const val COVER_ART_PATH = "PSP_GAME/ICON0.PNG"
         val CD001 = byteArrayOf('C'.code.toByte(), 'D'.code.toByte(), '0'.code.toByte(), '0'.code.toByte(), '1'.code.toByte())
     }
 }
