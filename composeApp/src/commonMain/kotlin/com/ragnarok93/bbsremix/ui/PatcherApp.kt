@@ -53,6 +53,7 @@ import androidx.compose.ui.unit.dp
 import com.ragnarok93.bbsremix.iso.IsoPatchResult
 import com.ragnarok93.bbsremix.iso.IsoPatchingService
 import com.ragnarok93.bbsremix.iso.IsoPreflight
+import com.ragnarok93.bbsremix.iso.IsoRebuildDiagnosticResult
 import com.ragnarok93.bbsremix.iso.IsoVerificationResult
 import com.ragnarok93.bbsremix.iso.IsoVerificationStatus
 import com.ragnarok93.bbsremix.patch.CancellationToken
@@ -224,7 +225,7 @@ fun PatcherApp(
 
         fun selectOutput() {
             val sourceName = source?.displayName ?: "Birth-By-Sleep-Final-ReMix"
-            val suggested = sourceName.substringBeforeLast('.', sourceName) + ".final-remix.iso"
+            val suggested = sourceName.substringBeforeLast('.', sourceName) + ".diagnostic-rebuild.iso"
             start("Choose ISO output") { output = fileGateway.pickOutput(suggested) }
         }
 
@@ -283,6 +284,50 @@ fun PatcherApp(
                     outputCommitted = true
                     status = PatcherStatus.Complete(result, outputSelection.location)
                     appendLog("Patched ISO committed to ${outputSelection.location}.")
+                } finally {
+                    fileGateway.deleteTemp(temporary)
+                    if (outputCommitted && stagedSource == sourcePath) {
+                        fileGateway.deleteTemp(sourcePath)
+                        stagedSource = null
+                    }
+                }
+            }
+        }
+
+        fun diagnosticRebuild() {
+            val sourcePath = stagedSource ?: return
+            val sourceSelection = source ?: return
+            val outputSelection = output ?: return
+            if (fileGateway.isSameSourceAndOutput(sourceSelection, outputSelection)) {
+                status = PatcherStatus.Failure("The diagnostic output must be separate from the source ISO.")
+                appendLog("Diagnostic rebuild refused: output points to the source image.")
+                return
+            }
+            if (!outputSelection.displayName.endsWith(".iso", ignoreCase = true)) {
+                status = PatcherStatus.Failure("Choose an output filename ending in .iso.")
+                appendLog("Diagnostic rebuild refused: output filename must end in .iso.")
+                return
+            }
+            start("Diagnostic rebuild") { token ->
+                val temporary = fileGateway.createTempPath("bbs-diagnostic-rebuild", ".iso")
+                var outputCommitted = false
+                try {
+                    val result = withContext(Dispatchers.Default) {
+                        patchingService.rebuildUnmodifiedTo(
+                            sourcePath,
+                            temporary,
+                            token,
+                            ProgressReporter(::report),
+                        )
+                    }
+                    withContext(Dispatchers.Default) {
+                        fileGateway.commitOutput(temporary, outputSelection, token, ProgressReporter(::report))
+                    }
+                    outputCommitted = true
+                    status = PatcherStatus.DiagnosticComplete(result, outputSelection.location)
+                    appendLog(
+                        "Diagnostic rebuild committed to ${outputSelection.location}; complete ISO is byte-identical to the staged source.",
+                    )
                 } finally {
                     fileGateway.deleteTemp(temporary)
                     if (outputCommitted && stagedSource == sourcePath) {
@@ -394,9 +439,11 @@ fun PatcherApp(
             }
         }
 
-        val canPatch = stagedSource != null &&
-            preflight?.eboot?.supported == true &&
-            options.validate().isEmpty()
+        val canWriteOutput = stagedSource != null && preflight?.eboot?.supported == true
+        val runtimePatchingAvailable = false
+        val canPatch = canWriteOutput &&
+            options.validate().isEmpty() &&
+            runtimePatchingAvailable
         val busy = activeJob != null
         val textureProfile = TextureProfileCatalog.find(preflight?.image?.discSerial)
         val textureOperationBusy = activeOperation == "Choose Texture Destination" || activeOperation == "Install HD Textures"
@@ -416,14 +463,17 @@ fun PatcherApp(
                                 options = options,
                                 output = output,
                                 busy = busy,
+                                canWriteOutput = canWriteOutput,
                                 canPatch = canPatch,
                                 onSelectSource = ::selectSource,
                                 onVerifySource = ::verifySource,
                                 onOptionsChanged = { options = it },
                                 onSelectOutput = ::selectOutput,
                                 onPatch = ::patchIso,
+                                onDiagnosticRebuild = ::diagnosticRebuild,
                                 onCancel = ::cancelCurrentOperation,
                                 isPatching = activeOperation == "Patch ISO",
+                                isDiagnosticRebuild = activeOperation == "Diagnostic rebuild",
                                 compact = true,
                             )
 
@@ -472,14 +522,17 @@ fun PatcherApp(
                                 options = options,
                                 output = output,
                                 busy = busy,
+                                canWriteOutput = canWriteOutput,
                                 canPatch = canPatch,
                                 onSelectSource = ::selectSource,
                                 onVerifySource = ::verifySource,
                                 onOptionsChanged = { options = it },
                                 onSelectOutput = ::selectOutput,
                                 onPatch = ::patchIso,
+                                onDiagnosticRebuild = ::diagnosticRebuild,
                                 onCancel = ::cancelCurrentOperation,
                                 isPatching = activeOperation == "Patch ISO",
+                                isDiagnosticRebuild = activeOperation == "Diagnostic rebuild",
                                 compact = false,
                             )
 
@@ -542,14 +595,17 @@ private fun PatcherPage(
     options: PatchOptions,
     output: PlatformOutputSelection?,
     busy: Boolean,
+    canWriteOutput: Boolean,
     canPatch: Boolean,
     onSelectSource: () -> Unit,
     onVerifySource: () -> Unit,
     onOptionsChanged: (PatchOptions) -> Unit,
     onSelectOutput: () -> Unit,
     onPatch: () -> Unit,
+    onDiagnosticRebuild: () -> Unit,
     onCancel: () -> Unit,
     isPatching: Boolean,
+    isDiagnosticRebuild: Boolean,
     compact: Boolean,
 ) {
     Column(
@@ -564,7 +620,19 @@ private fun PatcherPage(
             SourceCard(source, status, preflight, progress, onSelectSource, onVerifySource, busy)
             DetectedGamePane(preflight, compact = true)
             OptionsCard(options, onOptionsChanged, busy)
-            OutputCard(output, onSelectOutput, onPatch, onCancel, busy, canPatch, isPatching, progress)
+            OutputCard(
+                output = output,
+                onSelect = onSelectOutput,
+                onPatch = onPatch,
+                onDiagnosticRebuild = onDiagnosticRebuild,
+                onCancel = onCancel,
+                busy = busy,
+                canWriteOutput = canWriteOutput,
+                canPatch = canPatch,
+                isPatching = isPatching,
+                isDiagnosticRebuild = isDiagnosticRebuild,
+                progress = progress,
+            )
         } else {
             Row(
                 Modifier.fillMaxWidth(),
@@ -580,7 +648,20 @@ private fun PatcherPage(
                 OptionsCard(options, onOptionsChanged, busy, Modifier.fillMaxWidth(0.88f))
             }
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                OutputCard(output, onSelectOutput, onPatch, onCancel, busy, canPatch, isPatching, progress, Modifier.fillMaxWidth(0.72f))
+                OutputCard(
+                    output = output,
+                    onSelect = onSelectOutput,
+                    onPatch = onPatch,
+                    onDiagnosticRebuild = onDiagnosticRebuild,
+                    onCancel = onCancel,
+                    busy = busy,
+                    canWriteOutput = canWriteOutput,
+                    canPatch = canPatch,
+                    isPatching = isPatching,
+                    isDiagnosticRebuild = isDiagnosticRebuild,
+                    progress = progress,
+                    modifier = Modifier.fillMaxWidth(0.72f),
+                )
             }
             StatusCard(status, progress)
         }
@@ -597,12 +678,12 @@ private fun PageHeader() {
             fontWeight = FontWeight.SemiBold,
         )
         Text(
-            text = "Direct ISO patching with safe validation and rebuilt output images.",
+            text = "PSP-native gameplay hooks are being revalidated.",
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.primary,
         )
         Text(
-            text = "Select a supported English-patched ISO. The app reads the embedded executable, applies only the enabled features, and never overwrites the source image.",
+            text = "Gameplay patch output is temporarily disabled after the previous payloads were found inside the MainApp overlay arena. Diagnostic rebuild remains available to validate the ISO pipeline without changing game code.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -1198,10 +1279,13 @@ private fun OutputCard(
     output: PlatformOutputSelection?,
     onSelect: () -> Unit,
     onPatch: () -> Unit,
+    onDiagnosticRebuild: () -> Unit,
     onCancel: () -> Unit,
     busy: Boolean,
+    canWriteOutput: Boolean,
     canPatch: Boolean,
     isPatching: Boolean,
+    isDiagnosticRebuild: Boolean,
     progress: PatchProgress?,
     modifier: Modifier = Modifier,
 ) {
@@ -1213,11 +1297,17 @@ private fun OutputCard(
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            Text(
+                "Gameplay patching is temporarily disabled while the hooks are re-derived from the English-patched PSP executable. Diagnostic rebuild writes the original EBOOT unchanged and requires the complete ISO to remain byte-identical.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                PatcherButton("Choose output…", onSelect, enabled = !busy && canPatch)
+                PatcherButton("Choose output…", onSelect, enabled = !busy && canWriteOutput)
+                PatcherButton("Diagnostic rebuild", onDiagnosticRebuild, enabled = !busy && canWriteOutput && output != null)
                 PatcherButton("Patch ISO", onPatch, enabled = !busy && canPatch && output != null)
             }
-            if (isPatching) {
+            if (isPatching || isDiagnosticRebuild) {
                 Row(
                     Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
@@ -1225,9 +1315,16 @@ private fun OutputCard(
                 ) {
                     PatcherIndeterminateProgress(Modifier.size(44.dp))
                     Column(Modifier.weight(1f)) {
-                        Text("Patching ISO", style = MaterialTheme.typography.titleSmall)
                         Text(
-                            progress?.detail ?: "Preparing patch pipeline…",
+                            if (isDiagnosticRebuild) "Diagnostic rebuild" else "Patching ISO",
+                            style = MaterialTheme.typography.titleSmall,
+                        )
+                        Text(
+                            progress?.detail ?: if (isDiagnosticRebuild) {
+                                "Rebuilding with the original EBOOT unchanged…"
+                            } else {
+                                "Preparing patch pipeline…"
+                            },
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -1278,6 +1375,15 @@ private fun StatusCard(status: PatcherStatus, progress: PatchProgress?) {
             "Output: " + status.outputLocation +
                 "\nSource EBOOT SHA-256: " + status.result.sourceEbootSha256 +
                 "\nPatched EBOOT SHA-256: " + status.result.patchedEbootSha256,
+        )
+
+        is PatcherStatus.DiagnosticComplete -> MessageCard(
+            "Diagnostic ISO ready",
+            "Output: " + status.outputLocation +
+                "\nFull ISO byte-identical: " + status.result.byteIdentical +
+                "\nEBOOT extent preserved: " + status.result.ebootExtentPreserved +
+                "\nEBOOT size preserved: " + status.result.ebootSizePreserved +
+                "\nEBOOT SHA-256: " + status.result.rebuiltEbootSha256,
         )
 
         is PatcherStatus.Verification -> {
@@ -1476,6 +1582,7 @@ private sealed interface PatcherStatus {
     data class Busy(val label: String) : PatcherStatus
     data class Failure(val message: String) : PatcherStatus
     data class Complete(val result: IsoPatchResult, val outputLocation: String) : PatcherStatus
+    data class DiagnosticComplete(val result: IsoRebuildDiagnosticResult, val outputLocation: String) : PatcherStatus
     data class Verification(val result: IsoVerificationResult) : PatcherStatus
 }
 
