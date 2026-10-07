@@ -107,5 +107,31 @@
     "correction": "Current v3 profile keeps the corrected X inversion but restores centered native polarity for Y.",
     "reported_at": "2026-10-07",
     "evidence_reference": "User runtime report: left/right correct; up/down still reversed"
+  },
+  "right_stick_current_candidate": {
+    "result": "directions_correct",
+    "camera_control_modes": "Both in-game camera control options function correctly without interference with other controls/functions.",
+    "reported_at": "2026-10-07",
+    "evidence_reference": "User runtime report: right-stick camera control working correctly"
+  },
+  "camera_geometry_candidate": {
+    "implementation": "resident PSP camera table data-only patch",
+    "table_va": "0x08B59F00",
+    "mode1_height_va": "0x08B59F24",
+    "mode1_distance_va": "0x08B59F28",
+    "mode2_height_va": "0x08B59F54",
+    "mode2_distance_va": "0x08B59F58",
+    "distance": {
+      "result": "pending",
+      "evidence_reference": null
+    },
+    "height": {
+      "result": "pending",
+      "evidence_reference": null
+    },
+    "combined_camera": {
+      "result": "pending",
+      "evidence_reference": null
+    }
   }
 }
