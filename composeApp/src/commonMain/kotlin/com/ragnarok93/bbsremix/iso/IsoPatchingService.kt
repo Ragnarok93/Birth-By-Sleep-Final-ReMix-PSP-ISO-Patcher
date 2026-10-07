@@ -14,6 +14,7 @@ import com.ragnarok93.bbsremix.patch.Stage5EbootPatchEngine
 import com.ragnarok93.bbsremix.patch.sha256Hex
 import okio.FileSystem
 import okio.Path
+import okio.buffer
 
 data class IsoPreflight(
     val image: IsoImageInfo,
@@ -42,6 +43,18 @@ data class IsoPatchResult(
     val patchedEbootSha256: String,
     val outputSize: Long,
     val relocatedEboot: Boolean,
+)
+
+data class IsoRebuildDiagnosticResult(
+    val source: Path,
+    val destination: Path,
+    val sourceEbootSha256: String,
+    val rebuiltEbootSha256: String,
+    val sourceSize: Long,
+    val outputSize: Long,
+    val byteIdentical: Boolean,
+    val ebootExtentPreserved: Boolean,
+    val ebootSizePreserved: Boolean,
 )
 
 class IsoPatchingService(
@@ -126,6 +139,90 @@ class IsoPatchingService(
         }
     }
 
+    fun rebuildUnmodifiedTo(
+        source: Path,
+        destination: Path,
+        cancellation: CancellationToken = NeverCancelled,
+        progress: ProgressReporter = NoProgress,
+    ): IsoRebuildDiagnosticResult {
+        if (source == destination) {
+            throw PatchValidationException("The diagnostic output must be different from the source ISO.")
+        }
+        if (fileSystem.exists(destination)) {
+            throw IsoFormatException("The diagnostic output ISO already exists; choose a separate output path.")
+        }
+
+        cancellation.throwIfCancelled()
+        val image = reader.inspect(source)
+        val originalEboot = reader.readEntry(source, image.eboot)
+        val sourceInspection = engine.inspect(originalEboot, PatchOptions())
+        if (!sourceInspection.supported) {
+            throw PatchValidationException(sourceInspection.problems.joinToString(" "))
+        }
+
+        val sourceSize = fileSystem.metadata(source).size
+            ?: throw IsoFormatException("Unable to determine source ISO size.")
+        progress.report(
+            PatchProgress(
+                PatchPhase.REBUILDING_ISO,
+                0L,
+                sourceSize,
+                "Diagnostic rebuild: writing the original EBOOT unchanged",
+            ),
+        )
+        rebuilder.rebuild(source, destination, image, originalEboot, cancellation, progress)
+
+        cancellation.throwIfCancelled()
+        val rebuiltImage = reader.inspect(destination)
+        val rebuiltEboot = reader.readEntry(destination, rebuiltImage.eboot)
+        val outputSize = fileSystem.metadata(destination).size
+            ?: throw IsoFormatException("Unable to determine diagnostic ISO size.")
+
+        val ebootExtentPreserved = rebuiltImage.eboot.extentSector == image.eboot.extentSector
+        val ebootSizePreserved = rebuiltImage.eboot.size == image.eboot.size
+        if (!rebuiltEboot.contentEquals(originalEboot)) {
+            throw IsoFormatException("Diagnostic rebuild changed EBOOT.BIN bytes.")
+        }
+        if (!ebootExtentPreserved || !ebootSizePreserved) {
+            throw IsoFormatException("Diagnostic rebuild changed the EBOOT directory extent or size.")
+        }
+
+        progress.report(
+            PatchProgress(
+                PatchPhase.VALIDATING_OUTPUT,
+                0L,
+                sourceSize,
+                "Diagnostic rebuild: comparing the complete ISO byte-for-byte",
+            ),
+        )
+        val byteIdentical = filesEqual(source, destination, cancellation, progress, sourceSize)
+        if (!byteIdentical) {
+            throw IsoFormatException(
+                "Diagnostic rebuild changed bytes outside EBOOT.BIN. The ISO rebuild pipeline must be fixed before gameplay patching resumes.",
+            )
+        }
+
+        progress.report(
+            PatchProgress(
+                PatchPhase.VALIDATING_OUTPUT,
+                sourceSize,
+                sourceSize,
+                "Diagnostic rebuild is byte-identical to the source ISO",
+            ),
+        )
+        return IsoRebuildDiagnosticResult(
+            source = source,
+            destination = destination,
+            sourceEbootSha256 = sha256Hex(originalEboot),
+            rebuiltEbootSha256 = sha256Hex(rebuiltEboot),
+            sourceSize = sourceSize,
+            outputSize = outputSize,
+            byteIdentical = true,
+            ebootExtentPreserved = true,
+            ebootSizePreserved = true,
+        )
+    }
+
     fun patchTo(
         source: Path,
         destination: Path,
@@ -133,6 +230,11 @@ class IsoPatchingService(
         cancellation: CancellationToken = NeverCancelled,
         progress: ProgressReporter = NoProgress,
     ): IsoPatchResult {
+        if (!RUNTIME_PATCHING_ENABLED) {
+            throw PatchValidationException(
+                "Gameplay patching is temporarily disabled. The previous payloads were placed in the MainApp overlay arena and are being re-derived against the English-patched PSP executable. Use Diagnostic rebuild to validate the ISO pipeline without changing game code.",
+            )
+        }
         if (source == destination) throw PatchValidationException("The output ISO must be different from the source ISO.")
         val preflight = preflight(source, options, cancellation, progress)
         if (!preflight.eboot.supported) {
@@ -175,8 +277,50 @@ class IsoPatchingService(
         }
     }
 
+    private fun filesEqual(
+        source: Path,
+        destination: Path,
+        cancellation: CancellationToken,
+        progress: ProgressReporter,
+        total: Long,
+    ): Boolean {
+        val sourceSize = fileSystem.metadata(source).size ?: return false
+        val destinationSize = fileSystem.metadata(destination).size ?: return false
+        if (sourceSize != destinationSize) return false
+
+        fileSystem.source(source).buffer().use { left ->
+            fileSystem.source(destination).buffer().use { right ->
+                var compared = 0L
+                val leftChunk = ByteArray(COMPARE_CHUNK_SIZE)
+                val rightChunk = ByteArray(COMPARE_CHUNK_SIZE)
+                while (compared < sourceSize) {
+                    cancellation.throwIfCancelled()
+                    val requested = minOf(COMPARE_CHUNK_SIZE.toLong(), sourceSize - compared).toInt()
+                    val leftRead = left.read(leftChunk, 0, requested)
+                    val rightRead = right.read(rightChunk, 0, requested)
+                    if (leftRead != rightRead || leftRead <= 0) return false
+                    for (index in 0 until leftRead) {
+                        if (leftChunk[index] != rightChunk[index]) return false
+                    }
+                    compared += leftRead
+                    progress.report(
+                        PatchProgress(
+                            PatchPhase.VALIDATING_OUTPUT,
+                            compared,
+                            total,
+                            "Diagnostic rebuild: byte-for-byte ISO comparison",
+                        ),
+                    )
+                }
+            }
+        }
+        return true
+    }
+
     private companion object {
         const val MAX_COVER_ART_BYTES = 4L * 1024L * 1024L
+        const val COMPARE_CHUNK_SIZE = 1024 * 1024
+        const val RUNTIME_PATCHING_ENABLED = false
     }
 }
 
