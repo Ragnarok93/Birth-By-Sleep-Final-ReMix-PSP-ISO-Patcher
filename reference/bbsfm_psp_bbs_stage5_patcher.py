@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""KH Birth by Sleep Final Mix ULJM-05775 — Better Battle System Stage 5 completion beta.
+"""KH Birth by Sleep Final Mix ULJM-05775 — Birth By Sleep - Final ReMix Stage 5 completion beta.
 
 Targets exactly the decrypted English-patched EBOOT fingerprint used during development.
 This patcher contains patch data/injected code only; it does not contain game assets.
@@ -17,7 +17,7 @@ Stage 5 core:
 - Critical Mode Reload Boost + Second Chance grants through the PSP runtime ability table
 - Critical Mode Munny Plus + Berserk + Auto-Remedy + Double CP via player+0x30 mask 0x04008300
 
-This completes the main BBS_BetterBattleSystem_Steam.lua feature set. PSP BBS already
+This completes the main BBS_FinalReMix_Steam.lua feature set. PSP BBS already
 has native L+R+Start+Select soft reset. The archive's title/minigame helper scripts are
 separate utilities whose executable logic lives in separately loaded PSP modules.
 """
@@ -181,7 +181,7 @@ def patch(data:bytes,camera_controls:bool,post_input:bool,cfg:int,camera_distanc
     return out
 
 def main():
-    ap=argparse.ArgumentParser(description='BBSFM ULJM-05775 Better Battle System Stage 5 + right-stick + camera distance/height patcher')
+    ap=argparse.ArgumentParser(description='BBSFM ULJM-05775 Birth By Sleep - Final ReMix Stage 5 + right-stick + camera distance/height patcher')
     ap.add_argument('input',type=Path,help='ORIGINAL decrypted EBOOT.BIN')
     ap.add_argument('output',nargs='?',type=Path)
     mode=ap.add_mutually_exclusive_group()
