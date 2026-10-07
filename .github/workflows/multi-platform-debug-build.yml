@@ -74,18 +74,39 @@ jobs:
         run: ${{ matrix.gradle_command }} :composeApp:desktopTest --stacktrace
       - name: Build desktop application (${{ matrix.platform }})
         run: ${{ matrix.gradle_command }} ${{ matrix.package_task }} --stacktrace
-      - name: Normalize Linux application artifact
+      - name: Package Linux AppImage
         if: matrix.platform == 'Linux'
         shell: bash
         run: |
-          mkdir -p dist
-          candidate="$(find composeApp/build/compose/binaries/main -type f -iname '*.appimage' -print -quit)"
-          if [ -z "$candidate" ]; then
+          set -euo pipefail
+          app_root="$(find composeApp/build/compose/binaries/main/app -mindepth 1 -maxdepth 1 -type d -print -quit)"
+          if [ -z "$app_root" ]; then
             find composeApp/build/compose/binaries/main -maxdepth 5 -print
             exit 1
           fi
-          cp "$candidate" dist/Birth-By-Sleep-Final-ReMix-PSP-ISO-Patcher.AppImage
-      - name: Normalize Windows application artifact
+          app_dir="$RUNNER_TEMP/bbs-remix-appdir"
+          rm -rf "$app_dir"
+          mkdir -p "$app_dir/usr/share/applications" "$app_dir/usr/share/icons/hicolor/512x512/apps"
+          cp -a "$app_root"/. "$app_dir"/
+          cp packaging/linux/AppRun "$app_dir/AppRun"
+          cp packaging/linux/bbs-remix.desktop "$app_dir/usr/share/applications/bbs-remix.desktop"
+          chmod +x "$app_dir/AppRun"
+          icon="$(find "$app_root" -type f -iname '*.png' -print -quit)"
+          if [ -z "$icon" ]; then
+            echo "Compose distribution did not contain a PNG icon." >&2
+            exit 1
+          fi
+          cp "$icon" "$app_dir/.DirIcon"
+          cp "$icon" "$app_dir/usr/share/icons/hicolor/512x512/apps/bbs-remix.png"
+          curl --fail --location --retry 3 --output "$RUNNER_TEMP/appimagetool" \
+            https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x "$RUNNER_TEMP/appimagetool"
+          mkdir -p dist
+          APPIMAGE_EXTRACT_AND_RUN=1 "$RUNNER_TEMP/appimagetool" "$app_dir" \
+            dist/Birth-By-Sleep-Final-ReMix-PSP-ISO-Patcher.AppImage
+          chmod +x dist/Birth-By-Sleep-Final-ReMix-PSP-ISO-Patcher.AppImage
+
+      - name: Package Windows portable EXE
         if: matrix.platform == 'Windows'
         shell: pwsh
         run: |
