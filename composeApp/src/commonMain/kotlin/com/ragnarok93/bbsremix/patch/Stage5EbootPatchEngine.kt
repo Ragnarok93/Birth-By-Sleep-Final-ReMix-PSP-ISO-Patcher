@@ -1,7 +1,5 @@
 package com.ragnarok93.bbsremix.patch
 
-import kotlin.math.abs
-
 class Stage5EbootPatchEngine : EbootPatchEngine {
     override fun inspect(data: ByteArray, options: PatchOptions): EbootInspection {
         val problems = mutableListOf<String>()
@@ -46,15 +44,15 @@ class Stage5EbootPatchEngine : EbootPatchEngine {
             problems += "The reserved third program-header slot is not zero-filled."
         }
 
-        val postInput = options.combatFeatures || options.appliesCameraDistance
+        val postInput = options.combatFeatures
         if (options.rightStickCamera) {
             PspNativeRightStickPatch.validateSource(data, problems)
         }
+        if (options.appliesCameraDistance || options.appliesCameraHeight) {
+            PspNativeCameraGeometryPatch.validateSource(data, problems)
+        }
         if (postInput) {
             validatePostInputHook(data, problems)
-        }
-        if (options.appliesCameraHeight) {
-            validateCameraHeight(data, problems)
         }
 
         return EbootInspection(fingerprint, problems.isEmpty(), problems)
@@ -72,15 +70,14 @@ class Stage5EbootPatchEngine : EbootPatchEngine {
             PspNativeRightStickPatch.apply(output)
         }
 
-        val postInput = options.combatFeatures || options.appliesCameraDistance
+        if (options.appliesCameraDistance || options.appliesCameraHeight) {
+            PspNativeCameraGeometryPatch.apply(output, options)
+        }
+
+        val postInput = options.combatFeatures
         if (postInput) {
             output.writeIntLe(fileOffset(POST_INPUT_HOOK.first), jal(Stage5Payloads.S5_WRAPPER_VA))
             output = addStage5(output, options)
-        }
-
-        if (options.appliesCameraHeight) {
-            output.writeFloatLe(fileOffset(Stage5Payloads.CAMERA_FREE_HEIGHT_VA), options.cameraHeight)
-            output.writeFloatLe(fileOffset(Stage5Payloads.CAMERA_LOCK_HEIGHT_VA), options.cameraHeight)
         }
 
         return PatchedEboot(
@@ -95,7 +92,7 @@ class Stage5EbootPatchEngine : EbootPatchEngine {
         problems += options.validate().map { it.message }
         if (!options.hasSelectedFeature) return PatchVerification(false, problems)
 
-        val postInput = options.combatFeatures || options.appliesCameraDistance
+        val postInput = options.combatFeatures
         if (!data.startsWith(ELF_MAGIC)) problems += "The embedded EBOOT is not a decrypted ELF."
         if (data.size < SUPPORTED_SIZE) {
             problems += "The embedded EBOOT is smaller than the supported input profile."
@@ -185,12 +182,6 @@ class Stage5EbootPatchEngine : EbootPatchEngine {
             ) {
                 problems += "The Stage 5 feature configuration does not match the selected toggles."
             }
-            val distanceOffset = Stage5Payloads.S4_FILE_OFFSET + Stage5Payloads.S4_CAMERA_DISTANCE_OFFSET
-            if (distanceOffset + 4 > data.size ||
-                abs(data.readFloatLe(distanceOffset) - options.cameraDistance) > 0.0001f
-            ) {
-                problems += "The camera-distance configuration does not match the selected value."
-            }
             val wrapperOffset = Stage5Payloads.S4_FILE_OFFSET + Stage5Payloads.S5_WRAPPER_OFFSET
             if (wrapperOffset + Stage5Payloads.s5WrapperBlob.size > data.size ||
                 !data.copyOfRange(
@@ -209,25 +200,7 @@ class Stage5EbootPatchEngine : EbootPatchEngine {
             problems += "The output EBOOT contains an unselected Stage 5 segment."
         }
 
-        if (options.appliesCameraHeight) {
-            val freeOffset = fileOffset(Stage5Payloads.CAMERA_FREE_HEIGHT_VA)
-            val lockOffset = fileOffset(Stage5Payloads.CAMERA_LOCK_HEIGHT_VA)
-            if (freeOffset + 4 > data.size || abs(data.readFloatLe(freeOffset) - options.cameraHeight) > 0.0001f) {
-                problems += "The free-camera height does not match the selected value."
-            }
-            if (lockOffset + 4 > data.size || abs(data.readFloatLe(lockOffset) - options.cameraHeight) > 0.0001f) {
-                problems += "The lock-on camera height does not match the selected value."
-            }
-        } else {
-            val freeOffset = fileOffset(Stage5Payloads.CAMERA_FREE_HEIGHT_VA)
-            val lockOffset = fileOffset(Stage5Payloads.CAMERA_LOCK_HEIGHT_VA)
-            if (freeOffset + 4 > data.size || abs(data.readFloatLe(freeOffset) - Stage5Payloads.CAMERA_FREE_HEIGHT_ORIG) > 0.0001f) {
-                problems += "The output EBOOT contains an unselected free-camera height change."
-            }
-            if (lockOffset + 4 > data.size || abs(data.readFloatLe(lockOffset) - Stage5Payloads.CAMERA_LOCK_HEIGHT_ORIG) > 0.0001f) {
-                problems += "The output EBOOT contains an unselected lock-on height change."
-            }
-        }
+        PspNativeCameraGeometryPatch.verifyPatched(data, options, problems)
 
         return PatchVerification(problems.isEmpty(), problems.distinct())
     }
@@ -248,21 +221,6 @@ class Stage5EbootPatchEngine : EbootPatchEngine {
         }
     }
 
-    private fun validateCameraHeight(data: ByteArray, problems: MutableList<String>) {
-        val free = fileOffset(Stage5Payloads.CAMERA_FREE_HEIGHT_VA)
-        val lock = fileOffset(Stage5Payloads.CAMERA_LOCK_HEIGHT_VA)
-        if (free < 0 || free + 4 > data.size ||
-            abs(data.readFloatLe(free) - Stage5Payloads.CAMERA_FREE_HEIGHT_ORIG) > 0.000001f
-        ) {
-            problems += "The free-camera height constant does not match the reference EBOOT."
-        }
-        if (lock < 0 || lock + 4 > data.size ||
-            abs(data.readFloatLe(lock) - Stage5Payloads.CAMERA_LOCK_HEIGHT_ORIG) > 0.000001f
-        ) {
-            problems += "The lock-on camera height constant does not match the reference EBOOT."
-        }
-    }
-
     private fun stage5Segment(options: PatchOptions): ByteArray {
         val config = makeConfig(options)
         val segment = Stage5Payloads.s4Blob.copyOf().toMutableList()
@@ -273,7 +231,6 @@ class Stage5EbootPatchEngine : EbootPatchEngine {
         while (segment.size < Stage5Payloads.S5_SEGMENT_PAD) segment.add(0.toByte())
         val blob = segment.map { it.toByte() }.toByteArray()
         blob[Stage5Payloads.S4_CONFIG_OFFSET] = config.toByte()
-        blob.writeFloatLe(Stage5Payloads.S4_CAMERA_DISTANCE_OFFSET, options.cameraDistance)
 
         return blob
     }
@@ -308,7 +265,6 @@ class Stage5EbootPatchEngine : EbootPatchEngine {
             if (!options.commandCancels) config = config and 0x08.inv()
             if (!options.telemetry) config = config and 0x10.inv()
         }
-        if (options.appliesCameraDistance) config = config or 0x80
         return config
     }
 
