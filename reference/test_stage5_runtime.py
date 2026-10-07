@@ -10,30 +10,36 @@ spec.loader.exec_module(p)
 
 
 class RuntimeRegressionTest(unittest.TestCase):
-    def test_right_analog_helpers_poll_controller_directly(self):
-        self.assertEqual(168, len(p.S2_BLOB))
-        self.assertEqual(p.S2_VA, p.S2_RIGHT_X_VA)
-        self.assertEqual(p.S2_VA + 84, p.S2_RIGHT_Y_VA)
-        for helper, reserved in [(p.S2_RIGHT_X_VA, 0x1A), (p.S2_RIGHT_Y_VA, 0x1B)]:
-            off = helper - p.S2_VA
-            words = struct.unpack_from('<' + 'I' * 21, p.S2_BLOB, off)
-            self.assertEqual(0x27BDFFD0, words[0])
-            self.assertEqual(0xAFBF002C, words[1])
-            self.assertEqual(0x27A40010, words[2])
-            self.assertEqual(0x34050001, words[3])
-            self.assertEqual(0x0E2C5B4E, words[4])
-            self.assertEqual(0x93A80000 | reserved, words[8])
-            self.assertEqual(0x03E00008, words[19])
-            self.assertEqual(0x27BD0030, words[20])
+    def test_supported_right_stick_patch_stays_out_of_overlay_arena(self):
+        word_addresses = {va for va, _expected, _replacement, _desc in p.RIGHT_STICK_WORD_PATCHES}
+        byte_addresses = {va for va, _expected, _replacement, _desc in p.RIGHT_STICK_BYTE_PATCHES}
+        self.assertTrue(word_addresses)
+        self.assertTrue(byte_addresses)
+        self.assertTrue(all(va < 0x08B6EE7C for va in word_addresses | byte_addresses))
+        self.assertNotIn(0x08816688, word_addresses)
+        self.assertNotIn(p.S2_VA, word_addresses)
+        self.assertEqual({0x08B4199A, 0x08B4199B}, byte_addresses)
 
-    def test_camera_patch_set_does_not_replace_main_controller_poll(self):
-        addresses = {va for va, _expected, _replacement, _desc in p.CAMERA_PATCHES}
-        self.assertNotIn(0x08816688, addresses)
-        self.assertEqual(
-            {0x08940FEC, 0x0898F68C, 0x0898F850, 0x0898F69C,
-             0x0898F6DC, 0x0898F860, 0x0898F8A0},
-            addresses,
-        )
+    def test_camera_patch_preserves_native_jals_and_tags_delay_slots(self):
+        replacements = {va: replacement for va, _expected, replacement, _desc
+                        in p.RIGHT_STICK_WORD_PATCHES}
+        self.assertEqual(0x34045253, p.RIGHT_STICK_SELECTOR)
+        self.assertEqual(p.RIGHT_STICK_SELECTOR, replacements[0x0898F6A0])
+        self.assertEqual(p.RIGHT_STICK_SELECTOR, replacements[0x0898F6E0])
+        self.assertEqual(p.RIGHT_STICK_SELECTOR, replacements[0x0898F864])
+        self.assertEqual(p.RIGHT_STICK_SELECTOR, replacements[0x0898F8A4])
+
+        # The supported path does not replace the controller poll or the native
+        # camera JALs. Those calls are deliberately absent from the patch map.
+        for address in (0x08816688, 0x0898F69C, 0x0898F6DC, 0x0898F860, 0x0898F8A0):
+            self.assertNotIn(address, replacements)
+
+    def test_legacy_overlay_helpers_are_research_only(self):
+        # Retained solely for historical Python/Kotlin payload parity; the
+        # supported right-stick path no longer writes this blob.
+        self.assertEqual(168, len(p.S2_BLOB))
+        self.assertEqual(0x08B6EE80, p.S2_VA)
+        self.assertGreaterEqual(p.S2_VA, 0x08B6EE7C)
 
     def test_all_static_transfers_stay_in_executable_code(self):
         regions = [(p.S2_BLOB, p.S2_VA, p.S2_CODE_SIZE),
