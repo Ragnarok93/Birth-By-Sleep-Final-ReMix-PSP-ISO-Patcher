@@ -194,7 +194,6 @@ def sha(b): return hashlib.sha256(b).hexdigest()
 POST_INPUT_HOOK=(0x08816904,0x8FB00048)
 
 def verify(data:bytes, camera_controls:bool, post_input:bool):
-    if not (camera_controls or post_input): raise ValueError('Nothing selected')
     if len(data)!=SUPPORTED_SIZE: raise ValueError(f'Unsupported size {len(data)}; expected {SUPPORTED_SIZE}')
     d=sha(data)
     if d!=SUPPORTED_SHA256: raise ValueError(f'Unsupported EBOOT SHA-256\n got: {d}\n exp: {SUPPORTED_SHA256}')
