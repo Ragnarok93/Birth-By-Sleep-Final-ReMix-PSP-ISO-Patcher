@@ -14,11 +14,37 @@ class RuntimeRegressionTest(unittest.TestCase):
         word_addresses = {va for va, _expected, _replacement, _desc in p.RIGHT_STICK_WORD_PATCHES}
         byte_addresses = {va for va, _expected, _replacement, _desc in p.RIGHT_STICK_BYTE_PATCHES}
         self.assertTrue(word_addresses)
-        self.assertTrue(byte_addresses)
-        self.assertTrue(all(va < 0x08B6EE7C for va in word_addresses | byte_addresses))
+        self.assertFalse(byte_addresses)
+        self.assertTrue(all(va < 0x08B6EE7C for va in word_addresses))
         self.assertNotIn(0x08816688, word_addresses)
         self.assertNotIn(p.S2_VA, word_addresses)
-        self.assertEqual({0x08B4199A, 0x08B4199B}, byte_addresses)
+        self.assertEqual(0x08B4199A, p.RIGHT_STICK_X_BYTE_VA)
+        self.assertEqual(0x08B4199B, p.RIGHT_STICK_Y_BYTE_VA)
+
+    def test_right_stick_axes_are_centered_and_inverted_in_place(self):
+        replacements = {va: replacement for va, _expected, replacement, _desc
+                        in p.RIGHT_STICK_WORD_PATCHES}
+
+        # Final CtrlData analog[1] is captured as one halfword, both sign bits
+        # are flipped, and the centered signed byte is negated in each getter.
+        self.assertEqual(0x9545FFFA, replacements[0x0881683C])  # lhu a1,-6(t2)
+        self.assertEqual(0x38A58080, replacements[0x08816840])  # xori a1,a1,0x8080
+        self.assertEqual(0xA485199A, replacements[0x0881684C])  # sh a1,0x199a(a0)
+        self.assertNotIn(0x08816854, replacements)
+
+        self.assertEqual(0x8042199A, replacements[0x08816304])  # lb v0,rightX
+        self.assertEqual(0x00021023, replacements[0x0881630C])  # subu v0,zero,v0
+        self.assertEqual(0x8042199B, replacements[0x08816320])  # lb v0,rightY
+        self.assertEqual(0x00021023, replacements[0x08816328])  # subu v0,zero,v0
+
+        def transformed(raw):
+            stored = raw ^ 0x80
+            signed = stored if stored < 0x80 else stored - 0x100
+            return -signed
+
+        self.assertEqual(0, transformed(0x80))
+        self.assertGreater(transformed(0x00), 0)
+        self.assertLess(transformed(0xFF), 0)
 
     def test_camera_patch_preserves_native_jals_and_tags_delay_slots(self):
         replacements = {va: replacement for va, _expected, replacement, _desc
