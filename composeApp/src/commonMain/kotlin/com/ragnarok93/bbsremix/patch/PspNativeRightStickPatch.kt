@@ -58,7 +58,7 @@ internal object PspNativeRightStickPatch {
         WordPatch(0x0881631C, 0x0E20593E, 0x3C0208B4, "right-Y resident base"),
         WordPatch(0x08816320, 0x00000000, 0x8042199B.toInt(), "right-Y signed captured byte"),
         WordPatch(0x08816324, 0x8FBF0000.toInt(), 0x03E00008, "right-Y return"),
-        WordPatch(0x08816328, 0x03E00008, 0x00021023, "right-Y invert in delay slot"),
+        WordPatch(0x08816328, 0x03E00008, 0x00000000, "right-Y preserve centered polarity"),
         WordPatch(0x0881632C, 0x27BD0010, 0x00000000, "right-Y tail padding"),
 
         // MainApp input update. $t2 points one record past the final 16-byte
