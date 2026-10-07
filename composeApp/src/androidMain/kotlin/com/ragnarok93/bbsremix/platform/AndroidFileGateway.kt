@@ -1,6 +1,8 @@
 package com.ragnarok93.bbsremix.platform
 
 import android.content.ContentResolver
+import android.content.Context
+import android.content.Intent
 import android.database.Cursor
 import android.net.Uri
 import android.provider.OpenableColumns
@@ -19,11 +21,12 @@ import java.util.UUID
 import kotlin.coroutines.resume
 
 class AndroidFileGateway(
-    activity: ComponentActivity,
+    private val activity: ComponentActivity,
     private val fileSystem: FileSystem = FileSystem.SYSTEM,
 ) : FileGateway {
     private val resolver: ContentResolver = activity.contentResolver
     private val cacheRoot: Path = activity.cacheDir.absolutePath.toPath() / "bbs-patcher"
+    private val preferences = activity.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
 
     private var sourceContinuation: kotlinx.coroutines.CancellableContinuation<PlatformFileSelection?>? = null
     private var outputContinuation: kotlinx.coroutines.CancellableContinuation<PlatformOutputSelection?>? = null
@@ -56,7 +59,7 @@ class AndroidFileGateway(
 
     override suspend fun createTempPath(prefix: String, suffix: String): Path {
         fileSystem.createDirectories(cacheRoot)
-        return cacheRoot / "$prefix-${UUID.randomUUID()}$suffix"
+        return cacheRoot / "$prefix-\${UUID.randomUUID()}$suffix"
     }
 
     override suspend fun stageSource(
@@ -79,7 +82,7 @@ class AndroidFileGateway(
                     if (read == 0) continue
                     output.write(buffer, 0, read)
                     completed += read
-                    progress.report(PatchProgress(PatchPhase.STAGING_EBOOT, completed, total, "Copying source ISO to private workspace"))
+                    progress.report(PatchProgress(PatchPhase.STAGING_EBOOT, completed, total, "Copying ISO to private workspace"))
                 }
             }
         } finally {
@@ -116,7 +119,7 @@ class AndroidFileGateway(
         } catch (error: kotlinx.coroutines.CancellationException) {
             throw error
         } catch (error: Throwable) {
-            throw FileGatewayException("The patched ISO could not be committed: ${error.message}")
+            throw FileGatewayException("The patched ISO could not be committed: \${error.message}")
         }
     }
 
@@ -126,6 +129,19 @@ class AndroidFileGateway(
 
     override fun isSameSourceAndOutput(source: PlatformFileSelection, output: PlatformOutputSelection): Boolean =
         (source.token as? Uri)?.toString() == (output.token as? Uri)?.toString()
+
+    override fun shouldShowDonationPrompt(): Boolean =
+        preferences.getBoolean(DONATION_PROMPT_KEY, true)
+
+    override fun suppressDonationPrompt() {
+        preferences.edit().putBoolean(DONATION_PROMPT_KEY, false).apply()
+    }
+
+    override fun openExternalUrl(url: String) {
+        runCatching {
+            activity.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+        }
+    }
 
     private fun displayName(uri: Uri): String {
         val cursor: Cursor? = resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
@@ -137,5 +153,7 @@ class AndroidFileGateway(
 
     private companion object {
         const val COPY_BUFFER_SIZE = 1024 * 1024
+        const val PREFERENCES_NAME = "bbs-remix-preferences"
+        const val DONATION_PROMPT_KEY = "show-kofi-prompt"
     }
 }
