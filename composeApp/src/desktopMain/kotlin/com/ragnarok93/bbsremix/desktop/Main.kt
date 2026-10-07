@@ -8,7 +8,7 @@ import com.ragnarok93.bbsremix.ui.PatcherApp
 fun main() = application {
     Window(
         onCloseRequest = ::exitApplication,
-        title = "Birth By Sleep Final ReMix PSP ISO Patcher",
+        title = "Birth By Sleep - Final ReMix PSP ISO Patcher",
     ) {
         PatcherApp(fileGateway = DesktopFileGateway())
     }
