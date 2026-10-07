@@ -1,5 +1,5 @@
 {
-  "profile_sha256": "74d28a7d0de5dcb31f8f7a056eb3515722f6ff2aaa41bf397f33379fb66d5217",
+  "profile_sha256": "229902a8aa7d5bfcdcd481cb85fda2a50b80e626178c280f34d11a634841b724",
   "source_eboot_sha256": "8c8947e83b829199f82370c4c638856718886d9a0a525892fed22ce6a8b26ca7",
   "patched_eboot_sha256": null,
   "ppsspp_version": null,
@@ -24,27 +24,11 @@
         "result": "pending",
         "evidence_reference": null
       },
-      "guard_square_circle": {
-        "result": "pending",
-        "evidence_reference": null
-      },
-      "command_cancels": {
-        "result": "pending",
-        "evidence_reference": null
-      },
-      "critical_mode": {
-        "result": "pending",
-        "evidence_reference": null
-      },
       "scene_transitions": {
         "result": "pending",
         "evidence_reference": null
       },
       "save_load": {
-        "result": "pending",
-        "evidence_reference": null
-      },
-      "normal_combat_5_minutes": {
         "result": "pending",
         "evidence_reference": null
       }
@@ -66,27 +50,11 @@
         "result": "pending",
         "evidence_reference": null
       },
-      "guard_square_circle": {
-        "result": "pending",
-        "evidence_reference": null
-      },
-      "command_cancels": {
-        "result": "pending",
-        "evidence_reference": null
-      },
-      "critical_mode": {
-        "result": "pending",
-        "evidence_reference": null
-      },
       "scene_transitions": {
         "result": "pending",
         "evidence_reference": null
       },
       "save_load": {
-        "result": "pending",
-        "evidence_reference": null
-      },
-      "normal_combat_5_minutes": {
         "result": "pending",
         "evidence_reference": null
       }
@@ -108,27 +76,11 @@
         "result": "pending",
         "evidence_reference": null
       },
-      "guard_square_circle": {
-        "result": "pending",
-        "evidence_reference": null
-      },
-      "command_cancels": {
-        "result": "pending",
-        "evidence_reference": null
-      },
-      "critical_mode": {
-        "result": "pending",
-        "evidence_reference": null
-      },
       "scene_transitions": {
         "result": "pending",
         "evidence_reference": null
       },
       "save_load": {
-        "result": "pending",
-        "evidence_reference": null
-      },
-      "normal_combat_5_minutes": {
         "result": "pending",
         "evidence_reference": null
       }
