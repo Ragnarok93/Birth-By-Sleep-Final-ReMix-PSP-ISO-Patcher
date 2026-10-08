@@ -104,6 +104,17 @@ class Iso9660Reader(
         )
     }
 
+    /**
+     * Find a companion game archive by its ISO9660 path without staging it.
+     * Each caller must validate the exact archive and asset fingerprints.
+     */
+    fun findOptionalEntry(path: Path, image: IsoImageInfo, targetPath: String): IsoDirectoryEntry? {
+        require(targetPath.isNotBlank() && !targetPath.startsWith('/') &&
+            targetPath.split('/').all { it.isNotBlank() && it != "." && it != ".." })
+        return findTarget(path, image.root, image.sectorSize, targetPath, required = false)
+            ?.takeUnless { it.isDirectory }
+    }
+
     fun readEntry(path: Path, entry: IsoDirectoryEntry): ByteArray {
         if (entry.size > Int.MAX_VALUE) {
             throw IsoFormatException("ISO entry ${entry.path} is too large to stage safely.")
