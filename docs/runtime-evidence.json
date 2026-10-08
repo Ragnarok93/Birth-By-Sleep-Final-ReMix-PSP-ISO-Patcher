@@ -165,6 +165,7 @@
     "implementation": "resident MainApp frame-rate setter override at 0x088074B0",
     "runtime_mode_va": "0x09F25EC8",
     "runtime_scalar_va": "0x08B41870",
+    "ui": "single 60 FPS switch; off = stock 30 FPS, on = native 60 FPS",
     "targets": {
       "30": {
         "result": "pass_stock",
@@ -175,7 +176,9 @@
         "result": "pass",
         "timing_scalar": 1,
         "evidence_reference": "User runtime report: 60 FPS mode working correctly without PPSSPP cheat"
-      },
+      }
+    },
+    "retired_experiments": {
       "90": {
         "result": "runs_but_display_observed_at_60",
         "timing_scalar": 0.6666667,
@@ -195,11 +198,6 @@
         "evidence_reference": "User runtime screenshot/report: 120 FPS profile triggers early deadbeef root-thread crash and disc-read error"
       }
     },
-    "notes": "60 forces native mode 0 without CWCheat. 90/120 reuse mode 0 with 60/target timing scalar and may still be limited by PSP VBlank/PPSSPP presentation.",
-    "ppsspp_display_observation": {
-      "nominal_hle_refresh_hz": 59.9400599,
-      "source_note": "PPSSPP sceDisplayGetFramePerSec returns 59.9400599f; ISO-only timing scaling cannot by itself raise the emulated PSP display refresh.",
-      "implication": "90/120 timing-scalar profiles are research-only and are not validated >60 displayed-FPS modes."
-    }
+    "notes": "90/120 were removed from the product after runtime testing; only stock 30 and validated native 60 remain selectable."
   }
 }
