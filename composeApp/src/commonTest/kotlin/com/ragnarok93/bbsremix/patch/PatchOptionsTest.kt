@@ -17,8 +17,8 @@ class PatchOptionsTest {
         assertFalse(options.appliesCameraDistance)
         assertFalse(options.appliesCameraHeight)
         assertTrue(options.hasSelectedFeature)
-        assertEquals(4.0f, options.cameraDistance)
-        assertEquals(1.75f, options.cameraHeight)
+        assertEquals(2.0f, options.cameraDistance)
+        assertEquals(1.0f, options.cameraHeight)
         assertTrue(options.validate().isEmpty())
     }
 
@@ -86,6 +86,8 @@ class PatchOptionsTest {
         assertEquals(2.125f, PatchOptions.cameraHeightForLevel(4))
         assertEquals(2.5f, PatchOptions.cameraHeightForLevel(5))
 
+        assertEquals(1, PatchOptions.cameraDistanceLevel(PatchOptions().cameraDistance))
+        assertEquals(1, PatchOptions.cameraHeightLevel(PatchOptions().cameraHeight))
         assertEquals(3, PatchOptions.cameraDistanceLevel(4.0f))
         assertEquals(3, PatchOptions.cameraHeightLevel(1.75f))
         assertEquals(1.0f, PatchOptions.CAMERA_LEVEL_RANGE.start)
