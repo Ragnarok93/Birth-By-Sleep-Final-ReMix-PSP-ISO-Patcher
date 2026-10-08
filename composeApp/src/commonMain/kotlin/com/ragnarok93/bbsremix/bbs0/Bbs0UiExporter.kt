@@ -13,6 +13,8 @@ data class Bbs0UiExportResult(
     val externalLinks: Int,
     val layoutsExported: Int,
     val zipSize: Long,
+    val standaloneCtdLocated: Int = 0,
+    val standaloneCtdExported: Int = 0,
 )
 
 internal data class Bbs0ZipEntry(val name: String, val bytes: ByteArray)
@@ -82,6 +84,7 @@ object Bbs0UiExporter {
                 var arcCount = 0
                 val assets = mutableListOf<Candidate>()
                 val links = mutableListOf<String>()
+                val linkedCtd = mutableListOf<Bbs0IndexedCtd.Reference>()
                 var offset = indexLength
                 while (offset + 16 <= length) {
                     cancellation.throwIfCancelled()
@@ -94,6 +97,7 @@ object Bbs0UiExporter {
                             val table = read(offset, 16 + count * 32)
                             val pendingAssets = mutableListOf<Candidate>()
                             val pendingLinks = mutableListOf<String>()
+                            val pendingCtd = mutableListOf<Bbs0IndexedCtd.Reference>()
                             var valid = true
                             for (i in 0 until count) {
                                 val entry = 16 + i * 32
@@ -109,6 +113,9 @@ object Bbs0UiExporter {
                                 }
                                 if (table.u32(entry) != 0) {
                                     if (kind.isNotEmpty()) {
+                                        if (kind == "ctd") {
+                                            pendingCtd += Bbs0IndexedCtd.Reference(name, table.u32(entry))
+                                        }
                                         pendingLinks += jsonObj(
                                             "arc_offset" to offset.toString(),
                                             "name" to quote(name),
@@ -145,6 +152,7 @@ object Bbs0UiExporter {
                                 arcCount++
                                 assets.addAll(pendingAssets)
                                 links.addAll(pendingLinks)
+                                linkedCtd.addAll(pendingCtd)
                             }
                         }
                     }
@@ -152,9 +160,28 @@ object Bbs0UiExporter {
                     if (offset % (SECTOR * 1024) == 0L) progress(offset.coerceAtMost(length), length)
                 }
                 progress(length, length)
+                val ctd = Bbs0IndexedCtd.resolve(
+                    index, length, { offset, count -> read(offset, count) }, linkedCtd, cancellation,
+                )
                 val entries = mutableListOf(Bbs0ZipEntry("bbs0/index.bin", index))
                 val exported = mutableSetOf<Long>()
+                val exportedCtd = mutableSetOf<Long>()
                 var total = 0
+                if (!metadataOnly) {
+                    for (item in ctd.resources) {
+                        cancellation.throwIfCancelled()
+                        if (item.data.size > MAX_EXPORT - total ||
+                            item.offset in exportedCtd
+                        ) continue
+                        val name = item.name.replace(Regex("[^A-Za-z0-9_.-]"), "_")
+                        entries += Bbs0ZipEntry(
+                            "bbs0/ctd/" + item.offset.toString(16).padStart(8, '0') + "_" + name,
+                            item.data,
+                        )
+                        total += item.data.size
+                        exportedCtd += item.offset
+                    }
+                }
                 if (!metadataOnly) {
                     val sorted = assets.sortedWith(
                         compareByDescending<Candidate> { item ->
@@ -184,6 +211,8 @@ object Bbs0UiExporter {
                     append("\"index_sha256\":").append(quote(sha256Hex(index))).append(",\n")
                     append("\"arc_count\":").append(arcCount).append(",\n")
                     append("\"external_link_count\":").append(links.size).append(",\n")
+                    append("\"standalone_ctd_count\":").append(ctd.resources.size).append(",\n")
+                    append("\"standalone_ctd_exported\":").append(exportedCtd.size).append(",\n")
                     append("\"metadata_only\":").append(metadataOnly).append(",\n")
                     append("\"assets\":[\n")
                     assets.forEachIndexed { i, asset ->
@@ -194,6 +223,23 @@ object Bbs0UiExporter {
                             "size" to asset.size.toString(), "sha256" to quote(asset.sha),
                             "exported" to (asset.offset in exported).toString(),
                         ))
+                    }
+                    append("],\n\"standalone_ctds\":[\n")
+                    ctd.resources.forEachIndexed { i, item ->
+                        if (i != 0) append(",\n")
+                        append(jsonObj(
+                            "name" to quote(item.name),
+                            "directory_hash" to quote(item.directoryHash.toUInt().toString(16)),
+                            "offset" to item.offset.toString(),
+                            "size" to item.data.size.toString(),
+                            "sha256" to quote(item.sha256),
+                            "exported" to (item.offset in exportedCtd).toString(),
+                        ))
+                    }
+                    append("],\n\"unresolved_ctd_links\":[")
+                    ctd.unresolved.forEachIndexed { i, name ->
+                        if (i != 0) append(",")
+                        append(quote(name))
                     }
                     append("],\n\"links\":[\n")
                     links.forEachIndexed { i, item ->
@@ -208,6 +254,7 @@ object Bbs0UiExporter {
                 success = true
                 return Bbs0UiExportResult(
                     arcCount, assets.size, links.size, exported.size, fs.metadata(output).size ?: 0L,
+                    ctd.resources.size, exportedCtd.size,
                 )
             }
         } finally {

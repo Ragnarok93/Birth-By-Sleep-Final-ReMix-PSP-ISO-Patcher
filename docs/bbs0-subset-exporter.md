@@ -28,3 +28,20 @@ CTD entries, and it is not a substitute for eventual runtime PPSSPP validation.
 Try the full OpenKh BBSA index-0 extractor if an important resource is missing:
 [OpenKh.Command.Bbsa](https://github.com/OpenKH/OpenKh/tree/master/OpenKh.Command.Bbsa).
 Do not assume a download of BBS0.DAT from another game revision is compatible.
+
+## Linked CTD payload resolution
+
+The integrated exporter now reads the global BBSA directory records in the
+BBS0 index (OpenKh's 12-byte file-hash/info/folder-hash entries), matches
+ARC-linked `.ctd` references using CRC32 of the uppercase filename stem
+and exact folder hash, and resolves *BBS0-resident* physical sectors.
+Only validated `@CTD` version 1 payloads with bounded message/layout
+tables are exported into `bbs0/ctd/`. SHA-256, size and offset are recorded
+in `standalone_ctds`, while unresolved links are explicitly listed.
+`--metadata-only` excludes CTD payloads from ZIP as expected.
+References into BBS1–4, invalid magic and out-of-range offsets fail closed.
+
+For the seven CTD names in the supplied October 2026 export, the global
+BBSA index maps all seven to BBS0.DAT. The old ARC-only scanner could not
+retrieve them. Re-exporting with the updated app now includes those CTDs
+without transferring BBS0.DAT itself.

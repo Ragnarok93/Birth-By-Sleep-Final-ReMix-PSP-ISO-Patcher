@@ -456,7 +456,7 @@ fun PatcherApp(
                     withContext(Dispatchers.IO) {
                         fileGateway.commitOutput(temporary, target, token)
                     }
-                    bbs0Status = "Exported ${result.layoutsExported} UI layouts; indexed ${result.layoutsFound} across ${result.archiveCount} ARC archives and ${result.externalLinks} links. ZIP: ${target.displayName}."
+                    bbs0Status = "Exported ${result.layoutsExported} UI layouts and ${result.standaloneCtdExported} standalone CTDs; indexed ${result.layoutsFound} ARC layouts and ${result.standaloneCtdLocated} CTDs. ZIP: ${target.displayName}."
                     appendLog("BBS0 UI research ZIP exported to ${target.location}; ${result.layoutsFound} candidate layouts indexed.")
                 } finally {
                     fileGateway.deleteTemp(staged)
