@@ -3,9 +3,9 @@ package com.ragnarok93.bbsremix.patch
 data class PatchOptions(
     val rightStickCamera: Boolean = true,
     val cameraDistanceEnabled: Boolean = false,
-    val cameraDistance: Float = 4.5f,
+    val cameraDistance: Float = 4.0f,
     val cameraHeightEnabled: Boolean = false,
-    val cameraHeight: Float = 1.0f,
+    val cameraHeight: Float = 1.75f,
     val strictSteamExclusions: Boolean = false,
     val hitAwareCancels: Boolean = false,
     val invincibilityWindows: Boolean = false,
@@ -54,8 +54,36 @@ data class PatchOptions(
     }
 
     companion object {
-        val CAMERA_DISTANCE_RANGE: ClosedFloatingPointRange<Float> = 1.0f..12.0f
-        val CAMERA_HEIGHT_RANGE: ClosedFloatingPointRange<Float> = 0.0f..4.0f
+        val CAMERA_DISTANCE_RANGE: ClosedFloatingPointRange<Float> = 2.0f..6.0f
+        val CAMERA_HEIGHT_RANGE: ClosedFloatingPointRange<Float> = 1.0f..2.5f
+        val CAMERA_LEVEL_RANGE: ClosedFloatingPointRange<Float> = 1.0f..5.0f
+        const val CAMERA_LEVEL_STEPS = 3
+
+        private val CAMERA_DISTANCE_LEVEL_VALUES = floatArrayOf(2.0f, 3.0f, 4.0f, 5.0f, 6.0f)
+        private val CAMERA_HEIGHT_LEVEL_VALUES = floatArrayOf(1.0f, 1.375f, 1.75f, 2.125f, 2.5f)
+
+        fun cameraDistanceForLevel(level: Int): Float =
+            CAMERA_DISTANCE_LEVEL_VALUES[(level - 1).coerceIn(0, CAMERA_DISTANCE_LEVEL_VALUES.lastIndex)]
+
+        fun cameraHeightForLevel(level: Int): Float =
+            CAMERA_HEIGHT_LEVEL_VALUES[(level - 1).coerceIn(0, CAMERA_HEIGHT_LEVEL_VALUES.lastIndex)]
+
+        fun cameraDistanceLevel(value: Float): Int = nearestLevel(CAMERA_DISTANCE_LEVEL_VALUES, value)
+
+        fun cameraHeightLevel(value: Float): Int = nearestLevel(CAMERA_HEIGHT_LEVEL_VALUES, value)
+
+        private fun nearestLevel(values: FloatArray, value: Float): Int {
+            var bestIndex = 0
+            var bestDistance = kotlin.math.abs(values[0] - value)
+            for (index in 1..values.lastIndex) {
+                val distance = kotlin.math.abs(values[index] - value)
+                if (distance < bestDistance) {
+                    bestIndex = index
+                    bestDistance = distance
+                }
+            }
+            return bestIndex + 1
+        }
     }
 }
 
@@ -65,11 +93,11 @@ sealed class PatchOptionError(val message: String) {
     )
 
     data class CameraDistanceOutOfRange(val value: Float) : PatchOptionError(
-        "Camera distance must be between 1.0 and 12.0 (received $value)."
+        "Camera distance must be between 2.0 and 6.0 (received $value)."
     )
 
     data class CameraHeightOutOfRange(val value: Float) : PatchOptionError(
-        "Camera height must be between 0.0 and 4.0 (received $value)."
+        "Camera height must be between 1.0 and 2.5 (received $value)."
     )
 
     data object NoFeaturesSelected : PatchOptionError(
