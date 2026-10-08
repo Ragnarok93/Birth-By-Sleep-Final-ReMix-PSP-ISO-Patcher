@@ -50,6 +50,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
+import com.ragnarok93.bbsremix.bbs0.Bbs0UiExporter
 import com.ragnarok93.bbsremix.iso.IsoPatchResult
 import com.ragnarok93.bbsremix.iso.IsoPatchingService
 import com.ragnarok93.bbsremix.iso.IsoPreflight
@@ -107,6 +108,9 @@ fun PatcherApp(
         var preflight by remember { mutableStateOf<IsoPreflight?>(null) }
         var verification by remember { mutableStateOf<IsoVerificationResult?>(null) }
         var textureDestination by remember { mutableStateOf<PlatformDirectorySelection?>(null) }
+        var bbs0Source by remember { mutableStateOf<PlatformFileSelection?>(null) }
+        var bbs0MetadataOnly by remember { mutableStateOf(false) }
+        var bbs0Status by remember { mutableStateOf("Select BBS0.DAT to export its UI-layout index and assets.") }
         var includeRegionalButtonSwaps by remember { mutableStateOf(false) }
         var includeExtraHdPortraits by remember { mutableStateOf(false) }
         var textureStatus by remember { mutableStateOf("Select an ISO to identify its texture profile.") }
@@ -365,7 +369,11 @@ fun PatcherApp(
                     textureStatus = "Texture operation cancelled."
                     appendLog("$label cancelled.")
                 } catch (error: Exception) {
-                    textureStatus = "Texture operation failed: ${error.message ?: "The operation failed."}"
+                    if (label.contains("BBS0")) {
+                        bbs0Status = "BBS0 export failed: ${error.message ?: "The operation failed."}"
+                    } else {
+                        textureStatus = "Texture operation failed: ${error.message ?: "The operation failed."}"
+                    }
                     appendLog("$label failed: ${error.message ?: "The operation failed."}")
                 } finally {
                     if (activeJob == coroutineContext[Job]) {
@@ -387,6 +395,73 @@ fun PatcherApp(
                 textureDestination = selected
                 textureStatus = "Destination selected: ${selected.displayName}"
                 appendLog("Texture destination selected: ${selected.displayName}.")
+            }
+        }
+
+        fun selectBbs0Source() {
+            startTextureOperation("Select BBS0") {
+                val picked = fileGateway.pickBbs0Source() ?: run {
+                    bbs0Status = "BBS0 file selection cancelled."
+                    return@startTextureOperation
+                }
+                if (!picked.displayName.equals("BBS0.DAT", ignoreCase = true)) {
+                    bbs0Status = "Select the file named BBS0.DAT, not another game archive."
+                    appendLog("BBS0 selection rejected: ${picked.displayName}.")
+                    return@startTextureOperation
+                }
+                bbs0Source = picked
+                bbs0Status = "Selected ${picked.displayName}. Ready for local UI export."
+                appendLog("BBS0 source selected: ${picked.displayName}.")
+            }
+        }
+
+        fun exportBbs0Ui() {
+            val selectedSource = bbs0Source ?: return
+            startTextureOperation("Export BBS0 UI") { token ->
+                val target = fileGateway.pickOutput(if (bbs0MetadataOnly) "bbs0-index.zip" else "bbs0-ui.zip")
+                    ?: run {
+                        bbs0Status = "BBS0 export destination selection cancelled."
+                        return@startTextureOperation
+                    }
+                if (fileGateway.isSameSourceAndOutput(selectedSource, target)) {
+                    throw IllegalArgumentException("BBS0 export cannot overwrite the source archive.")
+                }
+                if (!target.displayName.endsWith(".zip", ignoreCase = true)) {
+                    throw IllegalArgumentException("The BBS0 export filename must end in .zip.")
+                }
+                val staged = fileGateway.createTempPath("bbs0-source", ".dat")
+                val temporary = fileGateway.createTempPath("bbs0-ui-export", ".zip")
+                try {
+                    bbs0Status = "Copying BBS0 into a private workspace; sufficient temporary storage is required."
+                    withContext(Dispatchers.IO) {
+                        fileGateway.stageSource(selectedSource, staged, token, ProgressReporter { value ->
+                            scope.launch {
+                                if (activeOperation == "Export BBS0 UI") {
+                                    bbs0Status = "Copying BBS0: ${formatTextureSize(value.completed)} / ${formatTextureSize(value.total)}"
+                                }
+                            }
+                        })
+                    }
+                    bbs0Status = "Inspecting the archive index and embedded UI layouts."
+                    val result = withContext(Dispatchers.Default) {
+                        Bbs0UiExporter.export(staged, temporary, bbs0MetadataOnly, token) { done, total ->
+                            scope.launch {
+                                if (activeOperation == "Export BBS0 UI") {
+                                    bbs0Status = "Scanning BBS0: ${formatTextureSize(done)} / ${formatTextureSize(total)}"
+                                }
+                            }
+                        }
+                    }
+                    bbs0Status = "Saving ZIP to selected destination."
+                    withContext(Dispatchers.IO) {
+                        fileGateway.commitOutput(temporary, target, token)
+                    }
+                    bbs0Status = "Exported ${result.layoutsExported} UI layouts; indexed ${result.layoutsFound} across ${result.archiveCount} ARC archives and ${result.externalLinks} links. ZIP: ${target.displayName}."
+                    appendLog("BBS0 UI research ZIP exported to ${target.location}; ${result.layoutsFound} candidate layouts indexed.")
+                } finally {
+                    fileGateway.deleteTemp(staged)
+                    fileGateway.deleteTemp(temporary)
+                }
             }
         }
 
@@ -449,6 +524,7 @@ fun PatcherApp(
         val busy = activeJob != null
         val textureProfile = TextureProfileCatalog.find(preflight?.image?.discSerial)
         val textureOperationBusy = activeOperation == "Choose Texture Destination" || activeOperation == "Install HD Textures"
+        val bbs0OperationBusy = activeOperation == "Select BBS0" || activeOperation == "Export BBS0 UI"
 
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
             PatcherBackground(Modifier.fillMaxSize())
@@ -484,6 +560,13 @@ fun PatcherApp(
                                 destination = textureDestination,
                                 includeRegionalButtonSwaps = includeRegionalButtonSwaps,
                                 includeExtraHdPortraits = includeExtraHdPortraits,
+                                bbs0Source = bbs0Source,
+                                bbs0MetadataOnly = bbs0MetadataOnly,
+                                bbs0Status = bbs0Status,
+                                bbs0Busy = bbs0OperationBusy,
+                                onPickBbs0 = ::selectBbs0Source,
+                                onBbs0MetadataOnlyChanged = { bbs0MetadataOnly = it },
+                                onExportBbs0 = ::exportBbs0Ui,
                                 statusText = textureStatus,
                                 progress = textureProgress,
                                 busy = busy,
@@ -543,6 +626,13 @@ fun PatcherApp(
                                 destination = textureDestination,
                                 includeRegionalButtonSwaps = includeRegionalButtonSwaps,
                                 includeExtraHdPortraits = includeExtraHdPortraits,
+                                bbs0Source = bbs0Source,
+                                bbs0MetadataOnly = bbs0MetadataOnly,
+                                bbs0Status = bbs0Status,
+                                bbs0Busy = bbs0OperationBusy,
+                                onPickBbs0 = ::selectBbs0Source,
+                                onBbs0MetadataOnlyChanged = { bbs0MetadataOnly = it },
+                                onExportBbs0 = ::exportBbs0Ui,
                                 statusText = textureStatus,
                                 progress = textureProgress,
                                 busy = busy,
@@ -711,6 +801,13 @@ private fun HdTexturesPage(
     destination: PlatformDirectorySelection?,
     includeRegionalButtonSwaps: Boolean,
     includeExtraHdPortraits: Boolean,
+    bbs0Source: PlatformFileSelection?,
+    bbs0MetadataOnly: Boolean,
+    bbs0Status: String,
+    bbs0Busy: Boolean,
+    onPickBbs0: () -> Unit,
+    onBbs0MetadataOnlyChanged: (Boolean) -> Unit,
+    onExportBbs0: () -> Unit,
     statusText: String,
     progress: TextureInstallProgress?,
     busy: Boolean,
@@ -825,6 +922,52 @@ private fun HdTexturesPage(
                 )
                 if (textureOperationBusy) {
                     TextButton(onClick = onCancel) { Text("Cancel") }
+                }
+            }
+        }
+        PatcherSurface(Modifier.fillMaxWidth()) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("BBS0 UI research export", style = MaterialTheme.typography.titleLarge)
+                Text(
+                    "Export a compact ZIP of UI layouts and the archive index. " +
+                        "Uses your own BBS0.DAT locally; the game archive is not changed or uploaded. " +
+                        "This is separate from HD texture installation and ISO patching.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    bbs0Source?.displayName ?: "No BBS0.DAT selected.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                PatcherButton(
+                    label = if (bbs0Source == null) "Select BBS0.DAT" else "Change BBS0.DAT",
+                    onClick = onPickBbs0,
+                    enabled = !busy,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                PatcherCheckbox(
+                    label = "Index + manifest only (smaller ZIP)",
+                    checked = bbs0MetadataOnly,
+                    onCheckedChange = onBbs0MetadataOnlyChanged,
+                    enabled = !busy,
+                )
+                Text(
+                    "Full export includes up to 12 MiB of UI resources. " +
+                        "Android temporarily copies BBS0 to private storage, so sufficient free space is required.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                PatcherButton(
+                    label = "Export BBS0 UI ZIP…",
+                    onClick = onExportBbs0,
+                    enabled = bbs0Source != null && !busy,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Text(bbs0Status, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (bbs0Busy) {
+                    PatcherIndeterminateProgress(Modifier.fillMaxWidth())
+                    TextButton(onClick = onCancel) { Text("Cancel export") }
                 }
             }
         }

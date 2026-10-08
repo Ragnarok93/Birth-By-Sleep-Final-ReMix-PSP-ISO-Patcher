@@ -40,6 +40,17 @@ class DesktopFileGateway(
         PlatformFileSelection(path.name, path.absolutePath, path.absolutePath.toPath())
     }
 
+    override suspend fun pickBbs0Source(): PlatformFileSelection? = withContext(Dispatchers.Main) {
+        val dialog = FileDialog(null as Frame?, "Select BBS0.DAT from your PSP game", FileDialog.LOAD)
+        dialog.filenameFilter = java.io.FilenameFilter { _, name ->
+            name.equals("BBS0.DAT", ignoreCase = true)
+        }
+        dialog.isVisible = true
+        val file = dialog.file ?: return@withContext null
+        val path = File(dialog.directory, file).absoluteFile
+        PlatformFileSelection(path.name, path.absolutePath, path.absolutePath.toPath())
+    }
+
     override suspend fun pickOutput(suggestedName: String): PlatformOutputSelection? = withContext(Dispatchers.Main) {
         val dialog = FileDialog(null as Frame?, "Save output file", FileDialog.SAVE)
         dialog.file = suggestedName

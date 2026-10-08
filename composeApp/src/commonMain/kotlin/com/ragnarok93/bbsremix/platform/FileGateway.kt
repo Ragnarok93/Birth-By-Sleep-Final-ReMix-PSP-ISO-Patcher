@@ -29,6 +29,9 @@ class PlatformDirectorySelection internal constructor(
 interface FileGateway {
     suspend fun pickSource(): PlatformFileSelection?
 
+    /** Select the game's BBS0.DAT for a local, non-patching UI research export. */
+    suspend fun pickBbs0Source(): PlatformFileSelection?
+
     suspend fun pickOutput(suggestedName: String): PlatformOutputSelection?
 
     suspend fun pickTextureDestination(): PlatformDirectorySelection?

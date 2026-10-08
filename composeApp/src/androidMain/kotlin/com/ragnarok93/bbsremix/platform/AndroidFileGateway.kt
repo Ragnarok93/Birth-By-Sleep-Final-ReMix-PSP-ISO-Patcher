@@ -38,6 +38,7 @@ class AndroidFileGateway(
     private val preferences = activity.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
 
     private var sourceContinuation: kotlinx.coroutines.CancellableContinuation<PlatformFileSelection?>? = null
+    private var bbs0Continuation: kotlinx.coroutines.CancellableContinuation<PlatformFileSelection?>? = null
     private var outputContinuation: kotlinx.coroutines.CancellableContinuation<PlatformOutputSelection?>? = null
     private var textureDestinationContinuation: kotlinx.coroutines.CancellableContinuation<PlatformDirectorySelection?>? = null
 
@@ -45,6 +46,13 @@ class AndroidFileGateway(
         ActivityResultContracts.OpenDocument(),
     ) { uri ->
         val continuation = sourceContinuation.also { sourceContinuation = null }
+        continuation?.resume(uri?.let { PlatformFileSelection(displayName(it), it.toString(), it) })
+    }
+
+    private val bbs0Launcher = activity.registerForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        val continuation = bbs0Continuation.also { bbs0Continuation = null }
         continuation?.resume(uri?.let { PlatformFileSelection(displayName(it), it.toString(), it) })
     }
 
@@ -68,6 +76,12 @@ class AndroidFileGateway(
         sourceContinuation = continuation
         continuation.invokeOnCancellation { if (sourceContinuation === continuation) sourceContinuation = null }
         sourceLauncher.launch(arrayOf("application/x-cd-image", "application/octet-stream", "*/*"))
+    }
+
+    override suspend fun pickBbs0Source(): PlatformFileSelection? = suspendCancellableCoroutine { continuation ->
+        bbs0Continuation = continuation
+        continuation.invokeOnCancellation { if (bbs0Continuation === continuation) bbs0Continuation = null }
+        bbs0Launcher.launch(arrayOf("*/*"))
     }
 
     override suspend fun pickOutput(suggestedName: String): PlatformOutputSelection? = suspendCancellableCoroutine { continuation ->
@@ -106,7 +120,7 @@ class AndroidFileGateway(
     ) {
         val uri = source.token as? Uri ?: throw FileGatewayException("The Android source selection is invalid.")
         val total = resolver.openAssetFileDescriptor(uri, "r")?.use { it.length }?.takeIf { it >= 0L } ?: 0L
-        val input = resolver.openInputStream(uri) ?: throw FileGatewayException("Unable to open the selected ISO.")
+        val input = resolver.openInputStream(uri) ?: throw FileGatewayException("Unable to open the selected source file.")
         try {
             fileSystem.sink(destination, mustCreate = true).buffer().use { output ->
                 val buffer = ByteArray(COPY_BUFFER_SIZE)
@@ -118,7 +132,7 @@ class AndroidFileGateway(
                     if (read == 0) continue
                     output.write(buffer, 0, read)
                     completed += read
-                    progress.report(PatchProgress(PatchPhase.STAGING_EBOOT, completed, total, "Copying ISO to private workspace"))
+                    progress.report(PatchProgress(PatchPhase.STAGING_EBOOT, completed, total, "Copying source file to private workspace"))
                 }
             }
         } finally {
