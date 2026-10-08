@@ -678,12 +678,12 @@ private fun PageHeader() {
             fontWeight = FontWeight.SemiBold,
         )
         Text(
-            text = "PSP-native FPS and camera mods are ready for runtime testing.",
+            text = "PSP-native 60 FPS and camera mods are ready for runtime testing.",
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.primary,
         )
         Text(
-            text = "Right-stick, camera distance, and camera height are working in runtime tests. 60 FPS now uses the resident native frame-rate setter; 90/120 FPS are exposed as experimental timing profiles. ELF program headers and the dynamic overlay arena remain untouched. Combat mods stay disabled.",
+            text = "Right-stick, camera distance, camera height, and native 60 FPS are working in runtime tests. The frame-rate switch simply toggles stock 30 FPS versus the validated native 60 FPS path. ELF program headers and the dynamic overlay arena remain untouched. Combat mods stay disabled.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -1055,15 +1055,19 @@ private fun OptionsCard(
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("3. Patch Options", style = MaterialTheme.typography.titleLarge)
             Text(
-                "FPS selection and the resident PSP-native camera mods are available for runtime testing. 60 FPS uses the game's native high-frame-rate path; 90/120 FPS are experimental. Combat mods remain unavailable.",
+                "60 FPS and the resident PSP-native camera mods are available for runtime testing. Leave 60 FPS off for the stock 30 FPS behavior. Combat mods remain unavailable.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
-            FrameRateSetting(
-                targetFps = options.fpsTarget,
+            FeatureToggle(
+                title = "60 FPS",
+                description = "Off = stock 30 FPS. On = native 60 FPS mode without a PPSSPP cheat.",
+                checked = options.fpsTarget == 60,
                 enabled = !busy,
-                onTargetChanged = { onOptionsChanged(options.copy(fpsTarget = it)) },
+                onCheckedChange = { enabled ->
+                    onOptionsChanged(options.copy(fpsTarget = if (enabled) 60 else 30))
+                },
             )
 
             FeatureToggle(
@@ -1249,53 +1253,6 @@ private fun ExpandableRow(
             )
         }
         Text(if (expanded) "⌃" else "⌄", style = MaterialTheme.typography.titleLarge)
-    }
-}
-
-@Composable
-private fun FrameRateSetting(
-    targetFps: Int,
-    enabled: Boolean,
-    onTargetChanged: (Int) -> Unit,
-) {
-    val title = when (targetFps) {
-        30 -> "30 FPS · Stock"
-        60 -> "60 FPS"
-        90 -> "90 FPS · Experimental · 60Hz limited"
-        120 -> "120 FPS · Experimental · Unsafe"
-        else -> "$targetFps FPS"
-    }
-    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("Frame Rate", style = MaterialTheme.typography.bodyMedium)
-            Spacer(Modifier.weight(1f))
-            Text(
-                title,
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary,
-            )
-        }
-        PatcherSlider(
-            value = targetFps.toFloat(),
-            onValueChange = {
-                val snapped = (kotlin.math.round(it / 30f).toInt() * 30).coerceIn(30, 120)
-                onTargetChanged(snapped)
-            },
-            valueRange = 30f..120f,
-            steps = 2,
-            enabled = enabled,
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Text(
-            when (targetFps) {
-                30 -> "Original game frame-rate behavior."
-                60 -> "Forces the game's native 60 FPS mode without a PPSSPP cheat."
-                90 -> "Research profile. Runtime testing reaches the native 60 FPS path, but PPSSPP's emulated PSP display remains about 59.94 Hz, so no >60 displayed-frame gain has been observed."
-                else -> "Unsafe research profile. The 0.5 timing-scale test caused an early root-thread deadbeef/disc-read failure; keep this only for controlled investigation."
-            },
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
     }
 }
 
