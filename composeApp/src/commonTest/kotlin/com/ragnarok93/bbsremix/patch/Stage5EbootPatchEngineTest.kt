@@ -209,6 +209,53 @@ class Stage5EbootPatchEngineTest {
     }
 
     @Test
+    fun camera_geometry_copier_overrides_only_selected_components() {
+        val heightOnly = PspNativeCameraGeometryPatch.patchedCopyRoutine(
+            PatchOptions(
+                rightStickCamera = false,
+                cameraHeightEnabled = true,
+                cameraHeight = 1.2f,
+            ),
+        ).toList()
+        val distanceOnly = PspNativeCameraGeometryPatch.patchedCopyRoutine(
+            PatchOptions(
+                rightStickCamera = false,
+                cameraDistanceEnabled = true,
+                cameraDistance = 5.0f,
+            ),
+        ).toList()
+        val combined = PspNativeCameraGeometryPatch.patchedCopyRoutine(
+            PatchOptions(
+                rightStickCamera = false,
+                cameraHeightEnabled = true,
+                cameraHeight = 1.2f,
+                cameraDistanceEnabled = true,
+                cameraDistance = 5.0f,
+            ),
+        ).toList()
+
+        assertTrue(0xAC480024.toInt() in heightOnly)
+        assertTrue(0xAC480054.toInt() in heightOnly)
+        assertTrue(0xAC480028.toInt() !in heightOnly)
+        assertTrue(0xAC480058.toInt() !in heightOnly)
+
+        assertTrue(0xAC480028.toInt() in distanceOnly)
+        assertTrue(0xAC480058.toInt() in distanceOnly)
+        assertTrue(0xAC480024.toInt() !in distanceOnly)
+        assertTrue(0xAC480054.toInt() !in distanceOnly)
+
+        assertTrue(0xAC480024.toInt() in combined)
+        assertTrue(0xAC480054.toInt() in combined)
+        assertTrue(0xAC480028.toInt() in combined)
+        assertTrue(0xAC480058.toInt() in combined)
+
+        assertEquals(0x00801025, combined[0])
+        assertEquals(0x3408001C, combined[1])
+        assertEquals(0x1500FFFA, combined[7])
+        assertEquals(PspNativeCameraGeometryPatch.CAMERA_COPY_ROUTINE_SIZE / 4, combined.size)
+    }
+
+    @Test
     fun right_stick_profile_verifies_without_a_legacy_overlay_payload() {
         val options = PatchOptions()
         val image = ByteArray(3_589_832)
@@ -264,6 +311,12 @@ class Stage5EbootPatchEngineTest {
         )
         image.writeFloatLe(PspNativeCameraGeometryPatch.MODE1_RECORD_VA + 0x1C - VA_FILE_DELTA, 1.0f)
         image.writeFloatLe(PspNativeCameraGeometryPatch.MODE2_RECORD_VA + 0x1C - VA_FILE_DELTA, 1.0f)
+        PspNativeCameraGeometryPatch.originalCopyRoutineWords().forEachIndexed { index, word ->
+            image.writeIntLe(
+                PspNativeCameraGeometryPatch.CAMERA_COPY_ROUTINE_VA - VA_FILE_DELTA + index * 4,
+                word,
+            )
+        }
     }
 
     private fun branchTarget(pc: Int, instruction: Int): Int {
