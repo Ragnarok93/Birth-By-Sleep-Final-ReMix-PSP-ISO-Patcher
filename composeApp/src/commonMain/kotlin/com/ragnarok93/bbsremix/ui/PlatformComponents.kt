@@ -102,6 +102,16 @@ expect fun PatcherSlider(
 )
 
 @Composable
+expect fun PatcherLevelSlider(
+    level: Int,
+    onLevelChange: (Int) -> Unit,
+    minLevel: Int = 1,
+    maxLevel: Int = 5,
+    enabled: Boolean,
+    modifier: Modifier = Modifier,
+)
+
+@Composable
 expect fun PatcherIndeterminateProgress(modifier: Modifier = Modifier)
 
 @Composable
