@@ -154,3 +154,20 @@ change ELF program-header count or LOAD sizes. Runtime testing now confirms that
 Output checks structure and bytes; gameplay validation remains separate. See
 [PSP-native gameplay port restart](docs/psp-native-port-restart.md) and
 [Runtime remediation](docs/runtime-remediation.md).
+
+## In-app BBS0 UI export
+
+The **HD Textures** page includes a separate **BBS0 UI research export** card
+(Android, Windows, Linux and macOS). Select an existing `BBS0.DAT` using a file
+picker, optionally enable **Index + manifest only** for a smaller ZIP, and
+choose the export destination. This does not patch the ISO or modify the DAT.
+
+The app exports a compact `bbs0-ui.zip` containing the BBSA index, a JSON
+manifest of validated ARC-embedded `.l2d` / `.ctd` resources, and up to
+12 MiB of matching research assets. ARC links are recorded but not resolved;
+some subtitle resources may remain absent. For portability, Android first
+copies the source DAT into private temporary storage, which requires free space
+roughly equal to its size. Temporary data is deleted after completion or
+cancellation. Files are never uploaded automatically.
+
+The standalone Python exporter remains available for command-line use.
