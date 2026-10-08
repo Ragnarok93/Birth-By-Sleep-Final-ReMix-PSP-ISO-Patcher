@@ -49,18 +49,24 @@ For application validation:
 
 1. Run **Diagnostic rebuild** first. The app must report the complete output ISO
    byte-identical to the staged source. Boot that ISO in PPSSPP.
-2. Create a **right-stick-only** Patch ISO output.
-3. Use PPSSPP with cheats/plugins off and CPU clock at default while isolating
-   this candidate.
-4. Bind the physical second stick to **Right Analog X/Y**.
-5. Confirm normal left-stick movement is unchanged and the right stick controls
-   free/lock-on camera.
-6. Exercise title -> load -> gameplay -> room transitions -> save/load for Terra,
-   Ventus, and Aqua. Record PPSSPP version, device, patched EBOOT hash, and any
-   crash PC/RA in `docs/runtime-evidence.json`.
+2. Create isolated Patch ISO outputs for **60 FPS**, **90 FPS**, and **120 FPS**
+   with camera mods disabled. Keep PPSSPP cheats/plugins off and CPU clock at
+   default. Record both PPSSPP's reported game FPS and host/display FPS.
+3. Validate 60 FPS first. It should reproduce the known native high-frame-rate
+   behavior without CWCheat.
+4. Treat 90/120 as experimental. Check whether PPSSPP actually presents more
+   than 60 unique game frames; separately check gameplay speed, animation,
+   command timing, physics, menus, cutscenes, and audio synchronization.
+5. Validate right-stick, distance, and height independently and then combined
+   with the confirmed FPS profile. Bind the physical second stick to
+   **Right Analog X/Y** when right-stick camera is selected.
+6. Exercise title -> load -> gameplay -> room transitions -> lock-on -> save/load
+   for Terra, Ventus, and Aqua. Record PPSSPP version, device, patched EBOOT
+   hash, selected FPS target, and any crash PC/RA in
+   `docs/runtime-evidence.json`.
 
-Camera distance/height and all Better Battle System combat options remain
-disabled until their PSP-native re-derivation is independently validated.
+Better Battle System combat options remain disabled until their PSP-native
+re-derivation is independently validated.
 
 The fixture must remain outside Git. The repository does not contain game binaries,
 ISO images, encryption keys, or a release copy of the fixture.
