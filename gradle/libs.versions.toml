@@ -5,7 +5,7 @@ compose = "1.8.2"
 coroutines = "1.10.2"
 okio = "3.15.0"
 activityCompose = "1.10.1"
-oneuiCompose = "1fe97b4e5a4ad559a7252376fad650a64310b229"
+oneuiCompose = "7fc5248187f4833f8ba9138c9d0549be04b63cb9"
 desugarJdkLibs = "2.1.5"
 junit = "4.13.2"
 
