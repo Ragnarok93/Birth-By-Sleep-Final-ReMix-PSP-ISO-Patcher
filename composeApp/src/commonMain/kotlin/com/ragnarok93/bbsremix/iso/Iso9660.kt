@@ -128,9 +128,10 @@ class Iso9660Reader(
     internal fun readAt(path: Path, offset: Long, size: Int): ByteArray {
         if (offset < 0L || size < 0) throw IsoFormatException("Invalid ISO read range.")
         return try {
-            fileSystem.source(path).buffer().use { source ->
-                source.skip(offset)
-                source.readByteArray(size.toLong())
+            fileSystem.openReadOnly(path).use { handle ->
+                handle.source(offset).buffer().use { source ->
+                    source.readByteArray(size.toLong())
+                }
             }
         } catch (error: Exception) {
             throw IsoFormatException("Unable to read ISO range at $offset ($size bytes): ${error.message}")
@@ -408,9 +409,10 @@ class Iso9660Rebuilder(
 
     private fun readPatchPreimage(source: Path, patch: IsoBytePatch): ByteArray =
         try {
-            fileSystem.source(source).buffer().use { input ->
-                input.skip(patch.absoluteOffset)
-                input.readByteArray(patch.expected.size.toLong())
+            fileSystem.openReadOnly(source).use { handle ->
+                handle.source(patch.absoluteOffset).buffer().use { input ->
+                    input.readByteArray(patch.expected.size.toLong())
+                }
             }
         } catch (error: Exception) {
             throw IsoFormatException("Failed to verify ISO overlay ${patch.label}: ${error.message}")

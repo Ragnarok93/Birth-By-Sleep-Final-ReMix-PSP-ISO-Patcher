@@ -84,8 +84,8 @@ internal object UiScalePatchPlanner {
         var changed = 0
         for (element in UiScaleElement.entries) {
             val percent = options.uiScaling[element]
+            if (percent == 100) continue
             if (element == UiScaleElement.SUBTITLES) {
-                if (percent == 100) continue
                 val ctd = BbsCtdLayoutCatalog.subtitleCandidate
                 val entry = reader.findOptionalEntry(iso, image, "PSP_GAME/USRDIR/BBS0.DAT")
                     ?: return false to "BBS0.DAT is missing."

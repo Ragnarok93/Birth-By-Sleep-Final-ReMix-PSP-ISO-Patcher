@@ -48,8 +48,6 @@ internal object BbsUiLayoutCatalog {
             117104L, 41088, "52622079cf63f7d2b66557c5bac49a4085022b5d1d869b9f7d32ccee661da759"),
         Candidate(UiScaleElement.COMBAT_HUD, "BBS1.DAT", BBS1_SIZE, "info_up_00.l2d",
             6127184L, 21696, "ad8fdbefc2b347ddf72cc16d23794c977ed9996db31af9ae767c1a8ea18810cd"),
-        Candidate(UiScaleElement.COMBAT_HUD, "BBS1.DAT", BBS1_SIZE, "map_00.l2d",
-            6119536L, 1440, "c42ed90ed5a9942eea0e7949072dfa3c2e72cfcca3750c5f9cbcd14653bc756d"),
         Candidate(UiScaleElement.COMBAT_HUD, "BBS1.DAT", BBS1_SIZE, "s_cursor.l2d",
             23001328L, 21488, "1dd134efcb8f71c1944e9526045e3e9372ebb3756d1928308d5f2d2c2b541573"),
         Candidate(UiScaleElement.COMBAT_HUD, "BBS1.DAT", BBS1_SIZE, "iw_00.l2d",
