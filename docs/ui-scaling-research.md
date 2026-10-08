@@ -1,8 +1,13 @@
-# PSP L2D UI scaling — archive research and safety gate
+# PSP L2D/CTD experimental UI scaling — source audit and runtime limitations
 
-This is an **asset-analysis and geometry-editor milestone**, not yet a finished
-gameplay scaling feature. Do not expose the editor as a production ISO patch
-until end-to-end runtime testing proves every affected overlay works.
+**Implementation status:** non-stock scale selections now generate real
+source-fingerprinted, size-preserving DAT overlays through the ISO rebuild
+pipeline. The app authenticates replacement bytes after rebuilding, while
+the single-file Verify Output mode reports only structural verification.
+No end-to-end PPSSPP presentation validation is claimed.
+
+This is a selectable **experimental** feature. It is not yet a guarantee that
+all animation, anchor, text, scissor and input geometry will scale correctly.
 
 ## Primary references
 
@@ -24,8 +29,7 @@ identical to their encrypted retail-ISO counterparts):
 
 These files begin with a sector-sized wrapper marked `bbs1.dat` etc.,
 not an OpenKh `bbsa` index header; raw ARC payloads and L2D data are readable.
-The absent `BBS0.DAT` is still needed to resolve common assets, archive indices,
-and gameplay HUD completeness. OpenKh notes that common files are in BBS0
+The matching BBS0 archive index and seven linked CTDs were subsequently supplied and independently verified. The full BBS0 data file was not transferred. OpenKh notes that common files are in BBS0
 and that BBS1/2/3 may be protected using PSP PDG encryption.
 
 ### Candidate layouts requiring visual/in-game classification
@@ -50,7 +54,7 @@ the combat Command Deck without gameplay validation.
 All 69 CTD references identified by the sector-aligned ARC scan are *links*
 (BBS1: 49, BBS2: 1, BBS3: 19), not embedded CTD assets. The actual dialogue
 and subtitle layout tables are therefore unavailable in these three supplied
-DATs. The BBS0 archive/index is needed for that part of the feature.
+DATs. The BBS0 index and seven linked CTD payloads have since been verified.
 
 **Never assume matching prefixes uniquely establish UI function.**
 All offsets above are within the supplied DAT files, not ISO-relative offsets.
@@ -69,24 +73,19 @@ at 100%, the output was byte-identical to source. This is *not runtime
 validation*: SQ2 animation keyframes, font/CTD sizes, clipping/scissor handling,
 anchor repositioning, dynamic gauge geometry and input hit regions are not yet
 mapped, so scaling only these fields may yield misalignment or visual bugs.
-No game asset binaries have been committed to the repository.
+No game asset binaries have been committed to the repository. Source-fingerprinted overlays now use the verified layouts in the experimental ISO patch path.
 
-## Remaining release gate
+## Remaining production-stability gate (experimental patching already connected)
 
-1. Obtain `BBS0.DAT` from the same supported game revision and, separately,
-   its decrypted supported `EBOOT.BIN` (or a lawful ISO containing it) for
-   renderer/asset lookup and profile verification.
+1. Validate the already identified BBS0 index and CTD data against a matched English-patched game ISO during ISO reconstruction; no second bulk upload is required.
 2. Classify every HUD/Deck/gauge/portrait/Shotlock/menu/subtitle asset by matched
    PPSSPP captures. Examine CTD (font positions and sizes).
 3. Re-derive the SQ2 animation key kinds and transforms, including texture UV
    invariants, clipping, centered coordinates and component anchors.
-4. Connect the completed low-memory ISO `IsoBytePatch` overlay primitive to
-   the identified DAT entries using exact L2D/ARC hashes, game-version guards
-   and post-rebuild verification of changed output spans.
+4. [Implemented experimentally] The low-memory `IsoBytePatch` pipeline now authenticates selected DAT layout sources, applies in-place replacements and verifies output spans.
 5. Validate repeated tests at 70, 75, 80, 85, 90, 95 and 100%, with the
    game's stock textures AND PPSSPP HD replacement profile.
-6. Enable category sliders only when the category's complete required resource
-   set and runtime behavior have been confirmed. Fail closed otherwise.
+6. Keep the sliders clearly labeled experimental until all required resources and in-game renderer behavior have been confirmed. Fail closed on mismatched inputs.
 
 ## Verified BBS0 linked CTD export (October 8, 2026)
 
@@ -111,8 +110,7 @@ The new `BbsCtdGeometry` research helper supports 70–100% (5% increments)
 for centered Subtitle-style CTD rows, retaining their horizontal center,
 bottom edge, existing message bytes, attributes and non-subtitle layouts.
 `BbsCtdLayoutCatalog` contains source-specific offsets and fingerprints
-for guarded experimental overlay planning; **neither helper is wired into
-shipping ISO patching**.
+for guarded experimental overlay planning; **both helpers are now wired into experimental ISO patching**, with strict source verification; gameplay behavior is not yet guaranteed.
 
 **Coverage warning:** The BBS0 global directory has 15,093 indexed file
 entries, including **492 BBS0-resident entries in message-category ranges

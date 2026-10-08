@@ -53,24 +53,33 @@ The current PSP-native profile exposes a **60 FPS switch** plus three independen
 The UI exposes only integer camera levels `1–5`, with **level 1 as the default for both sliders**. Internally, distance levels map to `2.0, 3.0, 4.0, 5.0, 6.0`; height levels map to `1.0, 1.375, 1.75, 2.125, 2.5`. The raw values are patch-engine details and are not shown by the sliders. The engine refuses unsupported size/hash, ELF program-header layout, occupied code caves, unexpected instruction bytes, invalid option values, malformed ISO directory records, ambiguous target paths, and output validation mismatches.
 
 
-## UI scaling status (research preview)
+## UI scaling (experimental ISO resource patches)
 
-The Setup page now includes independent 70–100% UI-scale selectors in 5% steps for the
-combat HUD, Command Deck, HP/Focus/D-Link gauges, portraits, Shotlock, menus,
-and subtitles. Each starts at stock 100%. The scale selections are currently a
-**non-patching preview**: any non-stock selection blocks ISO patching with an
-explicit error, rather than pretending the UI changed or writing unknown PSP
-memory offsets. Reset all UI scales to 100% to use the validated FPS/camera
-patches. Diagnostic rebuild remains an unmodified source comparison.
+The Setup page has independent 70–100% controls in 5% steps (stock 100%)
+for combat HUD, Command Deck, HP/Focus/D-Link gauges, portraits, Shotlock,
+menus, and subtitles. Selecting a non-stock value now **generates real,
+same-size UI resource edits in the output ISO** through the existing
+`IsoBytePatch` pipeline, alongside any selected FPS/camera EBOOT edits.
 
-The current ISO pipeline only replaces `EBOOT.BIN`; the game's UI layouts and
-animations may live in packed `.l2d` assets inside ARC/BBSA game archives.
-Before enabling a real scaling patch, verify the exact English-patched PSP
-resource hashes, individual render/layout anchors, text clipping, and dynamic
-layout dependencies, then add safe modification + output checks for any
-affected ISO entries. Scaling must transform geometry while leaving texture
-pixels, UVs, and PPSSPP replacement IDs untouched. Matching PPSSPP capture
-and stock-texture tests are required; no scaling runtime validation is claimed.
+The catalog covers selected, source-fingerprinted `.l2d` files inside
+`BBS0.DAT`, `BBS1.DAT`, and `BBS3.DAT`, plus the 25 centered subtitle
+layouts in `BBS0.DAT/CT00000.ctd`. Source sizes and exact per-resource
+SHA-256 fingerprints are checked before the output is created. The rebuilder
+verifies every preimage and then verifies the exact patched spans in the
+completed ISO; the original is never overwritten. No PNG files, PPSSPP HD
+texture IDs, or SP2 UVs are changed.
+
+**Experimental limitations:** the implemented edit currently changes static
+LY2 and SP2 geometry and CTD subtitle box/font geometry. Not all SQ2
+animation keys, game-side runtime transforms, hitboxes, and per-screen
+anchors have been mapped or visually verified. As a result, this is
+not a guarantee of complete pixel-accurate 70–100% scaling in PPSSPP.
+Unrecognized, encrypted, missing or mismatched DAT resources fail closed.
+The standalone Verify Output action can detect structurally valid non-stock
+resources but cannot authenticate the exact scale value without the source ISO;
+patch-time verification *does* compare the exact generated replacements.
+Testing with stock and HD textures is still required before treating the
+feature as production-stable.
 
 ## Texture packs
 

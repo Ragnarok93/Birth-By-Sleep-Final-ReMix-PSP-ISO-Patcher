@@ -7,12 +7,11 @@ import com.ragnarok93.bbsremix.iso.IsoImageInfo
 import okio.Path
 
 /**
- * Research-only catalog for layouts located in the supplied plaintext BBS1.DAT.
+ * Source-fingerprinted catalog from the supplied plaintext BBS0/BBS1/BBS3 archives.
  *
- * Offsets are in the DAT, not the ISO. No candidate proves that all resources
- * needed by its GUI category are identified. This planner is intentionally
- * NOT connected to the shipping patch path until all renderer/keyframe/UI
- * dependencies and BBS0 assets have been analyzed and validated in PPSSPP.
+ * Offsets are in each DAT, not the ISO. An entry proves only that a bounded
+ * asset is known and byte-authenticated; complete renderer/UI coverage and
+ * SQ2 animated key geometry still require visual PPSSPP validation.
  */
 internal object BbsUiLayoutCatalog {
     data class Candidate(
@@ -90,8 +89,8 @@ internal object BbsUiLayoutCatalog {
 
     /**
      * Construct one exact-source-verified, size-preserving experimental patch.
-     * Only a test harness may invoke it until category-level validation is
-     * complete. Never patch a mismatched or encrypted layout.
+     * Used by the experimental UI ISO patch path. Never modify an
+     * encrypted, mismatched, or unknown resource.
      */
     fun planCandidate(
         iso: Path,

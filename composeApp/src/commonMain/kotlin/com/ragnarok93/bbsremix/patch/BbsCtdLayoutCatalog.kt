@@ -14,8 +14,8 @@ import okio.Path
  * BBSA directory also indexes more message resources, and these must be
  * audited before shipping any subtitle/UI scaling.
  *
- * This planner is intentionally NOT integrated into the production ISO patch
- * path. No live scaling claims are made until PPSSPP rendering is verified.
+ * This planner is integrated in experimental ISO patching only. Static
+ * geometry success does not guarantee correct PPSSPP runtime rendering.
  */
 internal object BbsCtdLayoutCatalog {
     const val BBS0_SIZE = 754655232L
