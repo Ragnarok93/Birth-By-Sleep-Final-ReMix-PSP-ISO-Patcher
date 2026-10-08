@@ -4,9 +4,8 @@ package com.ragnarok93.bbsremix.patch
  * Percentage of the stock PSP 480x272 presentation footprint, not a texture
  * resampling factor. Each component starts at stock (100%).
  *
- * These values are intentionally not yet patched into the executable: there is
- * no verified layout map for the supported decrypted English-patched MainApp.
- * A non-stock selection is explicitly rejected by PatchOptions.validate().
+ * Non-stock values now request experimental source-fingerprinted ISO resource
+ * overlays. Renderer behavior still requires real PPSSPP gameplay validation.
  */
 enum class UiScaleElement(val title: String) {
     COMBAT_HUD("Combat HUD"),

@@ -1257,7 +1257,7 @@ private fun OptionsCard(
             HorizontalDivider()
             ExpandableRow(
                 title = "UI Scaling (70–100%)",
-                description = "Per-element scale planning; stock is 100%. Non-stock scaling is not yet safe to patch.",
+                description = "Experimental per-element ISO geometry scaling; default 100%.",
                 expanded = uiScaleExpanded,
                 enabled = !busy,
                 onExpandedChange = { uiScaleExpanded = it },
@@ -1265,8 +1265,9 @@ private fun OptionsCard(
             AnimatedVisibility(uiScaleExpanded) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        "Preview only: the PSP layout/rendering offsets have not been verified. " +
-                            "Non-stock selections disable Patch ISO; PPSSPP HD replacement textures are unchanged.",
+                        "Experimental ISO geometry scaling applies source-fingerprinted layout coordinates. " +
+                            "Animated SQ2 keys, some dynamic HUD elements, and PPSSPP presentation need validation. " +
+                            "Keep a backup and compare visually; HD textures are unchanged.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -1284,7 +1285,8 @@ private fun OptionsCard(
                     }
                     if (options.appliesUiScaling) {
                         Text(
-                            "Restore all UI sliders to 100% to enable ISO patching.",
+                            "Non-stock UI scaling is experimental. Resource changes are byte-verified, " +
+                                "but in-game appearance still requires PPSSPP testing.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.error,
                         )
@@ -1629,7 +1631,8 @@ private fun StatusCard(status: PatcherStatus, progress: PatchProgress?) {
             "Patched ISO ready",
             "Output: " + status.outputLocation +
                 "\nSource EBOOT SHA-256: " + status.result.sourceEbootSha256 +
-                "\nPatched EBOOT SHA-256: " + status.result.patchedEbootSha256,
+                "\nPatched EBOOT SHA-256: " + status.result.patchedEbootSha256 +
+                "\nUI resources patched: " + status.result.uiAssetsPatched,
         )
 
         is PatcherStatus.DiagnosticComplete -> MessageCard(
@@ -1644,6 +1647,7 @@ private fun StatusCard(status: PatcherStatus, progress: PatchProgress?) {
         is PatcherStatus.Verification -> {
             val title = when (status.result.status) {
                 IsoVerificationStatus.VERIFIED_PATCHED -> "Structure verified"
+                IsoVerificationStatus.UI_STRUCTURE_VERIFIED -> "UI resource structure verified"
                 IsoVerificationStatus.UNPATCHED -> "Source image detected"
                 IsoVerificationStatus.INCOMPATIBLE -> "Output does not match"
                 IsoVerificationStatus.MALFORMED -> "Invalid ISO"

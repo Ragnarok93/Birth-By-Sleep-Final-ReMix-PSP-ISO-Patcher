@@ -44,12 +44,12 @@ class PatchOptionsTest {
     }
 
     @Test
-    fun non_stock_ui_scale_is_blocked_until_real_psp_offsets_are_validated() {
+    fun non_stock_ui_scale_is_accepted_for_fingerprinted_experimental_overlays() {
         UiScaleElement.entries.forEach { category ->
             val selected = PatchOptions(uiScaling = UiScaleSettings().withPercent(category, 85))
             assertTrue(selected.appliesUiScaling)
             assertTrue(selected.hasSelectedFeature)
-            assertTrue(selected.validate().any { it is PatchOptionError.UnvalidatedUiScaling })
+            assertTrue(selected.validate().isEmpty())
             assertTrue(selected.uiScaling.invalidSelections().isEmpty())
         }
         assertTrue(PatchOptions(uiScaling = UiScaleSettings()).validate().isEmpty())

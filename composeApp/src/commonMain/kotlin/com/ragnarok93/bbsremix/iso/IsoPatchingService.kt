@@ -11,6 +11,7 @@ import com.ragnarok93.bbsremix.patch.PatchProgress
 import com.ragnarok93.bbsremix.patch.PatchValidationException
 import com.ragnarok93.bbsremix.patch.ProgressReporter
 import com.ragnarok93.bbsremix.patch.Stage5EbootPatchEngine
+import com.ragnarok93.bbsremix.patch.UiScalePatchPlanner
 import com.ragnarok93.bbsremix.patch.sha256Hex
 import okio.FileSystem
 import okio.Path
@@ -24,6 +25,7 @@ data class IsoPreflight(
 
 enum class IsoVerificationStatus {
     VERIFIED_PATCHED,
+    UI_STRUCTURE_VERIFIED,
     UNPATCHED,
     INCOMPATIBLE,
     MALFORMED,
@@ -43,6 +45,7 @@ data class IsoPatchResult(
     val patchedEbootSha256: String,
     val outputSize: Long,
     val relocatedEboot: Boolean,
+    val uiAssetsPatched: Int = 0,
 )
 
 data class IsoRebuildDiagnosticResult(
@@ -101,8 +104,24 @@ class IsoPatchingService(
             val hash = sha256Hex(embedded)
             val inspection = engine.inspect(embedded, options)
             val patched = engine.verifyPatched(embedded, options)
+            val uiInspection = if (options.appliesUiScaling) {
+                UiScalePatchPlanner.inspectStandaloneOutput(output, image, reader, options)
+            } else null
             val outputSize = fileSystem.metadata(output).size
             val result = when {
+                uiInspection != null && !uiInspection.first -> IsoVerificationResult(
+                    status = IsoVerificationStatus.INCOMPATIBLE,
+                    message = uiInspection.second,
+                    embeddedEbootSha256 = hash,
+                    outputSize = outputSize,
+                )
+                uiInspection != null && (inspection.supported || patched.verified) -> IsoVerificationResult(
+                    status = IsoVerificationStatus.UI_STRUCTURE_VERIFIED,
+                    message = "UI resource structure and changed-source checks passed. " +
+                        uiInspection.second + " Gameplay validation is pending.",
+                    embeddedEbootSha256 = hash,
+                    outputSize = outputSize,
+                )
                 inspection.supported -> IsoVerificationResult(
                     status = IsoVerificationStatus.UNPATCHED,
                     message = "The ISO is a supported source image, but the selected Final ReMix features are not applied.",
@@ -248,8 +267,14 @@ class IsoPatchingService(
             progress.report(PatchProgress(PatchPhase.PATCHING_EBOOT, 0L, originalEboot.size.toLong(), "Applying selected Final ReMix features"))
             val patched = engine.patch(originalEboot, options)
             progress.report(PatchProgress(PatchPhase.PATCHING_EBOOT, patched.bytes.size.toLong(), patched.bytes.size.toLong(), "EBOOT patch validated"))
+            val uiPatches = UiScalePatchPlanner.plan(source, preflight.image, reader, options, cancellation)
+            if (uiPatches.isNotEmpty()) {
+                progress.report(PatchProgress(PatchPhase.PATCHING_EBOOT, uiPatches.size.toLong(), uiPatches.size.toLong(),
+                    "Validated " + uiPatches.size + " source-fingerprinted UI assets"))
+            }
 
-            rebuilder.rebuild(source, destination, preflight.image, patched.bytes, cancellation, progress)
+            rebuilder.rebuild(source, destination, preflight.image, patched.bytes, cancellation, progress,
+                extraPatches = uiPatches)
             cancellation.throwIfCancelled()
             progress.report(PatchProgress(PatchPhase.VALIDATING_OUTPUT, 0L, 1L, "Re-opening rebuilt ISO"))
             val outputImage = reader.inspect(destination)
@@ -260,6 +285,7 @@ class IsoPatchingService(
             if (outputImage.eboot.size != patched.bytes.size.toLong()) {
                 throw IsoFormatException("Rebuilt ISO validation failed: EBOOT directory size is inconsistent.")
             }
+            UiScalePatchPlanner.verifyCommitted(destination, reader, uiPatches, cancellation)
             progress.report(PatchProgress(PatchPhase.VALIDATING_OUTPUT, 1L, 1L, "Rebuilt ISO is valid"))
             val outputSize = fileSystem.metadata(destination).size
                 ?: throw IsoFormatException("Unable to determine rebuilt ISO size.")
@@ -270,6 +296,7 @@ class IsoPatchingService(
                 patchedEbootSha256 = patched.outputSha256,
                 outputSize = outputSize,
                 relocatedEboot = outputImage.eboot.extentSector != preflight.image.eboot.extentSector,
+                uiAssetsPatched = uiPatches.size,
             )
         } catch (error: Throwable) {
             if (destinationWasAbsent) fileSystem.delete(destination, mustExist = false)

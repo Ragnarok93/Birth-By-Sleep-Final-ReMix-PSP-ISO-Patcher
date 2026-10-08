@@ -59,9 +59,6 @@ data class PatchOptions(
         uiScaling.invalidSelections().forEach { (element, percent) ->
             add(PatchOptionError.UiScaleOutsideSupportedRange(element.title, percent))
         }
-        if (appliesUiScaling) {
-            add(PatchOptionError.UnvalidatedUiScaling)
-        }
         if (!hasSelectedFeature) {
             add(PatchOptionError.NoFeaturesSelected)
         }
@@ -125,10 +122,6 @@ sealed class PatchOptionError(val message: String) {
 
     data class UiScaleOutsideSupportedRange(val element: String, val percent: Int) : PatchOptionError(
         "$element UI scale must be 70–100% in 5% increments (received $percent%)."
-    )
-
-    data object UnvalidatedUiScaling : PatchOptionError(
-        "Non-stock UI scaling is not supported: PSP HUD/layout rendering offsets and ISO resource edits have not been validated. Restore each UI scale to 100% before patching."
     )
 
     data object NoFeaturesSelected : PatchOptionError(
