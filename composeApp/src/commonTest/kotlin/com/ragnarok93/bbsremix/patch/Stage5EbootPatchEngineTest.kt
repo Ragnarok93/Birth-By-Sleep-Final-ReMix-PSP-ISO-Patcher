@@ -33,6 +33,56 @@ class Stage5EbootPatchEngineTest {
     }
 
     @Test
+    fun frame_rate_patch_forces_native_mode_zero_and_expected_timing_scalars() {
+        val original = ByteArray(3_589_832)
+        for (address in 0x088074B0..0x088074EC step 4) {
+            original.writeIntLe(fileOffset(address), PspNativeFrameRatePatch.originalWord(address))
+        }
+
+        val originalCopy = original.copyOf()
+        val noPatchProblems = mutableListOf<String>()
+        PspNativeFrameRatePatch.verifyPatched(originalCopy, 30, noPatchProblems)
+        assertTrue(noPatchProblems.isEmpty(), noPatchProblems.joinToString())
+
+        val expectedScalarBits = mapOf(
+            60 to 0x3F800000,
+            90 to 0x3F2AAAAB,
+            120 to 0x3F000000,
+        )
+
+        for ((fps, bits) in expectedScalarBits) {
+            val image = original.copyOf()
+            val sourceProblems = mutableListOf<String>()
+            PspNativeFrameRatePatch.validateSource(image, sourceProblems)
+            assertTrue(sourceProblems.isEmpty(), sourceProblems.joinToString())
+
+            PspNativeFrameRatePatch.apply(image, fps)
+
+            assertEquals(0x10000006, image.readIntLe(fileOffset(0x088074BC)))
+            assertEquals(
+                0x3C040000 or ((bits ushr 16) and 0xffff),
+                image.readIntLe(fileOffset(0x088074D8)),
+            )
+            assertEquals(
+                0x34840000.toInt() or (bits and 0xffff),
+                image.readIntLe(fileOffset(0x088074DC)),
+            )
+            assertEquals(0x44846000, image.readIntLe(fileOffset(0x088074E0)))
+            assertEquals(0xE4AC1870.toInt(), image.readIntLe(fileOffset(0x088074E4)))
+            assertEquals(0x03E00008, image.readIntLe(fileOffset(0x088074E8)))
+            assertEquals(0xACC05EC8.toInt(), image.readIntLe(fileOffset(0x088074EC)))
+
+            val problems = mutableListOf<String>()
+            PspNativeFrameRatePatch.verifyPatched(image, fps, problems)
+            assertTrue(problems.isEmpty(), problems.joinToString())
+        }
+
+        assertEquals(1.0f, PspNativeFrameRatePatch.timingScalar(60))
+        assertEquals(2.0f / 3.0f, PspNativeFrameRatePatch.timingScalar(90))
+        assertEquals(0.5f, PspNativeFrameRatePatch.timingScalar(120))
+    }
+
+    @Test
     fun right_stick_patch_is_resident_and_stays_out_of_overlay_arena() {
         assertTrue(
             PspNativeRightStickPatch.wordPatches.all {
