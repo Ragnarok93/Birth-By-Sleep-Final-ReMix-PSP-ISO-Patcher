@@ -2,7 +2,7 @@
 
 Kotlin Multiplatform + Compose Multiplatform app for applying the Birth By Sleep - Final ReMix patch set to a supported Kingdom Hearts: Birth by Sleep Final Mix PSP ISO.
 
-The app accepts an `.iso` as its patch input and validates the supported decrypted English-patched EBOOT fingerprint. The current PSP-native profile supports **30/60/90/120 FPS selection, right-stick camera control, camera distance, and camera height** using only resident MainApp code/data. It does not extend an ELF load segment and leaves the dynamic overlay arena untouched. Better Battle System combat features remain disabled while they are re-derived against the PSP executable. A separate Diagnostic rebuild writes the original EBOOT unchanged and requires the complete output ISO to remain byte-identical. The source image is never overwritten.
+The app accepts an `.iso` as its patch input and validates the supported decrypted English-patched EBOOT fingerprint. The current PSP-native profile supports a **30/60 FPS switch, right-stick camera control, camera distance, and camera height** using only resident MainApp code/data. It does not extend an ELF load segment and leaves the dynamic overlay arena untouched. Better Battle System combat features remain disabled while they are re-derived against the PSP executable. A separate Diagnostic rebuild writes the original EBOOT unchanged and requires the complete output ISO to remain byte-identical. The source image is never overwritten.
 
 ## Supported image profile
 
@@ -22,7 +22,7 @@ Encrypted PSP PRX containers (`~PSP`/`~SCE`) are identified and rejected before 
 
 1. Select a source `.iso` with the Android document picker or native desktop file dialog.
 2. Review the expandable Detected Game pane. When present, the patcher loads PSP cover art from `PSP_GAME/ICON0.PNG`.
-3. Select the **FPS target** above the camera options, then any combination of **Right-stick camera control**, **Camera distance**, and **Camera height**. 30 FPS keeps stock frame-rate behavior, 60 FPS forces the game's native high-frame-rate mode, and 90/120 FPS are experimental. Combat Mods remain disabled.
+3. Toggle **60 FPS** above the camera options, then select any combination of **Right-stick camera control**, **Camera distance**, and **Camera height**. With the switch off the game keeps stock 30 FPS behavior; with it on the patch forces the validated native 60 FPS mode. Combat Mods remain disabled.
 4. Select a separate output path.
 5. Use **Diagnostic rebuild** first when validating a new environment. It writes the original EBOOT unchanged and requires the complete output to compare byte-for-byte equal to the staged source.
 6. Use **Patch ISO** to create the selected resident PSP-native FPS/camera profile. Right-stick control modifies resident MainApp input/camera instructions. Distance and height update the resident camera table and replace the camera-only 0x70-byte BCam copier in place so loaded camera resources cannot overwrite the selected values. The original two ELF program headers remain intact and the legacy overlay payload region is untouched.
@@ -33,11 +33,11 @@ The app does not ask the user to extract EBOOT.BIN, run Python, decrypt files, o
 
 ## Patch options
 
-The current PSP-native profile exposes a discrete FPS selector plus three independent camera features. FPS choices are `30 / 60 / 90 / 120`: 30 leaves the native behavior intact; 60 forces MainApp's native mode-0 high-frame-rate path; 90 and 120 additionally scale the resident timing value to `2/3` and `1/2` respectively and are intentionally marked experimental because PSP VBlank/presentation or game logic may still cap unique frames.
+The current PSP-native profile exposes a **60 FPS switch** plus three independent camera features. The switch is off by default for stock 30 FPS behavior. Enabling it forces MainApp's validated native mode-0 60 FPS path without requiring a PPSSPP cheat.
 
  Right-stick camera direction and compatibility with both in-game camera-control options have passed runtime testing. The first static-table-only distance/height candidate produced no visible change because the game's BCam loader overwrites that table at runtime; the current candidates preserve selected geometry values after every native BCam copy and are pending runtime confirmation. Combat features remain visible for roadmap context but are disabled and rejected by validation:
 
-- FPS target — 30 stock / 60 native / 90 experimental / 120 experimental
+- 60 FPS — switch off for stock 30 FPS, on for validated native 60 FPS
 - Right-stick camera control
 - Camera distance — writes the native signed Z component in the two resident player-camera mode vectors
 - Camera height — writes the native Y component in the same two resident camera-mode vectors
