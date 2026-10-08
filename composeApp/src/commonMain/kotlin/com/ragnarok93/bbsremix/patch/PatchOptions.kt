@@ -61,7 +61,7 @@ data class PatchOptions(
     }
 
     companion object {
-        val FPS_TARGETS: Set<Int> = setOf(30, 60, 90, 120)
+        val FPS_TARGETS: Set<Int> = setOf(30, 60)
         val CAMERA_DISTANCE_RANGE: ClosedFloatingPointRange<Float> = 2.0f..6.0f
         val CAMERA_HEIGHT_RANGE: ClosedFloatingPointRange<Float> = 1.0f..2.5f
         val CAMERA_LEVEL_RANGE: ClosedFloatingPointRange<Float> = 1.0f..5.0f
@@ -97,7 +97,7 @@ data class PatchOptions(
 
 sealed class PatchOptionError(val message: String) {
     data class FrameRateTargetUnsupported(val value: Int) : PatchOptionError(
-        "FPS target must be 30, 60, 90, or 120 (received $value)."
+        "FPS target must be 30 or 60 (received $value)."
     )
 
     data object UnvalidatedPspPortFeature : PatchOptionError(
