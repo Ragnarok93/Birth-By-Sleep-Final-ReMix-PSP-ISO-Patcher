@@ -25,13 +25,20 @@ internal object UiScalePatchPlanner {
             if (element == UiScaleElement.SUBTITLES) {
                 BbsCtdLayoutCatalog.planExperimentalSubtitleOverlay(
                     iso, image, reader, percent,
-                )?.let(patches::add)
+                )?.let { patch ->
+                    requireExpectedDigest(patch, "BBS0.DAT",
+                        BbsCtdLayoutCatalog.subtitleCandidate.offsetInArchive, percent)
+                    patches += patch
+                }
             } else {
                 for (candidate in BbsUiLayoutCatalog.suppliedCandidates.filter { it.element == element }) {
                     cancellation.throwIfCancelled()
                     BbsUiLayoutCatalog.planCandidate(
                         iso, image, reader, candidate, percent,
-                    )?.let(patches::add)
+                    )?.let { patch ->
+                        requireExpectedDigest(patch, candidate.archive, candidate.offsetInArchive, percent)
+                        patches += patch
+                    }
                 }
             }
             if (patches.size == previousCount) {
@@ -53,6 +60,22 @@ internal object UiScalePatchPlanner {
         return sorted
     }
 
+    private fun requireExpectedDigest(
+        patch: IsoBytePatch,
+        archive: String,
+        offsetInArchive: Long,
+        percent: Int,
+    ) {
+        val prefix = UiScaleExpectedDigests.expectedPrefix(archive, offsetInArchive, percent)
+            ?: throw IsoFormatException("No reference digest for " + archive + "@" + offsetInArchive)
+        if (!sha256Hex(patch.replacement).startsWith(prefix)) {
+            throw IsoFormatException(
+                "Generated UI geometry differs from reference " + percent + "% digest for " +
+                    patch.label + "; refusing to create an unverified ISO.",
+            )
+        }
+    }
+
     /** Authenticate committed bytes against exactly the patch plan used. */
     fun verifyCommitted(
         output: Path,
@@ -71,8 +94,8 @@ internal object UiScalePatchPlanner {
 
     /**
      * Verify Output operates without the original source. Check file structure
-     * and selected resources against known original hashes, but deliberately
-     * cannot claim an exact scaling percentage or correct in-game rendering.
+     * and every reference digest against the requested percentage. It can
+     * authenticate the bytes but cannot certify correct in-game rendering.
      */
     fun inspectStandaloneOutput(
         iso: Path,
@@ -84,7 +107,6 @@ internal object UiScalePatchPlanner {
         var changed = 0
         for (element in UiScaleElement.entries) {
             val percent = options.uiScaling[element]
-            if (percent == 100) continue
             if (element == UiScaleElement.SUBTITLES) {
                 val ctd = BbsCtdLayoutCatalog.subtitleCandidate
                 val entry = reader.findOptionalEntry(iso, image, "PSP_GAME/USRDIR/BBS0.DAT")
@@ -95,10 +117,12 @@ internal object UiScalePatchPlanner {
                 val bytes = reader.readAt(iso, entry.dataOffset + ctd.offsetInArchive, ctd.size)
                 try { BbsCtdGeometry.scaleSubtitleLayouts(bytes, 100) }
                 catch (_: IllegalArgumentException) { return false to "Subtitle CTD structure is invalid." }
-                if (sha256Hex(bytes) == ctd.sourceSha256) {
-                    return false to "Subtitle CTD remains stock."
+                val expected = if (percent == 100) ctd.sourceSha256 else
+                    UiScaleExpectedDigests.expectedPrefix("BBS0.DAT", ctd.offsetInArchive, percent)
+                if (expected == null || !sha256Hex(bytes).startsWith(expected)) {
+                    return false to ("Subtitle CTD does not match requested " + percent + "% source profile.")
                 }
-                changed++
+                if (percent != 100) changed++
             } else {
                 val candidates = BbsUiLayoutCatalog.suppliedCandidates.filter { it.element == element }
                 for (candidate in candidates) {
@@ -109,20 +133,18 @@ internal object UiScalePatchPlanner {
                     val bytes = reader.readAt(iso, entry.dataOffset + candidate.offsetInArchive, candidate.layoutSize)
                     try { BbsL2dGeometry.scale(bytes, 100) }
                     catch (_: IllegalArgumentException) { return false to (candidate.layout + " is invalid.") }
-                    val isStock = sha256Hex(bytes) == candidate.originalSha256
-                    if (percent != 100 && isStock) {
-                        return false to (candidate.layout + " is stock despite the requested " + percent + "% scale.")
-                    }
-                    if (percent == 100 && !isStock) {
-                        return false to (candidate.layout + " differs from stock at 100%.")
+                    val expected = if (percent == 100) candidate.originalSha256 else
+                        UiScaleExpectedDigests.expectedPrefix(candidate.archive, candidate.offsetInArchive, percent)
+                    if (expected == null || !sha256Hex(bytes).startsWith(expected)) {
+                        return false to (candidate.layout + " does not match requested " + percent + "% profile.")
                     }
                     if (percent != 100) changed++
                 }
             }
         }
         return (changed > 0) to if (changed > 0) {
-            changed.toString() + " UI resources have non-stock, structurally valid geometry. " +
-                "Exact percentages and PPSSPP presentation still require comparison with the source ISO and gameplay."
+            changed.toString() + " UI resource digests match the requested scaling percentages. " +
+                "Correct in-game positioning and animations still require PPSSPP gameplay checks."
         } else {
             "No selected UI scaling resources were changed."
         }
