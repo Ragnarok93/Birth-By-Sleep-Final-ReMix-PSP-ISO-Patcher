@@ -1,6 +1,7 @@
 package com.ragnarok93.bbsremix.patch
 
 data class PatchOptions(
+    val fpsTarget: Int = 30,
     val rightStickCamera: Boolean = true,
     val cameraDistanceEnabled: Boolean = false,
     val cameraDistance: Float = 4.0f,
@@ -25,6 +26,9 @@ data class PatchOptions(
             criticalModeAbilities ||
             criticalModePassives
 
+    val appliesFrameRate: Boolean
+        get() = fpsTarget != 30
+
     val appliesCameraDistance: Boolean
         get() = cameraDistanceEnabled
 
@@ -32,9 +36,12 @@ data class PatchOptions(
         get() = cameraHeightEnabled
 
     val hasSelectedFeature: Boolean
-        get() = rightStickCamera || appliesCameraDistance || appliesCameraHeight || combatFeatures
+        get() = appliesFrameRate || rightStickCamera || appliesCameraDistance || appliesCameraHeight || combatFeatures
 
     fun validate(): List<PatchOptionError> = buildList {
+        if (fpsTarget !in FPS_TARGETS) {
+            add(PatchOptionError.FrameRateTargetUnsupported(fpsTarget))
+        }
         if (combatFeatures) {
             add(PatchOptionError.UnvalidatedPspPortFeature)
         }
@@ -54,6 +61,7 @@ data class PatchOptions(
     }
 
     companion object {
+        val FPS_TARGETS: Set<Int> = setOf(30, 60, 90, 120)
         val CAMERA_DISTANCE_RANGE: ClosedFloatingPointRange<Float> = 2.0f..6.0f
         val CAMERA_HEIGHT_RANGE: ClosedFloatingPointRange<Float> = 1.0f..2.5f
         val CAMERA_LEVEL_RANGE: ClosedFloatingPointRange<Float> = 1.0f..5.0f
@@ -88,6 +96,10 @@ data class PatchOptions(
 }
 
 sealed class PatchOptionError(val message: String) {
+    data class FrameRateTargetUnsupported(val value: Int) : PatchOptionError(
+        "FPS target must be 30, 60, 90, or 120 (received $value)."
+    )
+
     data object UnvalidatedPspPortFeature : PatchOptionError(
         "Better Battle System combat ports remain disabled pending PSP-native re-derivation and runtime validation."
     )
