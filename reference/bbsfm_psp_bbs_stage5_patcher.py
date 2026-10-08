@@ -185,6 +185,30 @@ CAMERA_COPY_ORIGINAL_WORDS = (
     0x8CA6004C,0xAC86004C,0x24860050,0x24A70050,0xD8E00000,0xF8C00000,0x24860060,0x24A50060,
     0xD8A00000,0xF8C00000,0x03E00008,0x00801025,
 )
+
+FPS_TARGETS = (30,60,90,120)
+FPS_SETTER_VA = 0x088074B0
+FPS_FORCE_BRANCH_VA = 0x088074BC
+FPS_RUNTIME_MODE_VA = 0x09F25EC8
+FPS_RUNTIME_SCALAR_VA = 0x08B41870
+FPS_SETTER_ORIGINAL_WORDS = (
+    (0x088074B0,0x3C0609F2),
+    (0x088074B4,0x8CC25EC8),
+    (0x088074B8,0x34070001),
+    (0x088074BC,0x14870006),
+    (0x088074C0,0x3C0508B4),
+    (0x088074C4,0x3C074000),
+    (0x088074C8,0x44876000),
+    (0x088074CC,0xE4AC1870),
+    (0x088074D0,0x03E00008),
+    (0x088074D4,0xACC45EC8),
+    (0x088074D8,0x3C043F80),
+    (0x088074DC,0x44846000),
+    (0x088074E0,0x34040000),
+    (0x088074E4,0xE4AC1870),
+    (0x088074E8,0x03E00008),
+    (0x088074EC,0xACC45EC8),
+)
 NOP = 0
 
 def jal(target:int)->int:
@@ -228,6 +252,30 @@ def verify(data:bytes, camera_controls:bool, post_input:bool):
 
 def _float_bits(value:float)->int:
     return struct.unpack('<I', struct.pack('<f', float(value)))[0]
+
+def fps_timing_scalar(target_fps:int)->float:
+    if target_fps==60: return 1.0
+    if target_fps==90: return 2.0/3.0
+    if target_fps==120: return 0.5
+    raise ValueError(f'No patched timing scalar for {target_fps} FPS')
+
+def verify_fps_source(data:bytes):
+    for va,expected in FPS_SETTER_ORIGINAL_WORDS:
+        got=u32(data,foff(va))
+        if got!=expected:
+            raise ValueError(f'frame-rate source mismatch @0x{va:08X}: 0x{got:08X} != 0x{expected:08X}')
+
+def apply_fps(out:bytearray,target_fps:int):
+    if target_fps not in (60,90,120):
+        raise ValueError(f'Unsupported patched FPS target: {target_fps}')
+    p32(out,foff(0x088074BC),0x10000006) # force native mode-0 path
+    bits=_float_bits(fps_timing_scalar(target_fps))
+    p32(out,foff(0x088074D8),0x3C040000 | ((bits>>16)&0xffff))
+    p32(out,foff(0x088074DC),0x34840000 | (bits&0xffff))
+    p32(out,foff(0x088074E0),0x44846000) # mtc1 a0,f12
+    p32(out,foff(0x088074E4),0xE4AC1870) # swc1 f12,0x1870(a1)
+    p32(out,foff(0x088074E8),0x03E00008) # jr ra
+    p32(out,foff(0x088074EC),0xACC05EC8) # sw zero,0x5ec8(a2)
 
 def camera_copy_routine(camera_distance_enabled:bool,camera_distance:float,camera_height_enabled:bool,camera_height:float):
     if not (camera_distance_enabled or camera_height_enabled):
@@ -335,9 +383,11 @@ def add_stage5(out:bytearray,cfg:int,camera_distance:float,critical_passives:boo
     if len(out)<S4_FILE_OFF: out.extend(b'\0'*(S4_FILE_OFF-len(out)))
     out.extend(blob)
 
-def patch(data:bytes,camera_controls:bool=True,post_input:bool=False,cfg:int=0,camera_distance_enabled:bool=False,camera_distance:float=4.0,camera_height_enabled:bool=False,camera_height:float=1.75,critical_passives:bool=False)->bytearray:
-    if not (camera_controls or camera_distance_enabled or camera_height_enabled):
-        raise ValueError('Enable at least one PSP-native camera feature')
+def patch(data:bytes,fps_target:int=30,camera_controls:bool=True,post_input:bool=False,cfg:int=0,camera_distance_enabled:bool=False,camera_distance:float=4.0,camera_height_enabled:bool=False,camera_height:float=1.75,critical_passives:bool=False)->bytearray:
+    if fps_target not in FPS_TARGETS:
+        raise ValueError('FPS target must be 30, 60, 90, or 120')
+    if not (fps_target!=30 or camera_controls or camera_distance_enabled or camera_height_enabled):
+        raise ValueError('Enable at least one PSP-native FPS/camera feature')
     if not 2.0 <= float(camera_distance) <= 6.0:
         raise ValueError('Camera distance must be between 2.0 and 6.0')
     if not 1.0 <= float(camera_height) <= 2.5:
@@ -345,9 +395,13 @@ def patch(data:bytes,camera_controls:bool=True,post_input:bool=False,cfg:int=0,c
     if post_input or critical_passives or cfg:
         raise ValueError('Better Battle System runtime payloads remain disabled pending PSP-native re-derivation')
     verify(data,camera_controls,False)
+    if fps_target!=30:
+        verify_fps_source(data)
     if camera_distance_enabled or camera_height_enabled:
         verify_camera_geometry_source(data)
     out=bytearray(data)
+    if fps_target!=30:
+        apply_fps(out,fps_target)
     if camera_controls:
         for va,exp,rep,desc in RIGHT_STICK_WORD_PATCHES:
             p32(out,foff(va),rep)
@@ -366,10 +420,11 @@ def patch(data:bytes,camera_controls:bool=True,post_input:bool=False,cfg:int=0,c
 
 def main():
     ap=argparse.ArgumentParser(
-        description='BBSFM ULJM-05775 PSP-native resident camera patcher'
+        description='BBSFM ULJM-05775 PSP-native resident FPS/camera patcher'
     )
     ap.add_argument('input',type=Path,help='ORIGINAL decrypted English-patched EBOOT.BIN')
     ap.add_argument('output',nargs='?',type=Path)
+    ap.add_argument('--fps',type=int,choices=FPS_TARGETS,default=30,help='target FPS: 30 stock, 60 native, 90/120 experimental')
     ap.add_argument('--no-right-stick',action='store_true',help='do not patch right-stick camera control')
     ap.add_argument('--camera-distance',type=float,default=None,metavar='VALUE',help='patch native camera distance (2.0-6.0)')
     ap.add_argument('--camera-height',type=float,default=None,metavar='VALUE',help='patch native camera height (1.0-2.5)')
@@ -381,10 +436,12 @@ def main():
     height_enabled=args.camera_height is not None
     data=args.input.read_bytes()
     verify(data,camera_controls,False)
+    if args.fps!=30:
+        verify_fps_source(data)
     if distance_enabled or height_enabled:
         verify_camera_geometry_source(data)
     print('Supported source fingerprint verified:',SUPPORTED_SHA256)
-    print('Profile: resident PSP-native camera controls/geometry')
+    print('Profile: resident PSP-native FPS/camera controls/geometry')
     print('ELF layout: unchanged (2 program headers; LOAD #0 is not extended)')
     print('Overlay arena: untouched')
     if args.verify_only:
@@ -392,17 +449,22 @@ def main():
 
     out=patch(
         data,
+        fps_target=args.fps,
         camera_controls=camera_controls,
         camera_distance_enabled=distance_enabled,
         camera_distance=args.camera_distance if distance_enabled else 4.0,
         camera_height_enabled=height_enabled,
         camera_height=args.camera_height if height_enabled else 1.75,
     )
-    dst=args.output or args.input.with_name(args.input.stem + '.psp-native-camera.BIN')
+    dst=args.output or args.input.with_name(args.input.stem + '.psp-native-mods.BIN')
     dst.write_bytes(out)
     print('Wrote:',dst)
     print('Patched SHA-256:',sha(out))
     print('Output size:',len(out))
+    if args.fps!=30:
+        print('FPS target:',args.fps,'timing scalar:',fps_timing_scalar(args.fps))
+        if args.fps>60:
+            print('WARNING: 90/120 FPS are experimental and may remain limited by PSP VBlank/PPSSPP presentation.')
     if camera_controls:
         print('PPSSPP: bind your physical right stick to Right Analog X/Y.')
     if distance_enabled:
