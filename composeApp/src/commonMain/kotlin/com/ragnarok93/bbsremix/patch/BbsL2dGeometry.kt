@@ -4,11 +4,10 @@ package com.ragnarok93.bbsremix.patch
  * Research-stage editor for the static geometry inside a BBS L2D asset.
  *
  * OpenKh documents the LY2 layout/node coordinate fields and SP2 group's
- * on-screen vertices. The SP2 parts contain UV coordinates and RGBA values;
- * they are deliberately never touched. This editor does NOT yet cover SQ2
- * animated translation/scale keys, dynamically generated gauges, text or
- * global HUD anchoring. It must not be wired into production ISO patching
- * until those dependencies and the relevant BBS0 assets are verified in-game.
+ * on-screen vertices, and documented LY2 font-size bytes. SP2 texture
+ * coordinates, RGBA, animation control data and font style metadata remain
+ * unchanged. This is an experimental test build: runtime-generated gauges,
+ * SQ2 animated translation/scale and in-game HUD anchoring remain unverified.
  */
 internal object BbsL2dGeometry {
     data class Result(
@@ -16,8 +15,10 @@ internal object BbsL2dGeometry {
         val layoutFieldsChanged: Int,
         val nodeFieldsChanged: Int,
         val groupFieldsChanged: Int,
+        val fontSizeFieldsChanged: Int,
     ) {
-        val totalFieldsChanged: Int get() = layoutFieldsChanged + nodeFieldsChanged + groupFieldsChanged
+        val totalFieldsChanged: Int get() =
+            layoutFieldsChanged + nodeFieldsChanged + groupFieldsChanged + fontSizeFieldsChanged
     }
 
     fun scale(source: ByteArray, percent: Int): Result {
@@ -61,6 +62,21 @@ internal object BbsL2dGeometry {
         val sequenceSetCount = output.readIntLe(0x20)
         val sequenceTable = output.readIntLe(0x24)
         requireRange(output, sequenceTable, sequenceSetCount, 4, "SQ2P pointer table")
+        // LY2 Font Info stores an int8 size at byte 8 in each 0x10 record.
+        // Preserve 0 (unassigned) and negative special values; scale only
+        // documented positive font sizes, leaving colors/center/type/IDs intact.
+        var fonts = 0
+        for (i in 0 until fontCount) {
+            val sizeOffset = fontOffset + i * 0x10 + 0x08
+            val old = output[sizeOffset].toInt()
+            if (old <= 0) continue
+            val updated = ((old * percent + 50) / 100).coerceAtLeast(1)
+            if (old != updated) {
+                output[sizeOffset] = updated.toByte()
+                fonts++
+            }
+        }
+
         var groups = 0
         for (i in 0 until sequenceSetCount) {
             val sq2p = relative(output, sequenceTable, sequenceTable + i * 4, "SQ2P pointer")
@@ -97,7 +113,8 @@ internal object BbsL2dGeometry {
                     disjoint(keyOffset, keyCount * 0x0c) &&
                     disjoint(sp2, 0x40) && disjoint(sq2, 0x40) &&
                     disjoint(layoutOffset, layoutCount * 0x10) &&
-                    disjoint(nodeOffset, nodeCount * 0x20)
+                    disjoint(nodeOffset, nodeCount * 0x20) &&
+                    disjoint(fontOffset, fontCount * 0x10)
             ) { "SP2 on-screen geometry overlaps texture, animation or layout metadata." }
             for (j in 0 until groupCount) {
                 val item = groupOffset + j * 0x0c
@@ -109,7 +126,7 @@ internal object BbsL2dGeometry {
         if (percent == UiScaleSettings.STOCK_PERCENT) {
             check(output.contentEquals(source)) { "100% L2D scaling changed the stock input." }
         }
-        return Result(output, layouts, nodes, groups)
+        return Result(output, layouts, nodes, groups, fonts)
     }
 
     private fun requireSignature(bytes: ByteArray, offset: Int, magic: String) {
