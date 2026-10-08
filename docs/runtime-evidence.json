@@ -167,26 +167,39 @@
     "runtime_scalar_va": "0x08B41870",
     "targets": {
       "30": {
-        "result": "stock",
+        "result": "pass_stock",
         "timing_scalar": null,
-        "evidence_reference": null
+        "evidence_reference": "User runtime report: 30 FPS mode working correctly"
       },
       "60": {
-        "result": "pending",
+        "result": "pass",
         "timing_scalar": 1,
-        "evidence_reference": null
+        "evidence_reference": "User runtime report: 60 FPS mode working correctly without PPSSPP cheat"
       },
       "90": {
-        "result": "pending_experimental",
+        "result": "runs_but_display_observed_at_60",
         "timing_scalar": 0.6666667,
-        "evidence_reference": null
+        "evidence_reference": "User runtime report: 90 FPS profile runs but appears to render at 60 FPS"
       },
       "120": {
-        "result": "pending_experimental",
+        "result": "fail_unsafe",
         "timing_scalar": 0.5,
-        "evidence_reference": null
+        "crash": {
+          "pc": "0xDEADBEEF",
+          "destination": "0xDEADBEEF",
+          "ra": "0x08000030",
+          "thread": "root",
+          "ppsspp": "v1.20.4",
+          "ui_message": "Game disc read error: ISO corrupt / DISC_VERSION is empty"
+        },
+        "evidence_reference": "User runtime screenshot/report: 120 FPS profile triggers early deadbeef root-thread crash and disc-read error"
       }
     },
-    "notes": "60 forces native mode 0 without CWCheat. 90/120 reuse mode 0 with 60/target timing scalar and may still be limited by PSP VBlank/PPSSPP presentation."
+    "notes": "60 forces native mode 0 without CWCheat. 90/120 reuse mode 0 with 60/target timing scalar and may still be limited by PSP VBlank/PPSSPP presentation.",
+    "ppsspp_display_observation": {
+      "nominal_hle_refresh_hz": 59.9400599,
+      "source_note": "PPSSPP sceDisplayGetFramePerSec returns 59.9400599f; ISO-only timing scaling cannot by itself raise the emulated PSP display refresh.",
+      "implication": "90/120 timing-scalar profiles are research-only and are not validated >60 displayed-FPS modes."
+    }
   }
 }
