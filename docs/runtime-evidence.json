@@ -160,5 +160,33 @@
     "reported_at": "2026-10-08",
     "evidence_reference": "User runtime report: neither camera height nor distance changed in-game; right-stick camera remained functional",
     "root_cause": "Native BCam resource loading copies 0x70 bytes through 0x0893DBF4 over the resident working table, replacing the static Y/Z edits."
+  },
+  "frame_rate_candidate": {
+    "implementation": "resident MainApp frame-rate setter override at 0x088074B0",
+    "runtime_mode_va": "0x09F25EC8",
+    "runtime_scalar_va": "0x08B41870",
+    "targets": {
+      "30": {
+        "result": "stock",
+        "timing_scalar": null,
+        "evidence_reference": null
+      },
+      "60": {
+        "result": "pending",
+        "timing_scalar": 1,
+        "evidence_reference": null
+      },
+      "90": {
+        "result": "pending_experimental",
+        "timing_scalar": 0.6666667,
+        "evidence_reference": null
+      },
+      "120": {
+        "result": "pending_experimental",
+        "timing_scalar": 0.5,
+        "evidence_reference": null
+      }
+    },
+    "notes": "60 forces native mode 0 without CWCheat. 90/120 reuse mode 0 with 60/target timing scalar and may still be limited by PSP VBlank/PPSSPP presentation."
   }
 }
