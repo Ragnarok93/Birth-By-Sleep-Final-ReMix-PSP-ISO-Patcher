@@ -225,7 +225,7 @@ fun PatcherApp(
 
         fun selectOutput() {
             val sourceName = source?.displayName ?: "Birth-By-Sleep-Final-ReMix"
-            val suggested = sourceName.substringBeforeLast('.', sourceName) + ".psp-native-camera.iso"
+            val suggested = sourceName.substringBeforeLast('.', sourceName) + ".psp-native-mods.iso"
             start("Choose patch output") { output = fileGateway.pickOutput(suggested) }
         }
 
@@ -678,12 +678,12 @@ private fun PageHeader() {
             fontWeight = FontWeight.SemiBold,
         )
         Text(
-            text = "PSP-native camera controls and geometry are ready for runtime testing.",
+            text = "PSP-native FPS and camera mods are ready for runtime testing.",
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.primary,
         )
         Text(
-            text = "Right-stick camera control is working in runtime tests. Camera distance and height now patch the PSP's resident camera vectors and the camera-only BCam copy path so runtime resource loads cannot overwrite them. ELF program headers and the dynamic overlay arena remain untouched. Combat mods stay disabled.",
+            text = "Right-stick, camera distance, and camera height are working in runtime tests. 60 FPS now uses the resident native frame-rate setter; 90/120 FPS are exposed as experimental timing profiles. ELF program headers and the dynamic overlay arena remain untouched. Combat mods stay disabled.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -1055,9 +1055,15 @@ private fun OptionsCard(
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("3. Patch Options", style = MaterialTheme.typography.titleLarge)
             Text(
-                "The resident PSP-native right-stick, camera distance, and camera height mods are available for isolated runtime testing. Combat mods remain unavailable.",
+                "FPS selection and the resident PSP-native camera mods are available for runtime testing. 60 FPS uses the game's native high-frame-rate path; 90/120 FPS are experimental. Combat mods remain unavailable.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            FrameRateSetting(
+                targetFps = options.fpsTarget,
+                enabled = !busy,
+                onTargetChanged = { onOptionsChanged(options.copy(fpsTarget = it)) },
             )
 
             FeatureToggle(
@@ -1249,6 +1255,51 @@ private fun ExpandableRow(
 }
 
 @Composable
+private fun FrameRateSetting(
+    targetFps: Int,
+    enabled: Boolean,
+    onTargetChanged: (Int) -> Unit,
+) {
+    val title = when (targetFps) {
+        30 -> "30 FPS · Stock"
+        60 -> "60 FPS"
+        90, 120 -> "$targetFps FPS · Experimental"
+        else -> "$targetFps FPS"
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text("Frame Rate", style = MaterialTheme.typography.bodyMedium)
+            Spacer(Modifier.weight(1f))
+            Text(
+                title,
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
+        PatcherSlider(
+            value = targetFps.toFloat(),
+            onValueChange = {
+                val snapped = (kotlin.math.round(it / 30f).toInt() * 30).coerceIn(30, 120)
+                onTargetChanged(snapped)
+            },
+            valueRange = 30f..120f,
+            steps = 2,
+            enabled = enabled,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Text(
+            when (targetFps) {
+                30 -> "Original game frame-rate behavior."
+                60 -> "Forces the game's native 60 FPS mode without a PPSSPP cheat."
+                else -> "Experimental: forces native 60 FPS mode and scales timing to 60/$targetFps. PPSSPP/VBlank or game logic may still limit actual unique frames.",
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
 private fun CameraLevelSlider(
     label: String,
     level: Int,
@@ -1307,31 +1358,31 @@ private fun OutputCard(
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("4. Patch", style = MaterialTheme.typography.titleLarge)
             Text(
-                output?.displayName ?: "No camera patch output selected.",
+                output?.displayName ?: "No patch output selected.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
-                "Patch ISO supports the resident PSP-native right-stick, camera distance, and camera height mods. Geometry patches the native camera table plus its resident BCam copy routine so values survive runtime resource loads; no overlay payload or extra ELF segment is used.",
+                "Patch ISO supports the FPS selector plus resident PSP-native right-stick, camera distance, and camera height mods. FPS and camera hooks stay in resident MainApp code/data; no overlay payload or extra ELF segment is used.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 PatcherButton(
-                    "Choose camera output…",
+                    "Choose output…",
                     onSelect,
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !busy && canWriteOutput,
                 )
                 PatcherButton(
-                    "Patch Camera ISO",
+                    "Patch ISO",
                     onPatch,
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !busy && canPatch && output != null,
                 )
                 HorizontalDivider()
                 Text(
-                    "Diagnostic rebuild is a separate no-op test. It opens its own output picker and never writes any selected camera mod.",
+                    "Diagnostic rebuild is a separate no-op test. It opens its own output picker and never writes any selected FPS/camera mod.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
