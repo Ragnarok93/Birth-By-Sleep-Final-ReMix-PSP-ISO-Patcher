@@ -40,7 +40,6 @@ internal object BbsUiLayoutCatalog {
             0xC392830, 16272, "0e4d0eae7b98f54a0de5c2ee952dcbfc0d83f042721e970eb3da8b1074f808de"),
         Candidate(UiScaleElement.MENUS, "BBS1.DAT", BBS1_SIZE, "camp.l2d",
             0xC2F6A50, 518320, "20db310957d3296bbceb326d938e1feb750b38f8dcf1f498900a15f118411983"),
-,
         // Verified additional geometry assets from the provided BBS archives.
         // Exact offsets and SHA-256 preimages prevent cross-region corruption.
         Candidate(UiScaleElement.COMBAT_HUD, "BBS0.DAT", 754655232L, "wind_00.l2d",
