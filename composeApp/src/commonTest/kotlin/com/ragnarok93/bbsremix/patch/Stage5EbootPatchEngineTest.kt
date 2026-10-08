@@ -324,6 +324,7 @@ class Stage5EbootPatchEngineTest {
             image.writeIntLe(fileOffset(it.virtualAddress), it.expected)
         }
         seedCameraGeometry(image)
+        seedFrameRateOriginal(image)
 
         val result = engine.verifyPatched(image, options)
         assertTrue(result.verified, result.problems.joinToString())
@@ -334,6 +335,12 @@ class Stage5EbootPatchEngineTest {
                 Stage5Payloads.S2_FILE_OFFSET + Stage5Payloads.s2Blob.size,
             ).all { it == 0.toByte() },
         )
+    }
+
+    private fun seedFrameRateOriginal(image: ByteArray) {
+        for (address in 0x088074B0..0x088074EC step 4) {
+            image.writeIntLe(fileOffset(address), PspNativeFrameRatePatch.originalWord(address))
+        }
     }
 
     private fun seedCameraGeometry(image: ByteArray) {
