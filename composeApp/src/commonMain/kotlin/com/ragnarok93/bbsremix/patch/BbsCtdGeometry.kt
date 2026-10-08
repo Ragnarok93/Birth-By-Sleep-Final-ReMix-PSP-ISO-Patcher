@@ -90,7 +90,6 @@ internal object BbsCtdGeometry {
                 0x10 to rounded(source.u16(base + 0x10), percent),
                 0x12 to rounded(source.u16(base + 0x12), percent),
                 0x14 to rounded(source.u16(base + 0x14), percent),
-                0x16 to rounded(source.u16(base + 0x16), percent),
             )
             var changes = 0
             for ((delta, value) in rowFields) {

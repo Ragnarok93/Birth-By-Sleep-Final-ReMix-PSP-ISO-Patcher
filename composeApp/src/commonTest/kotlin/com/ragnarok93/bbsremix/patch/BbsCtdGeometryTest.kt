@@ -23,7 +23,7 @@ class BbsCtdGeometryTest {
         assertEquals(228, scaled.u16(0x42))
         assertEquals(170, scaled.u16(0x44))
         assertEquals(20, scaled.u16(0x46))
-        assertEquals(15, scaled.u16(0x4e))
+        assertEquals(15, scaled.u16(0x4c))
         assertEquals(240, scaled.u16(0x40) + scaled.u16(0x44) / 2)
         assertEquals(248, scaled.u16(0x42) + scaled.u16(0x46))
         assertContentEquals(original.copyOfRange(0x20, 0x40), scaled.copyOfRange(0x20, 0x40))
