@@ -444,13 +444,13 @@ fun PatcherApp(
                     }
                     bbs0Status = "Inspecting the archive index and embedded UI layouts."
                     val result = withContext(Dispatchers.Default) {
-                        Bbs0UiExporter.export(staged, temporary, bbs0MetadataOnly, token) { done, total ->
+                        Bbs0UiExporter.export(staged, temporary, bbs0MetadataOnly, token, progress = { done, total ->
                             scope.launch {
                                 if (activeOperation == "Export BBS0 UI") {
                                     bbs0Status = "Scanning BBS0: ${formatTextureSize(done)} / ${formatTextureSize(total)}"
                                 }
                             }
-                        }
+                        })
                     }
                     bbs0Status = "Saving ZIP to selected destination."
                     withContext(Dispatchers.IO) {
