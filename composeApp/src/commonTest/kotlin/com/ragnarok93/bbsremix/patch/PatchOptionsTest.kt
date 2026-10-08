@@ -23,14 +23,16 @@ class PatchOptionsTest {
     }
 
     @Test
-    fun fps_targets_are_discrete_and_patch_only_above_stock() {
-        for (fps in listOf(30, 60, 90, 120)) {
+    fun fps_switch_accepts_only_stock_30_or_native_60() {
+        for (fps in listOf(30, 60)) {
             val options = PatchOptions(fpsTarget = fps)
             assertTrue(options.validate().isEmpty(), "FPS $fps should be accepted")
-            assertEquals(fps != 30, options.appliesFrameRate)
+            assertEquals(fps == 60, options.appliesFrameRate)
         }
-        val invalid = PatchOptions(fpsTarget = 75).validate()
-        assertTrue(invalid.any { it is PatchOptionError.FrameRateTargetUnsupported })
+        for (invalidFps in listOf(75, 90, 120)) {
+            val invalid = PatchOptions(fpsTarget = invalidFps).validate()
+            assertTrue(invalid.any { it is PatchOptionError.FrameRateTargetUnsupported })
+        }
     }
 
     @Test
