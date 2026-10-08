@@ -186,6 +186,17 @@ class RuntimeRegressionTest(unittest.TestCase):
                     self.assertNotIn(delay >> 26, (1, 2, 3, 4, 5, 6, 7, 20, 21, 22, 23))
                     self.assertFalse(delay >> 26 == 0 and delay & 63 in (8, 9))
 
+    def test_camera_geometry_ranges_match_runtime_validated_caps(self):
+        # The Python oracle accepts the validated raw ranges used by the UI's
+        # five-level sliders and rejects values outside them before patching.
+        dummy = bytearray()
+        for value in (1.999, 6.001):
+            with self.assertRaisesRegex(ValueError, '2.0 and 6.0'):
+                p.patch(dummy, camera_controls=False, camera_distance_enabled=True, camera_distance=value)
+        for value in (0.999, 2.501):
+            with self.assertRaisesRegex(ValueError, '1.0 and 2.5'):
+                p.patch(dummy, camera_controls=False, camera_height_enabled=True, camera_height=value)
+
     def test_advanced_configuration_is_rejected_at_python_entry(self):
         for cfg, passives in [(0x3d, False), (0x3e, False), (0x7c, False), (0x3c, True)]:
             with self.assertRaisesRegex(ValueError, 'runtime evidence'):
