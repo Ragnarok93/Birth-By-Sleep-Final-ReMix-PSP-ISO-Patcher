@@ -42,6 +42,17 @@ and that BBS1/2/3 may be protected using PSP PDG encryption.
 | Command Board | BBS3: `bd_cock.l2d` | `0x521D030` |
 
 **Never assume matching prefixes uniquely establish UI function.**
+In particular, `shp_face.l2d` is in a shop-related ARC and has not been
+established to be the main combat character-portrait renderer. Similarly,
+`cmd_b00` is packaged with shop command resources and must not be treated as
+the combat Command Deck without gameplay validation.
+
+All 69 CTD references identified by the sector-aligned ARC scan are *links*
+(BBS1: 49, BBS2: 1, BBS3: 19), not embedded CTD assets. The actual dialogue
+and subtitle layout tables are therefore unavailable in these three supplied
+DATs. The BBS0 archive/index is needed for that part of the feature.
+
+**Never assume matching prefixes uniquely establish UI function.**
 All offsets above are within the supplied DAT files, not ISO-relative offsets.
 Must match game serial, storage representation and exact asset hashes before
 any automated writing. Similar names appear at multiple archive locations.

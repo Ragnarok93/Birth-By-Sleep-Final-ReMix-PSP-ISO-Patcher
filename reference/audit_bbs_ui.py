@@ -24,7 +24,8 @@ def u32(data, pos):
 
 def scan_dat(path):
     result = {"filename": path.name, "file_size": path.stat().st_size,
-              "arc_count": 0, "arc_entry_count": 0, "l2d": []}
+              "arc_count": 0, "arc_entry_count": 0, "l2d": [],
+              "ctd_links": 0, "ctd_embedded": 0}
     with path.open("rb") as handle:
         mm = mmap.mmap(handle.fileno(), 0, access=mmap.ACCESS_READ)
         try:
@@ -48,6 +49,8 @@ def scan_dat(path):
                     ):
                         valid = False
                         break
+                    if raw.lower().endswith(b".ctd"):
+                        entries.append({"ctd_reference": True, "embedded": directory_hash == 0})
                     if directory_hash == 0 and raw.lower().endswith(b".l2d"):
                         offset = start + relative
                         if mm[offset:offset + 4] == b"L2D@" and length >= 0x40:
@@ -63,7 +66,11 @@ def scan_dat(path):
                 if valid:
                     result["arc_count"] += 1
                     result["arc_entry_count"] += count
-                    result["l2d"].extend(entries)
+                    for entry in entries:
+                        if entry.get("ctd_reference"):
+                            result["ctd_embedded" if entry["embedded"] else "ctd_links"] += 1
+                        else:
+                            result["l2d"].append(entry)
         finally:
             mm.close()
     result["l2d_count"] = len(result["l2d"])
