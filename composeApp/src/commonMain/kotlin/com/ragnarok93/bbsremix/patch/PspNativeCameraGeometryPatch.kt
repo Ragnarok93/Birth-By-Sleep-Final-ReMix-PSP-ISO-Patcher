@@ -63,6 +63,8 @@ internal object PspNativeCameraGeometryPatch {
         0xD8A00000.toInt(), 0xF8C00000.toInt(), 0x03E00008, 0x00801025,
     )
 
+    internal fun originalCopyRoutineWords(): IntArray = originalCopyRoutine.copyOf()
+
     fun validateSource(data: ByteArray, problems: MutableList<String>) {
         val signatureOffset = fileOffset(CAMERA_TABLE_VA)
         if (signatureOffset < 0 || signatureOffset + 4 > data.size ||
