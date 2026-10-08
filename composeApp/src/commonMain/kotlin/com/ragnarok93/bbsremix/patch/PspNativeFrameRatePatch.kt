@@ -11,8 +11,7 @@ package com.ragnarok93.bbsremix.patch
  *   mode 1 -> scalar 2.0f
  *   mode 0 -> scalar 1.0f
  *
- * The 60 FPS profile forces the native mode-0 path. Experimental 90/120
- * profiles keep that same mode flag but replace the scalar with 60/target.
+ * The 60 FPS profile forces the native mode-0 path and its 1.0f timing scalar.
  * This is intentionally an in-place resident patch: no overlay allocation,
  * additional ELF segment, or BSS file write is required.
  */
@@ -59,12 +58,12 @@ internal object PspNativeFrameRatePatch {
     }
 
     fun apply(data: ByteArray, targetFps: Int) {
-        require(targetFps in setOf(60, 90, 120)) { "Unsupported patched FPS target: $targetFps" }
+        require(targetFps == 60) { "Unsupported patched FPS target: $targetFps" }
 
         // Always take the native mode-0/60-FPS branch.
         data.writeIntLe(fileOffset(FORCE_MODE_BRANCH_VA), 0x10000006)
 
-        val scalarBits = timingScalar(targetFps).toBits()
+        val scalarBits = 1.0f.toBits()
         data.writeIntLe(fileOffset(0x088074D8), 0x3C040000 or ((scalarBits ushr 16) and 0xffff))
         data.writeIntLe(fileOffset(0x088074DC), 0x34840000 or (scalarBits and 0xffff))
         data.writeIntLe(fileOffset(0x088074E0), 0x44846000)
@@ -85,12 +84,12 @@ internal object PspNativeFrameRatePatch {
             return
         }
 
-        if (targetFps !in setOf(60, 90, 120)) {
+        if (targetFps != 60) {
             problems += "Unsupported FPS target $targetFps."
             return
         }
 
-        val scalarBits = timingScalar(targetFps).toBits()
+        val scalarBits = 1.0f.toBits()
         val expected = linkedMapOf(
             0x088074BC to 0x10000006,
             0x088074D8 to (0x3C040000 or ((scalarBits ushr 16) and 0xffff)),
@@ -121,12 +120,7 @@ internal object PspNativeFrameRatePatch {
         }
     }
 
-    internal fun timingScalar(targetFps: Int): Float = when (targetFps) {
-        60 -> 1.0f
-        90 -> 2.0f / 3.0f
-        120 -> 0.5f
-        else -> throw IllegalArgumentException("No patched timing scalar for $targetFps FPS")
-    }
+    internal const val TIMING_SCALAR_60 = 1.0f
 
     internal fun originalWord(virtualAddress: Int): Int = originalWords.getValue(virtualAddress)
 
