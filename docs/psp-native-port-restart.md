@@ -111,20 +111,34 @@ record+`0x20` into the game's native camera transform setup at
 `0x08AE0AF0`. The structure-copy path at `0x0893DBF4` also copies the
 float at record+`0x14`.
 
-For the current isolated runtime candidates:
+The first isolated geometry candidate patched only those four resident floats.
+Runtime testing showed that neither distance nor height changed in-game, while
+right-stick camera behavior remained unaffected. Static analysis of the exact
+EBOOT explains why: the native BCam resource loader at `0x0893EF24` resolves a
+camera resource, then the camera-only structure copier at `0x0893DBF4` copies
+`0x70` bytes from that resource over the resident working table. Its vector
+copies at offsets `+0x20` and `+0x50` overwrite the patched Y/Z values before
+the camera state functions consume them.
 
-- **Camera height** writes the Y component at `0x08B59F24` and
-  `0x08B59F54`.
-- **Camera distance** writes the signed Z component at `0x08B59F28` and
-  `0x08B59F58`. The UI remains positive, so a distance of `4.5` is stored
-  natively as `-4.5`.
-- The table signature, mode IDs, vector W components, ELF program headers,
-  LOAD sizes, and dynamic overlay arena remain unchanged.
-- No runtime hook, injected MIPS payload, or additional ELF segment is required.
+The corrected candidate now patches both the fallback data and that native copy
+path:
 
-These mappings are substantially safer than the old Stage 4 camera path, but
-they are still runtime candidates until distance and height are tested
-independently in PPSSPP.
+- **Camera height** keeps the selected Y value at working-table offsets
+  `+0x24` and `+0x54`.
+- **Camera distance** keeps the selected signed Z value at `+0x28` and
+  `+0x58`. A UI distance of `4.5` is stored as `-4.5`.
+- `0x0893DBF4` is replaced in place with a standard 28-word copy loop that
+  reproduces the original `0x70`-byte BCam copy, then rewrites only the
+  selected component(s). Unselected camera components continue to come from
+  the loaded BCam resource.
+- The camera copier has only two call sites in MainApp
+  (`0x0893E12C` and `0x0893EFC0`), both belonging to this camera-resource
+  path.
+- No new allocation, overlay code, third program header, or LOAD extension is
+  introduced.
+
+This corrected copy-time override is the next runtime candidate. The previous
+static-table-only candidate is retired as non-functional.
 
 ## Better Battle System re-port
 
