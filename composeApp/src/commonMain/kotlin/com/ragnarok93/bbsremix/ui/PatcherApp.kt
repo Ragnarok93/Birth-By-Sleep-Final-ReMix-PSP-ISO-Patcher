@@ -683,7 +683,7 @@ private fun PageHeader() {
             color = MaterialTheme.colorScheme.primary,
         )
         Text(
-            text = "Right-stick camera control is working in runtime tests. Camera distance and height now use the PSP's resident native camera-mode vectors as data-only patches; ELF program headers and the dynamic overlay arena remain untouched. Combat mods stay disabled.",
+            text = "Right-stick camera control is working in runtime tests. Camera distance and height now patch the PSP's resident camera vectors and the camera-only BCam copy path so runtime resource loads cannot overwrite them. ELF program headers and the dynamic overlay arena remain untouched. Combat mods stay disabled.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -1069,7 +1069,7 @@ private fun OptionsCard(
             )
             FeatureToggle(
                 title = "Camera distance",
-                description = "PSP-native player-camera Z distance for normal and lock-on modes. Data-only patch; default 4.5.",
+                description = "PSP-native player-camera Z distance for normal and lock-on modes. Preserved through BCam resource reloads; default 4.5.",
                 checked = options.cameraDistanceEnabled,
                 enabled = !busy,
                 onCheckedChange = { onOptionsChanged(options.copy(cameraDistanceEnabled = it)) },
@@ -1084,7 +1084,7 @@ private fun OptionsCard(
             )
             FeatureToggle(
                 title = "Camera height",
-                description = "PSP-native player-camera Y height for normal and lock-on modes. Data-only patch; default 1.0.",
+                description = "PSP-native player-camera Y height for normal and lock-on modes. Preserved through BCam resource reloads; default 1.0.",
                 checked = options.cameraHeightEnabled,
                 enabled = !busy,
                 onCheckedChange = { onOptionsChanged(options.copy(cameraHeightEnabled = it)) },
@@ -1298,7 +1298,7 @@ private fun OutputCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
-                "Patch ISO supports the resident PSP-native right-stick, camera distance, and camera height mods. Geometry changes only the native camera data table; no overlay payload or extra ELF segment is used.",
+                "Patch ISO supports the resident PSP-native right-stick, camera distance, and camera height mods. Geometry patches the native camera table plus its resident BCam copy routine so values survive runtime resource loads; no overlay payload or extra ELF segment is used.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
