@@ -1261,7 +1261,8 @@ private fun FrameRateSetting(
     val title = when (targetFps) {
         30 -> "30 FPS · Stock"
         60 -> "60 FPS"
-        90, 120 -> "$targetFps FPS · Experimental"
+        90 -> "90 FPS · Experimental · 60Hz limited"
+        120 -> "120 FPS · Experimental · Unsafe"
         else -> "$targetFps FPS"
     }
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -1289,7 +1290,8 @@ private fun FrameRateSetting(
             when (targetFps) {
                 30 -> "Original game frame-rate behavior."
                 60 -> "Forces the game's native 60 FPS mode without a PPSSPP cheat."
-                else -> "Experimental: forces native 60 FPS mode and scales timing to 60/$targetFps. PPSSPP/VBlank or game logic may still limit actual unique frames."
+                90 -> "Research profile. Runtime testing reaches the native 60 FPS path, but PPSSPP's emulated PSP display remains about 59.94 Hz, so no >60 displayed-frame gain has been observed."
+                else -> "Unsafe research profile. The 0.5 timing-scale test caused an early root-thread deadbeef/disc-read failure; keep this only for controlled investigation."
             },
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
