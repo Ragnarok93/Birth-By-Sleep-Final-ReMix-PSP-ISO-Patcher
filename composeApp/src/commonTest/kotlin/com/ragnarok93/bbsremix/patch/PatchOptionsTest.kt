@@ -20,6 +20,39 @@ class PatchOptionsTest {
         assertEquals(2.0f, options.cameraDistance)
         assertEquals(1.0f, options.cameraHeight)
         assertTrue(options.validate().isEmpty())
+        assertTrue(options.uiScaling.isStock)
+        assertFalse(options.appliesUiScaling)
+    }
+
+    @Test
+    fun ui_scaling_bounds_and_stock_defaults_are_enforced() {
+        val defaults = PatchOptions()
+        UiScaleElement.entries.forEach { category ->
+            assertEquals(100, defaults.uiScaling[category])
+            assertEquals(70, defaults.uiScaling.withPercent(category, 70)[category])
+            assertEquals(100, defaults.uiScaling.withPercent(category, 70).withPercent(category, 100)[category])
+            assertTrue(defaults.uiScaling.withPercent(category, 70).invalidSelections().isEmpty())
+        }
+        for (invalid in listOf(0, 65, 69, 71, 99, 101, 120)) {
+            assertFalse(UiScaleSettings.isSelectable(invalid))
+            val malformed = PatchOptions(uiScaling = UiScaleSettings(combatHud = invalid))
+            assertTrue(malformed.validate().any { it is PatchOptionError.UiScaleOutsideSupportedRange })
+        }
+        listOf(70, 75, 80, 85, 90, 95, 100).forEach {
+            assertTrue(UiScaleSettings.isSelectable(it))
+        }
+    }
+
+    @Test
+    fun non_stock_ui_scale_is_blocked_until_real_psp_offsets_are_validated() {
+        UiScaleElement.entries.forEach { category ->
+            val selected = PatchOptions(uiScaling = UiScaleSettings().withPercent(category, 85))
+            assertTrue(selected.appliesUiScaling)
+            assertTrue(selected.hasSelectedFeature)
+            assertTrue(selected.validate().any { it is PatchOptionError.UnvalidatedUiScaling })
+            assertTrue(selected.uiScaling.invalidSelections().isEmpty())
+        }
+        assertTrue(PatchOptions(uiScaling = UiScaleSettings()).validate().isEmpty())
     }
 
     @Test

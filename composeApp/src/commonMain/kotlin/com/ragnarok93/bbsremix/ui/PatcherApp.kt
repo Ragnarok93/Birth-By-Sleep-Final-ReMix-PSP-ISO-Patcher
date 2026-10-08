@@ -59,6 +59,8 @@ import com.ragnarok93.bbsremix.iso.IsoVerificationStatus
 import com.ragnarok93.bbsremix.patch.CancellationToken
 import com.ragnarok93.bbsremix.patch.PatchCancelledException
 import com.ragnarok93.bbsremix.patch.PatchOptions
+import com.ragnarok93.bbsremix.patch.UiScaleElement
+import com.ragnarok93.bbsremix.patch.UiScaleSettings
 import com.ragnarok93.bbsremix.patch.PatchProgress
 import com.ragnarok93.bbsremix.patch.ProgressReporter
 import com.ragnarok93.bbsremix.platform.FileGateway
@@ -1049,6 +1051,7 @@ private fun OptionsCard(
     modifier: Modifier = Modifier,
 ) {
     var combatExpanded by remember { mutableStateOf(true) }
+    var uiScaleExpanded by remember { mutableStateOf(false) }
     var advancedExpanded by remember { mutableStateOf(false) }
 
     PatcherSurface(modifier.fillMaxWidth()) {
@@ -1107,6 +1110,50 @@ private fun OptionsCard(
                     onOptionsChanged(options.copy(cameraHeight = PatchOptions.cameraHeightForLevel(level)))
                 },
             )
+
+            HorizontalDivider()
+            ExpandableRow(
+                title = "UI Scaling (70–100%)",
+                description = "Per-element scale planning; stock is 100%. Non-stock scaling is not yet safe to patch.",
+                expanded = uiScaleExpanded,
+                enabled = !busy,
+                onExpandedChange = { uiScaleExpanded = it },
+            )
+            AnimatedVisibility(uiScaleExpanded) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "Preview only: the PSP layout/rendering offsets have not been verified. " +
+                            "Non-stock selections disable Patch ISO; PPSSPP HD replacement textures are unchanged.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    UiScaleElement.entries.forEach { element ->
+                        UiScalePercentSlider(
+                            label = element.title,
+                            percent = options.uiScaling[element],
+                            enabled = !busy,
+                            onPercentChange = { percent ->
+                                onOptionsChanged(
+                                    options.copy(uiScaling = options.uiScaling.withPercent(element, percent)),
+                                )
+                            },
+                        )
+                    }
+                    if (options.appliesUiScaling) {
+                        Text(
+                            "Restore all UI sliders to 100% to enable ISO patching.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                        TextButton(
+                            onClick = { onOptionsChanged(options.copy(uiScaling = UiScaleSettings())) },
+                            enabled = !busy,
+                        ) {
+                            Text("Reset UI scaling to stock")
+                        }
+                    }
+                }
+            }
 
             HorizontalDivider()
             ExpandableRow(
@@ -1285,6 +1332,40 @@ private fun CameraLevelSlider(
 }
 
 @Composable
+private fun UiScalePercentSlider(
+    label: String,
+    percent: Int,
+    enabled: Boolean,
+    onPercentChange: (Int) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(label, style = MaterialTheme.typography.bodyMedium)
+            Spacer(Modifier.weight(1f))
+            Text(
+                "$percent%",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
+        PatcherSlider(
+            value = percent.toFloat(),
+            onValueChange = { value ->
+                val snapped = (kotlin.math.round(value / UiScaleSettings.STEP_PERCENT) *
+                    UiScaleSettings.STEP_PERCENT).toInt()
+                    .coerceIn(UiScaleSettings.MIN_PERCENT, UiScaleSettings.MAX_PERCENT)
+                onPercentChange(snapped)
+            },
+            valueRange = UiScaleSettings.MIN_PERCENT.toFloat()..UiScaleSettings.MAX_PERCENT.toFloat(),
+            steps = (UiScaleSettings.MAX_PERCENT - UiScaleSettings.MIN_PERCENT) /
+                UiScaleSettings.STEP_PERCENT - 1,
+            enabled = enabled,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+}
+
+@Composable
 private fun OutputCard(
     output: PlatformOutputSelection?,
     onSelect: () -> Unit,
@@ -1308,7 +1389,7 @@ private fun OutputCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
-                "Patch ISO supports the FPS selector plus resident PSP-native right-stick, camera distance, and camera height mods. FPS and camera hooks stay in resident MainApp code/data; no overlay payload or extra ELF segment is used.",
+                "Patch ISO supports the FPS selector plus resident PSP-native right-stick, camera distance, and camera height mods. Non-stock UI scaling is blocked until the game layout/rendering offsets are validated.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

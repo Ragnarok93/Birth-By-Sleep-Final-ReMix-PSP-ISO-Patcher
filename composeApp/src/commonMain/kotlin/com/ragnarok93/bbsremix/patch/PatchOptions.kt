@@ -15,6 +15,7 @@ data class PatchOptions(
     val telemetry: Boolean = false,
     val criticalModeAbilities: Boolean = false,
     val criticalModePassives: Boolean = false,
+    val uiScaling: UiScaleSettings = UiScaleSettings(),
 ) {
     val combatFeatures: Boolean
         get() = strictSteamExclusions ||
@@ -35,8 +36,12 @@ data class PatchOptions(
     val appliesCameraHeight: Boolean
         get() = cameraHeightEnabled
 
+    val appliesUiScaling: Boolean
+        get() = !uiScaling.isStock
+
     val hasSelectedFeature: Boolean
-        get() = appliesFrameRate || rightStickCamera || appliesCameraDistance || appliesCameraHeight || combatFeatures
+        get() = appliesFrameRate || rightStickCamera || appliesCameraDistance || appliesCameraHeight ||
+            appliesUiScaling || combatFeatures
 
     fun validate(): List<PatchOptionError> = buildList {
         if (fpsTarget !in FPS_TARGETS) {
@@ -50,6 +55,12 @@ data class PatchOptions(
         }
         if (cameraHeight !in CAMERA_HEIGHT_RANGE) {
             add(PatchOptionError.CameraHeightOutOfRange(cameraHeight))
+        }
+        uiScaling.invalidSelections().forEach { (element, percent) ->
+            add(PatchOptionError.UiScaleOutsideSupportedRange(element.title, percent))
+        }
+        if (appliesUiScaling) {
+            add(PatchOptionError.UnvalidatedUiScaling)
         }
         if (!hasSelectedFeature) {
             add(PatchOptionError.NoFeaturesSelected)
@@ -110,6 +121,14 @@ sealed class PatchOptionError(val message: String) {
 
     data class CameraHeightOutOfRange(val value: Float) : PatchOptionError(
         "Camera height must be between 1.0 and 2.5 (received $value)."
+    )
+
+    data class UiScaleOutsideSupportedRange(val element: String, val percent: Int) : PatchOptionError(
+        "$element UI scale must be 70–100% in 5% increments (received $percent%)."
+    )
+
+    data object UnvalidatedUiScaling : PatchOptionError(
+        "Non-stock UI scaling is not supported: PSP HUD/layout rendering offsets and ISO resource edits have not been validated. Restore each UI scale to 100% before patching."
     )
 
     data object NoFeaturesSelected : PatchOptionError(
