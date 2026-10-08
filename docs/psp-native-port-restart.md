@@ -139,9 +139,7 @@ path:
 
 Runtime testing now confirms that the corrected copy-time overrides make both
 camera distance and camera height functional. The validated user-facing ranges
-are distance `2.0–6.0` and height `1.0–2.5`. The UI exposes five discrete
-levels for each control: distance `2/3/4/5/6`, and height
-`1.0/1.375/1.75/2.125/2.5`. The previous static-table-only candidate remains
+are distance `2.0–6.0` and height `1.0–2.5`. The UI exposes only five discrete integer levels, `1–5`, with level `1` as the default for both controls. Internally those levels map to distance `2/3/4/5/6` and height `1.0/1.375/1.75/2.125/2.5`. The previous static-table-only candidate remains
 retired as non-functional.
 
 ## Better Battle System re-port
