@@ -1075,7 +1075,7 @@ private fun OptionsCard(
             )
             FeatureToggle(
                 title = "Camera distance",
-                description = "PSP-native player-camera Z distance for normal and lock-on modes. Five validated levels map 2.0–6.0; default level 3 = 4.0.",
+                description = "PSP-native player-camera Z distance for normal and lock-on modes. Range 1–5; default 1.",
                 checked = options.cameraDistanceEnabled,
                 enabled = !busy,
                 onCheckedChange = { onOptionsChanged(options.copy(cameraDistanceEnabled = it)) },
@@ -1083,7 +1083,6 @@ private fun OptionsCard(
             CameraLevelSlider(
                 label = "Camera Distance",
                 level = PatchOptions.cameraDistanceLevel(options.cameraDistance),
-                actualValue = options.cameraDistance,
                 enabled = !busy && options.cameraDistanceEnabled,
                 onLevelChange = { level ->
                     onOptionsChanged(options.copy(cameraDistance = PatchOptions.cameraDistanceForLevel(level)))
@@ -1091,7 +1090,7 @@ private fun OptionsCard(
             )
             FeatureToggle(
                 title = "Camera height",
-                description = "PSP-native player-camera Y height for normal and lock-on modes. Five validated levels map 1.0–2.5; default level 3 = 1.75.",
+                description = "PSP-native player-camera Y height for normal and lock-on modes. Range 1–5; default 1.",
                 checked = options.cameraHeightEnabled,
                 enabled = !busy,
                 onCheckedChange = { onOptionsChanged(options.copy(cameraHeightEnabled = it)) },
@@ -1099,7 +1098,6 @@ private fun OptionsCard(
             CameraLevelSlider(
                 label = "Camera Height",
                 level = PatchOptions.cameraHeightLevel(options.cameraHeight),
-                actualValue = options.cameraHeight,
                 enabled = !busy && options.cameraHeightEnabled,
                 onLevelChange = { level ->
                     onOptionsChanged(options.copy(cameraHeight = PatchOptions.cameraHeightForLevel(level)))
@@ -1303,36 +1301,24 @@ private fun FrameRateSetting(
 private fun CameraLevelSlider(
     label: String,
     level: Int,
-    actualValue: Float,
     enabled: Boolean,
     onLevelChange: (Int) -> Unit,
 ) {
-    val hundredths = kotlin.math.round(actualValue * 100f).toInt()
-    val whole = hundredths / 100
-    val fraction = kotlin.math.abs(hundredths % 100)
-    val formattedValue = if (fraction == 0) {
-        "$whole.0"
-    } else if (fraction % 10 == 0) {
-        "$whole.${fraction / 10}"
-    } else {
-        "$whole.${fraction.toString().padStart(2, '0')}"
-    }
-
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(label, style = MaterialTheme.typography.bodyMedium)
             Spacer(Modifier.weight(1f))
             Text(
-                "Level $level · $formattedValue",
+                level.coerceIn(1, 5).toString(),
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.primary,
             )
         }
-        PatcherSlider(
-            value = level.toFloat(),
-            onValueChange = { onLevelChange(kotlin.math.round(it).toInt().coerceIn(1, 5)) },
-            valueRange = PatchOptions.CAMERA_LEVEL_RANGE,
-            steps = PatchOptions.CAMERA_LEVEL_STEPS,
+        PatcherLevelSlider(
+            level = level,
+            onLevelChange = onLevelChange,
+            minLevel = 1,
+            maxLevel = 5,
             enabled = enabled,
             modifier = Modifier.fillMaxWidth(),
         )
