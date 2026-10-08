@@ -166,6 +166,74 @@ class Iso9660Test {
     }
 
     @Test
+    fun multiple_ui_overlays_and_relocated_eboot_survive_one_iso_rebuild() {
+        val source = createFixture("ui-multi-source")
+        val destination = path("ui-multi-output")
+        try {
+            val image = reader.inspect(source)
+            val eboot = ByteArray(5000) { ((it * 17) and 255).toByte() }
+            val offsets = listOf(
+                23L * SECTOR_SIZE + 1L,
+                KEEP_SECTOR.toLong() * SECTOR_SIZE + 2L,
+            )
+            val replacements = listOf("HUD".encodeToByteArray(), "CTD".encodeToByteArray())
+            val overlays = offsets.zip(replacements).mapIndexed { index, (offset, replacement) ->
+                IsoBytePatch(
+                    offset, reader.readAt(source, offset, replacement.size),
+                    replacement, "ui-test-" + index,
+                )
+            }
+            rebuilder.rebuild(source, destination, image, eboot, extraPatches = overlays)
+            val result = reader.inspect(destination)
+            assertTrue(result.eboot.extentSector != image.eboot.extentSector)
+            assertContentEquals(eboot, reader.readEntry(destination, result.eboot))
+            overlays.forEach { patch ->
+                assertContentEquals(
+                    patch.replacement,
+                    reader.readAt(destination, patch.absoluteOffset, patch.replacement.size),
+                )
+            }
+            assertContentEquals(
+                reader.readAt(source, 23L * SECTOR_SIZE, 1),
+                reader.readAt(destination, 23L * SECTOR_SIZE, 1),
+            )
+            assertContentEquals(
+                reader.readAt(source, KEEP_SECTOR.toLong() * SECTOR_SIZE, 2),
+                reader.readAt(destination, KEEP_SECTOR.toLong() * SECTOR_SIZE, 2),
+            )
+        } finally {
+            fileSystem.delete(source, mustExist = false)
+            fileSystem.delete(destination, mustExist = false)
+        }
+    }
+
+    @Test
+    fun overlapping_ui_overlay_preimages_are_rejected_without_an_output() {
+        val source = createFixture("ui-overlap-source")
+        val destination = path("ui-overlap-output")
+        try {
+            val image = reader.inspect(source)
+            val eboot = reader.readEntry(source, image.eboot)
+            val a = 23L * SECTOR_SIZE + 1L
+            val b = a + 2L
+            assertFailsWith<IsoFormatException> {
+                rebuilder.rebuild(source, destination, image, eboot,
+                    extraPatches = listOf(
+                        IsoBytePatch(a, reader.readAt(source, a, 4),
+                            byteArrayOf(1, 2, 3, 4), "first"),
+                        IsoBytePatch(b, reader.readAt(source, b, 4),
+                            byteArrayOf(5, 6, 7, 8), "second"),
+                    ),
+                )
+            }
+            assertTrue(!fileSystem.exists(destination))
+        } finally {
+            fileSystem.delete(source, mustExist = false)
+            fileSystem.delete(destination, mustExist = false)
+        }
+    }
+
+    @Test
     fun overlay_rejects_wrong_preimage_and_eboot_overlap_without_creating_destination() {
         val source = createFixture("overlay-reject-source")
         val dest = path("overlay-reject-output")
