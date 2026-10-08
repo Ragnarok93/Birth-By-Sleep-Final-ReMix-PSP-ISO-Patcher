@@ -15,8 +15,8 @@ class PatchOptionsTest {
         assertFalse(options.appliesCameraDistance)
         assertFalse(options.appliesCameraHeight)
         assertTrue(options.hasSelectedFeature)
-        assertEquals(4.5f, options.cameraDistance)
-        assertEquals(1.0f, options.cameraHeight)
+        assertEquals(4.0f, options.cameraDistance)
+        assertEquals(1.75f, options.cameraHeight)
         assertTrue(options.validate().isEmpty())
     }
 
@@ -50,8 +50,33 @@ class PatchOptionsTest {
     }
 
     @Test
-    fun camera_values_keep_reference_boundaries() {
-        assertEquals(1, PatchOptions(cameraDistance = 0.999f).validate().size)
-        assertEquals(1, PatchOptions(cameraHeight = 4.001f).validate().size)
+    fun camera_values_keep_validated_boundaries() {
+        assertTrue(PatchOptions(cameraDistance = 2.0f, cameraHeight = 1.0f).validate().isEmpty())
+        assertTrue(PatchOptions(cameraDistance = 6.0f, cameraHeight = 2.5f).validate().isEmpty())
+        assertEquals(1, PatchOptions(cameraDistance = 1.999f).validate().size)
+        assertEquals(1, PatchOptions(cameraDistance = 6.001f).validate().size)
+        assertEquals(1, PatchOptions(cameraHeight = 0.999f).validate().size)
+        assertEquals(1, PatchOptions(cameraHeight = 2.501f).validate().size)
+    }
+
+    @Test
+    fun camera_sliders_use_five_discrete_levels() {
+        assertEquals(2.0f, PatchOptions.cameraDistanceForLevel(1))
+        assertEquals(3.0f, PatchOptions.cameraDistanceForLevel(2))
+        assertEquals(4.0f, PatchOptions.cameraDistanceForLevel(3))
+        assertEquals(5.0f, PatchOptions.cameraDistanceForLevel(4))
+        assertEquals(6.0f, PatchOptions.cameraDistanceForLevel(5))
+
+        assertEquals(1.0f, PatchOptions.cameraHeightForLevel(1))
+        assertEquals(1.375f, PatchOptions.cameraHeightForLevel(2))
+        assertEquals(1.75f, PatchOptions.cameraHeightForLevel(3))
+        assertEquals(2.125f, PatchOptions.cameraHeightForLevel(4))
+        assertEquals(2.5f, PatchOptions.cameraHeightForLevel(5))
+
+        assertEquals(3, PatchOptions.cameraDistanceLevel(4.0f))
+        assertEquals(3, PatchOptions.cameraHeightLevel(1.75f))
+        assertEquals(1.0f, PatchOptions.CAMERA_LEVEL_RANGE.start)
+        assertEquals(5.0f, PatchOptions.CAMERA_LEVEL_RANGE.endInclusive)
+        assertEquals(3, PatchOptions.CAMERA_LEVEL_STEPS)
     }
 }
