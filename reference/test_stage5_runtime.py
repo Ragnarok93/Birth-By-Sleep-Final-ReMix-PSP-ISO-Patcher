@@ -10,6 +10,30 @@ spec.loader.exec_module(p)
 
 
 class RuntimeRegressionTest(unittest.TestCase):
+    def test_frame_rate_profiles_force_native_mode_zero_and_scale_timing(self):
+        expected_bits = {
+            60: 0x3F800000,
+            90: 0x3F2AAAAB,
+            120: 0x3F000000,
+        }
+        for fps,bits in expected_bits.items():
+            data=bytearray(p.SUPPORTED_SIZE)
+            for va,word in p.FPS_SETTER_ORIGINAL_WORDS:
+                p.p32(data,p.foff(va),word)
+            p.verify_fps_source(data)
+            p.apply_fps(data,fps)
+            self.assertEqual(0x10000006,p.u32(data,p.foff(0x088074BC)))
+            self.assertEqual(0x3C040000 | ((bits>>16)&0xffff),p.u32(data,p.foff(0x088074D8)))
+            self.assertEqual(0x34840000 | (bits&0xffff),p.u32(data,p.foff(0x088074DC)))
+            self.assertEqual(0x44846000,p.u32(data,p.foff(0x088074E0)))
+            self.assertEqual(0xE4AC1870,p.u32(data,p.foff(0x088074E4)))
+            self.assertEqual(0x03E00008,p.u32(data,p.foff(0x088074E8)))
+            self.assertEqual(0xACC05EC8,p.u32(data,p.foff(0x088074EC)))
+
+        self.assertAlmostEqual(1.0,p.fps_timing_scalar(60))
+        self.assertAlmostEqual(2.0/3.0,p.fps_timing_scalar(90))
+        self.assertAlmostEqual(0.5,p.fps_timing_scalar(120))
+
     def test_supported_right_stick_patch_stays_out_of_overlay_arena(self):
         word_addresses = {va for va, _expected, _replacement, _desc in p.RIGHT_STICK_WORD_PATCHES}
         byte_addresses = {va for va, _expected, _replacement, _desc in p.RIGHT_STICK_BYTE_PATCHES}
