@@ -1289,7 +1289,7 @@ private fun FrameRateSetting(
             when (targetFps) {
                 30 -> "Original game frame-rate behavior."
                 60 -> "Forces the game's native 60 FPS mode without a PPSSPP cheat."
-                else -> "Experimental: forces native 60 FPS mode and scales timing to 60/$targetFps. PPSSPP/VBlank or game logic may still limit actual unique frames.",
+                else -> "Experimental: forces native 60 FPS mode and scales timing to 60/$targetFps. PPSSPP/VBlank or game logic may still limit actual unique frames."
             },
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
