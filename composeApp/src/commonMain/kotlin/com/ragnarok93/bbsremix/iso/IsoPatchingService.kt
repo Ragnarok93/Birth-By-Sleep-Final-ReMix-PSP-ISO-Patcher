@@ -46,6 +46,7 @@ data class IsoPatchResult(
     val outputSize: Long,
     val relocatedEboot: Boolean,
     val uiAssetsPatched: Int = 0,
+    val uiPatchDetails: List<String> = emptyList(),
 )
 
 data class IsoRebuildDiagnosticResult(
@@ -297,6 +298,10 @@ class IsoPatchingService(
                 outputSize = outputSize,
                 relocatedEboot = outputImage.eboot.extentSector != preflight.image.eboot.extentSector,
                 uiAssetsPatched = uiPatches.size,
+                uiPatchDetails = uiPatches.map { overlay ->
+                    overlay.label + ": " + sha256Hex(overlay.expected).take(16) +
+                        " → " + sha256Hex(overlay.replacement).take(16)
+                },
             )
         } catch (error: Throwable) {
             if (destinationWasAbsent) fileSystem.delete(destination, mustExist = false)

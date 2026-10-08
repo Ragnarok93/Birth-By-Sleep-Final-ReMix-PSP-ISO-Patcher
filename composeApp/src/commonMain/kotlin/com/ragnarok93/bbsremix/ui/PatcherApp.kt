@@ -290,6 +290,14 @@ fun PatcherApp(
                     outputCommitted = true
                     status = PatcherStatus.Complete(result, outputSelection.location)
                     appendLog("Patched ISO committed to ${outputSelection.location}.")
+                    if (options.appliesUiScaling) {
+                        val requested = com.ragnarok93.bbsremix.patch.UiScaleElement.entries
+                            .filter { options.uiScaling[it] != 100 }
+                            .joinToString { it.title + " " + options.uiScaling[it] + "%" }
+                        appendLog("Experimental UI scaling selections: " + requested)
+                        appendLog("Verified " + result.uiAssetsPatched + " patched game UI assets in the generated ISO.")
+                        result.uiPatchDetails.forEach { detail -> appendLog("UI asset: " + detail) }
+                    }
                 } finally {
                     fileGateway.deleteTemp(temporary)
                     if (outputCommitted && stagedSource == sourcePath) {
