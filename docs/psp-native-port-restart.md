@@ -137,8 +137,12 @@ path:
 - No new allocation, overlay code, third program header, or LOAD extension is
   introduced.
 
-This corrected copy-time override is the next runtime candidate. The previous
-static-table-only candidate is retired as non-functional.
+Runtime testing now confirms that the corrected copy-time overrides make both
+camera distance and camera height functional. The validated user-facing ranges
+are distance `2.0–6.0` and height `1.0–2.5`. The UI exposes five discrete
+levels for each control: distance `2/3/4/5/6`, and height
+`1.0/1.375/1.75/2.125/2.5`. The previous static-table-only candidate remains
+retired as non-functional.
 
 ## Better Battle System re-port
 
@@ -164,8 +168,9 @@ Runtime promotion gates:
 - The resident right-stick implementation must preserve its confirmed direction
   and control behavior and survive scene/module transitions plus save/load for
   Terra, Ventus, and Aqua.
-- Camera distance and camera height must each boot and visibly affect both native
-  camera modes when tested alone before combined camera testing.
+- Camera distance and camera height have independently passed functional runtime
+  testing; their validated slider ranges are locked to the five-level scales
+  above.
 - The combined right-stick + distance + height profile must retain normal
   movement, lock-on, scene transitions, and save/load.
 - Combat telemetry-only must boot without gameplay writes.
