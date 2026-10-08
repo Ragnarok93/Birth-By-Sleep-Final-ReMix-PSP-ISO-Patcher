@@ -29,7 +29,7 @@ def scan_dat(path):
         mm = mmap.mmap(handle.fileno(), 0, access=mmap.ACCESS_READ)
         try:
             for start in range(SECTOR, len(mm) - 64, SECTOR):
-                if mm[start:start + 4] != b"ARC\\x00" or u16(mm, start + 4) != 1:
+                if mm[start:start + 4] != b"ARC\x00" or u16(mm, start + 4) != 1:
                     continue
                 count = u16(mm, start + 6)
                 if count > 300 or start + 16 + count * 32 > len(mm):
@@ -39,7 +39,7 @@ def scan_dat(path):
                 for index in range(count):
                     name_offset = start + 16 + index * 32
                     directory_hash, relative, length = struct.unpack_from("<III", mm, name_offset)
-                    raw = mm[name_offset + 16:name_offset + 32].split(b"\\x00", 1)[0]
+                    raw = mm[name_offset + 16:name_offset + 32].split(b"\x00", 1)[0]
                     if not raw or any(ch < 32 or ch > 126 for ch in raw):
                         valid = False
                         break
@@ -80,7 +80,7 @@ def main():
     ]}
     output = json.dumps(manifest, indent=2)
     if args.output:
-        args.output.write_text(output + "\\n", encoding="utf-8")
+        args.output.write_text(output + "\n", encoding="utf-8")
         print("Saved metadata-only inventory:", args.output)
     else:
         print(output)
