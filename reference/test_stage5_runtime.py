@@ -77,6 +77,9 @@ class RuntimeRegressionTest(unittest.TestCase):
             (p.CAMERA_MODE2_RECORD_VA + 0x1C, 1.0),
         ):
             p.pf32(data, p.foff(va), value)
+        copy_off = p.foff(p.CAMERA_COPY_ROUTINE_VA)
+        for index, word in enumerate(p.CAMERA_COPY_ORIGINAL_WORDS):
+            p.p32(data, copy_off + index * 4, word)
 
         p.verify_camera_geometry_source(data)
         p.apply_camera_geometry(
