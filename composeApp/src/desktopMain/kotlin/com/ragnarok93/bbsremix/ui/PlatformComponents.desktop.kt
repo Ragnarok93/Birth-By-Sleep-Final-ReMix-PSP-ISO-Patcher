@@ -128,6 +128,27 @@ actual fun PatcherSlider(
 }
 
 @Composable
+actual fun PatcherLevelSlider(
+    level: Int,
+    onLevelChange: (Int) -> Unit,
+    minLevel: Int,
+    maxLevel: Int,
+    enabled: Boolean,
+    modifier: Modifier,
+) {
+    Slider(
+        value = level.coerceIn(minLevel, maxLevel).toFloat(),
+        onValueChange = {
+            onLevelChange(kotlin.math.round(it).toInt().coerceIn(minLevel, maxLevel))
+        },
+        modifier = modifier,
+        enabled = enabled,
+        valueRange = minLevel.toFloat()..maxLevel.toFloat(),
+        steps = (maxLevel - minLevel - 1).coerceAtLeast(0),
+    )
+}
+
+@Composable
 actual fun PatcherIndeterminateProgress(modifier: Modifier) {
     CircularProgressIndicator(
         modifier = modifier,
