@@ -10,6 +10,8 @@ class PatchOptionsTest {
     fun defaults_expose_only_psp_native_right_stick_candidate() {
         val options = PatchOptions()
 
+        assertEquals(30, options.fpsTarget)
+        assertFalse(options.appliesFrameRate)
         assertTrue(options.rightStickCamera)
         assertFalse(options.combatFeatures)
         assertFalse(options.appliesCameraDistance)
@@ -18,6 +20,17 @@ class PatchOptionsTest {
         assertEquals(4.0f, options.cameraDistance)
         assertEquals(1.75f, options.cameraHeight)
         assertTrue(options.validate().isEmpty())
+    }
+
+    @Test
+    fun fps_targets_are_discrete_and_patch_only_above_stock() {
+        for (fps in listOf(30, 60, 90, 120)) {
+            val options = PatchOptions(fpsTarget = fps)
+            assertTrue(options.validate().isEmpty(), "FPS $fps should be accepted")
+            assertEquals(fps != 30, options.appliesFrameRate)
+        }
+        val invalid = PatchOptions(fpsTarget = 75).validate()
+        assertTrue(invalid.any { it is PatchOptionError.FrameRateTargetUnsupported })
     }
 
     @Test
