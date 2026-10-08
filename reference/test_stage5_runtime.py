@@ -95,6 +95,47 @@ class RuntimeRegressionTest(unittest.TestCase):
         self.assertEqual(1, p.u32(data, p.foff(p.CAMERA_MODE1_RECORD_VA)))
         self.assertEqual(2, p.u32(data, p.foff(p.CAMERA_MODE2_RECORD_VA)))
 
+    def test_camera_geometry_copier_survives_runtime_bcam_reload(self):
+        self.assertEqual(0x0893DBF4, p.CAMERA_COPY_ROUTINE_VA)
+        self.assertEqual(44, len(p.CAMERA_COPY_ORIGINAL_WORDS))
+
+        height_only = p.camera_copy_routine(False, 4.5, True, 1.2)
+        distance_only = p.camera_copy_routine(True, 5.0, False, 1.0)
+        combined = p.camera_copy_routine(True, 5.0, True, 1.2)
+
+        self.assertEqual(0x00801025, combined[0])
+        self.assertEqual(0x3408001C, combined[1])
+        self.assertEqual(0x1500FFFA, combined[7])
+        self.assertEqual(len(p.CAMERA_COPY_ORIGINAL_WORDS), len(combined))
+
+        self.assertIn(0xAC480024, height_only)
+        self.assertIn(0xAC480054, height_only)
+        self.assertNotIn(0xAC480028, height_only)
+        self.assertNotIn(0xAC480058, height_only)
+
+        self.assertIn(0xAC480028, distance_only)
+        self.assertIn(0xAC480058, distance_only)
+        self.assertNotIn(0xAC480024, distance_only)
+        self.assertNotIn(0xAC480054, distance_only)
+
+        self.assertIn(0xAC480024, combined)
+        self.assertIn(0xAC480054, combined)
+        self.assertIn(0xAC480028, combined)
+        self.assertIn(0xAC480058, combined)
+
+    def test_camera_geometry_static_only_candidate_would_be_overwritten(self):
+        # The original camera-only copier copies the resource vectors at
+        # source+0x20 and source+0x50 over the resident working table. The
+        # previous static-table-only candidate therefore could not survive a
+        # successful BCam resource load.
+        original = p.CAMERA_COPY_ORIGINAL_WORDS
+        self.assertIn(0x24860020, original)
+        self.assertIn(0x24A70020, original)
+        self.assertIn(0xD8E00000, original)
+        self.assertIn(0xF8C00000, original)
+        self.assertIn(0x24860050, original)
+        self.assertIn(0x24A70050, original)
+
     def test_camera_patch_preserves_native_jals_and_tags_delay_slots(self):
         replacements = {va: replacement for va, _expected, replacement, _desc
                         in p.RIGHT_STICK_WORD_PATCHES}
