@@ -25,7 +25,7 @@ Encrypted PSP PRX containers (`~PSP`/`~SCE`) are identified and rejected before 
 3. Select any combination of **Right-stick camera control**, **Camera distance**, and **Camera height**. Combat Mods remain disabled.
 4. Select a separate output path.
 5. Use **Diagnostic rebuild** first when validating a new environment. It writes the original EBOOT unchanged and requires the complete output to compare byte-for-byte equal to the staged source.
-6. Use **Patch Camera ISO** to create the selected resident PSP-native camera profile. Right-stick control modifies only resident MainApp input/camera instructions; distance and height modify only the native camera parameter table. The original two ELF program headers remain intact and the legacy overlay payload region is untouched.
+6. Use **Patch Camera ISO** to create the selected resident PSP-native camera profile. Right-stick control modifies resident MainApp input/camera instructions. Distance and height update the resident camera table and replace the camera-only 0x70-byte BCam copier in place so loaded camera resources cannot overwrite the selected values. The original two ELF program headers remain intact and the legacy overlay payload region is untouched.
 7. Open Logs, use Verify Output to inspect an ISO, and keep texture installation/verification separate.
 8. Export the live operation log to a user-chosen location. The filename uses the detected game ID and local date; when the ISO has no valid ID, the filename clearly says the serial is unavailable.
 
@@ -33,7 +33,7 @@ The app does not ask the user to extract EBOOT.BIN, run Python, decrypt files, o
 
 ## Patch options
 
-The current PSP-native camera profile exposes three independent camera features. Right-stick camera direction and compatibility with both in-game camera-control options have passed runtime testing; distance and height are newly re-derived data-only candidates pending runtime confirmation. Combat features remain visible for roadmap context but are disabled and rejected by validation:
+The current PSP-native camera profile exposes three independent camera features. Right-stick camera direction and compatibility with both in-game camera-control options have passed runtime testing. The first static-table-only distance/height candidate produced no visible change because the game's BCam loader overwrites that table at runtime; the current candidates preserve selected geometry values after every native BCam copy and are pending runtime confirmation. Combat features remain visible for roadmap context but are disabled and rejected by validation:
 
 - Right-stick camera control
 - Camera distance — writes the native signed Z component in the two resident player-camera mode vectors
@@ -119,11 +119,17 @@ testing now confirms correct right-stick directions and operation with both in-g
 control settings without interference with other controls.
 
 Camera distance and height have also been re-derived from the exact PSP executable. MainApp's
-resident camera table at `0x08B59F00` contains two native camera-mode position vectors:
-`[0.0, 1.5, -3.5, 1.0]` and `[0.0, 1.0, -3.5, 1.0]`. The PSP-native geometry patch changes
-only their Y (height) and signed Z (distance) components. It adds no executable payload and
-does not alter ELF program-header count or LOAD sizes. Runtime validation of these two
-geometry controls is pending. Better Battle System combat ports remain disabled. Verify
+resident working camera table at `0x08B59F00` contains two native camera-mode position
+vectors: `[0.0, 1.5, -3.5, 1.0]` and `[0.0, 1.0, -3.5, 1.0]`. Runtime testing proved that
+editing only this table is insufficient: the native BCam resource path copies 0x70 bytes over
+it through `0x0893DBF4`, replacing the selected Y/Z values.
+
+The current geometry candidate therefore keeps the patched fallback Y (height) and signed Z
+(distance) values and replaces that camera-only copier in place with an equivalent resident
+word copy followed by the selected component overrides. This preserves unselected components
+from the loaded BCam resource, uses no overlay allocation or extra ELF segment, and does not
+change ELF program-header count or LOAD sizes. Runtime validation of the corrected geometry
+controls is pending. Better Battle System combat ports remain disabled. Verify
 Output checks structure and bytes; gameplay validation remains separate. See
 [PSP-native gameplay port restart](docs/psp-native-port-restart.md) and
 [Runtime remediation](docs/runtime-remediation.md).
