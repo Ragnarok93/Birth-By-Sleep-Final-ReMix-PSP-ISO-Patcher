@@ -175,6 +175,16 @@ CAMERA_FREE_HEIGHT_ORIG = 1.5
 CAMERA_LOCK_HEIGHT_ORIG = 1.0
 CAMERA_FREE_DISTANCE_ORIG = -3.5
 CAMERA_LOCK_DISTANCE_ORIG = -3.5
+CAMERA_COPY_ROUTINE_VA = 0x0893DBF4
+CAMERA_COPY_ROUTINE_SIZE = 0xB0
+CAMERA_COPY_ORIGINAL_WORDS = (
+    0x8CA60000,0x8CA70004,0xC4AC0008,0x44086000,0xAC860000,0xAC870004,0xAC880008,0xC4AD000C,
+    0x44066800,0xAC86000C,0x8CA60010,0xAC860010,0xC4AE0014,0xE48E0014,0xC4AE0018,0xE48E0018,
+    0x8CA6001C,0xAC86001C,0x24860020,0x24A70020,0xD8E00000,0xF8C00000,0x24860030,0x24A70030,
+    0xD8E00000,0xF8C00000,0x8CA60040,0xAC860040,0xC4AC0044,0xE48C0044,0xC4AC0048,0xE48C0048,
+    0x8CA6004C,0xAC86004C,0x24860050,0x24A70050,0xD8E00000,0xF8C00000,0x24860060,0x24A50060,
+    0xD8A00000,0xF8C00000,0x03E00008,0x00801025,
+)
 NOP = 0
 
 def jal(target:int)->int:
@@ -216,6 +226,42 @@ def verify(data:bytes, camera_controls:bool, post_input:bool):
         if got!=exp: raise ValueError(f'post-input hook mismatch @0x{va:08X} got 0x{got:08X} exp 0x{exp:08X}')
         if S4_VA+S5_SEGMENT_PAD>=ORIGINAL_LOAD1_VA: raise ValueError('Stage 5 VA overlaps original LOAD #1')
 
+def _float_bits(value:float)->int:
+    return struct.unpack('<I', struct.pack('<f', float(value)))[0]
+
+def camera_copy_routine(camera_distance_enabled:bool,camera_distance:float,camera_height_enabled:bool,camera_height:float):
+    if not (camera_distance_enabled or camera_height_enabled):
+        return list(CAMERA_COPY_ORIGINAL_WORDS)
+
+    words=[
+        0x00801025, # move v0,a0
+        0x3408001C, # ori t0,zero,28 (0x70 bytes)
+        0x8CA90000, # loop: lw t1,0(a1)
+        0xAC890000, #       sw t1,0(a0)
+        0x24A50004, #       addiu a1,a1,4
+        0x24840004, #       addiu a0,a0,4
+        0x2508FFFF, #       addiu t0,t0,-1
+        0x1500FFFA, #       bnez t0,loop
+        0x00000000,
+    ]
+    def emit_override(value,off1,off2):
+        bits=_float_bits(value)
+        words.extend([
+            0x3C080000 | ((bits >> 16) & 0xffff),
+            0x35080000 | (bits & 0xffff),
+            0xAC480000 | off1,
+            0xAC480000 | off2,
+        ])
+    if camera_height_enabled:
+        emit_override(camera_height,0x24,0x54)
+    if camera_distance_enabled:
+        emit_override(-float(camera_distance),0x28,0x58)
+    words.extend([0x03E00008,0x00000000])
+    words.extend([0]*(len(CAMERA_COPY_ORIGINAL_WORDS)-len(words)))
+    if len(words)!=len(CAMERA_COPY_ORIGINAL_WORDS):
+        raise ValueError('camera copy replacement no longer fits in-place')
+    return words
+
 def verify_camera_geometry_source(data:bytes):
     if u32(data, foff(CAMERA_TABLE_VA)) != CAMERA_TABLE_SIGNATURE:
         raise ValueError('camera parameter table signature mismatch')
@@ -235,6 +281,11 @@ def verify_camera_geometry_source(data:bytes):
         got=f32(data,foff(va))
         if abs(got-value)>1e-6:
             raise ValueError(f'{desc} mismatch @0x{va:08X}: {got:g}')
+    for index,word in enumerate(CAMERA_COPY_ORIGINAL_WORDS):
+        va=CAMERA_COPY_ROUTINE_VA+index*4
+        got=u32(data,foff(va))
+        if got!=word:
+            raise ValueError(f'camera resource copier mismatch @0x{va:08X}: 0x{got:08X}')
 
 def apply_camera_geometry(out:bytearray,camera_distance_enabled:bool,camera_distance:float,camera_height_enabled:bool,camera_height:float):
     if camera_distance_enabled:
@@ -244,6 +295,11 @@ def apply_camera_geometry(out:bytearray,camera_distance_enabled:bool,camera_dist
     if camera_height_enabled:
         pf32(out,foff(CAMERA_FREE_HEIGHT_VA),float(camera_height))
         pf32(out,foff(CAMERA_LOCK_HEIGHT_VA),float(camera_height))
+    if camera_distance_enabled or camera_height_enabled:
+        words=camera_copy_routine(camera_distance_enabled,camera_distance,camera_height_enabled,camera_height)
+        off=foff(CAMERA_COPY_ROUTINE_VA)
+        for index,word in enumerate(words):
+            p32(out,off+index*4,word)
 
 def make_config(args, combat:bool, camera_distance:bool)->int:
     cfg=0x3C if combat else 0x00  # conservative cancels + exclusions + telemetry
