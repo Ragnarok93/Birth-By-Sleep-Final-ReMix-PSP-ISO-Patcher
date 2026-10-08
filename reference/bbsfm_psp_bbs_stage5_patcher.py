@@ -335,13 +335,13 @@ def add_stage5(out:bytearray,cfg:int,camera_distance:float,critical_passives:boo
     if len(out)<S4_FILE_OFF: out.extend(b'\0'*(S4_FILE_OFF-len(out)))
     out.extend(blob)
 
-def patch(data:bytes,camera_controls:bool=True,post_input:bool=False,cfg:int=0,camera_distance_enabled:bool=False,camera_distance:float=4.5,camera_height_enabled:bool=False,camera_height:float=1.0,critical_passives:bool=False)->bytearray:
+def patch(data:bytes,camera_controls:bool=True,post_input:bool=False,cfg:int=0,camera_distance_enabled:bool=False,camera_distance:float=4.0,camera_height_enabled:bool=False,camera_height:float=1.75,critical_passives:bool=False)->bytearray:
     if not (camera_controls or camera_distance_enabled or camera_height_enabled):
         raise ValueError('Enable at least one PSP-native camera feature')
-    if not 1.0 <= float(camera_distance) <= 12.0:
-        raise ValueError('Camera distance must be between 1.0 and 12.0')
-    if not 0.0 <= float(camera_height) <= 4.0:
-        raise ValueError('Camera height must be between 0.0 and 4.0')
+    if not 2.0 <= float(camera_distance) <= 6.0:
+        raise ValueError('Camera distance must be between 2.0 and 6.0')
+    if not 1.0 <= float(camera_height) <= 2.5:
+        raise ValueError('Camera height must be between 1.0 and 2.5')
     if post_input or critical_passives or cfg:
         raise ValueError('Better Battle System runtime payloads remain disabled pending PSP-native re-derivation')
     verify(data,camera_controls,False)
@@ -371,8 +371,8 @@ def main():
     ap.add_argument('input',type=Path,help='ORIGINAL decrypted English-patched EBOOT.BIN')
     ap.add_argument('output',nargs='?',type=Path)
     ap.add_argument('--no-right-stick',action='store_true',help='do not patch right-stick camera control')
-    ap.add_argument('--camera-distance',type=float,default=None,metavar='VALUE',help='patch native camera distance (1.0-12.0)')
-    ap.add_argument('--camera-height',type=float,default=None,metavar='VALUE',help='patch native camera height (0.0-4.0)')
+    ap.add_argument('--camera-distance',type=float,default=None,metavar='VALUE',help='patch native camera distance (2.0-6.0)')
+    ap.add_argument('--camera-height',type=float,default=None,metavar='VALUE',help='patch native camera height (1.0-2.5)')
     ap.add_argument('--verify-only',action='store_true')
     args=ap.parse_args()
 
@@ -394,9 +394,9 @@ def main():
         data,
         camera_controls=camera_controls,
         camera_distance_enabled=distance_enabled,
-        camera_distance=args.camera_distance if distance_enabled else 4.5,
+        camera_distance=args.camera_distance if distance_enabled else 4.0,
         camera_height_enabled=height_enabled,
-        camera_height=args.camera_height if height_enabled else 1.0,
+        camera_height=args.camera_height if height_enabled else 1.75,
     )
     dst=args.output or args.input.with_name(args.input.stem + '.psp-native-camera.BIN')
     dst.write_bytes(out)
