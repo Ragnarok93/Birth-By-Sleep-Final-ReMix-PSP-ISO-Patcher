@@ -44,7 +44,7 @@ jobs:
       - name: Verify pinned OneUI source checkout (Android release)
         shell: bash
         run: |
-          expected="1fe97b4e5a4ad559a7252376fad650a64310b229"
+          expected="7fc5248187f4833f8ba9138c9d0549be04b63cb9"
           actual="$(git -C third_party/oneui-compose rev-parse HEAD)"
           if [[ "$actual" != "$expected" ]]; then
             echo "Expected OneUI source $expected, found $actual." >&2
