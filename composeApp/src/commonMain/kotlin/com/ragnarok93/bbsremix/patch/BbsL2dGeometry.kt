@@ -84,6 +84,21 @@ internal object BbsL2dGeometry {
             val groupCount = output.readIntLe(sp2 + 0x18)
             val groupOffset = relative(output, sp2, sp2 + 0x1c, "SP2 groups")
             requireRange(output, groupOffset, groupCount, 0x0c, "SP2 groups")
+            val keyCount = output.readIntLe(sq2 + 0x28)
+            val keyOffset = relative(output, sq2, sq2 + 0x2c, "SQ2 keys")
+            requireRange(output, keyOffset, keyCount, 0x0c, "SQ2 keys")
+            val groupEnd = groupOffset + groupCount * 0x0c
+            fun disjoint(otherOffset: Int, otherSize: Int): Boolean =
+                groupCount == 0 || otherSize == 0 ||
+                    groupEnd <= otherOffset || otherOffset + otherSize <= groupOffset
+            require(
+                disjoint(partOffset, partCount * 0x18) &&
+                    disjoint(spriteOffset, spriteCount * 4) &&
+                    disjoint(keyOffset, keyCount * 0x0c) &&
+                    disjoint(sp2, 0x40) && disjoint(sq2, 0x40) &&
+                    disjoint(layoutOffset, layoutCount * 0x10) &&
+                    disjoint(nodeOffset, nodeCount * 0x20)
+            ) { "SP2 on-screen geometry overlaps texture, animation or layout metadata." }
             for (j in 0 until groupCount) {
                 val item = groupOffset + j * 0x0c
                 for (field in 0..3) {

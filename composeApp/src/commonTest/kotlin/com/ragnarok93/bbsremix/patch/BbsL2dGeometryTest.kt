@@ -95,6 +95,12 @@ class BbsL2dGeometryTest {
         assertFailsWith<IllegalArgumentException> {
             BbsL2dGeometry.scale(source.copyOf().apply { writeIntLe(0x2c, size + 1) }, 85)
         }
+        assertFailsWith<IllegalArgumentException> {
+            BbsL2dGeometry.scale(source.copyOf().apply {
+                // Redirect SP2 screen-space groups into the protected UV table.
+                writeIntLe(0xac, 0x50)
+            }, 85)
+        }
         assertTrue(UiScaleSettings.isSelectable(70))
     }
 }
