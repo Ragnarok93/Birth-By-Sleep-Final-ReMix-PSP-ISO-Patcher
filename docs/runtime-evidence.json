@@ -124,17 +124,34 @@
     "mode2_height_va": "0x08B59F54",
     "mode2_distance_va": "0x08B59F58",
     "distance": {
-      "result": "pending",
-      "evidence_reference": null
+      "result": "pass",
+      "validated_range": "2.0-6.0",
+      "ui_levels": {
+        "1": 2,
+        "2": 3,
+        "3": 4,
+        "4": 5,
+        "5": 6
+      },
+      "evidence_reference": "User runtime report: camera distance mod is working; preferred tested range is 2.0-6.0"
     },
     "height": {
-      "result": "pending",
-      "evidence_reference": null
+      "result": "pass",
+      "validated_range": "1.0-2.5",
+      "ui_levels": {
+        "1": 1,
+        "2": 1.375,
+        "3": 1.75,
+        "4": 2.125,
+        "5": 2.5
+      },
+      "evidence_reference": "User runtime report: camera height mod is working; preferred tested range is 1.0-2.5"
     },
     "combined_camera": {
       "result": "pending",
       "evidence_reference": null
-    }
+    },
+    "reported_at": "2026-10-08"
   },
   "camera_geometry_previous_candidate": {
     "implementation": "resident PSP camera table static-float patch",
