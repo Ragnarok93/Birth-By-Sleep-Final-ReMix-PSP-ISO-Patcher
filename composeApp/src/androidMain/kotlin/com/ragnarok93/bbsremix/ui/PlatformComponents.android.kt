@@ -25,6 +25,7 @@ import org.oneui.compose.components.navigation.OneUiNavigationItem
 import org.oneui.compose.components.navigation.OneUiTabStyle
 import org.oneui.compose.components.navigation.OneUiTabs
 import org.oneui.compose.components.slider.OneUiSlider
+import org.oneui.compose.components.slider.OneUiLevelSlider
 import org.oneui.compose.components.slider.OneUiSliderMode
 import org.oneui.compose.oneui8.components.OneUI8Card
 import org.oneui.compose.oneui8.theme.OneUI8Theme
@@ -115,6 +116,28 @@ actual fun PatcherSlider(
         valueRange = valueRange,
         steps = steps,
         mode = OneUiSliderMode.Expand,
+    )
+}
+
+@Composable
+actual fun PatcherLevelSlider(
+    level: Int,
+    onLevelChange: (Int) -> Unit,
+    minLevel: Int,
+    maxLevel: Int,
+    enabled: Boolean,
+    modifier: Modifier,
+) {
+    OneUiLevelSlider(
+        value = level.coerceIn(minLevel, maxLevel).toFloat(),
+        onValueChange = {
+            onLevelChange(kotlin.math.round(it).toInt().coerceIn(minLevel, maxLevel))
+        },
+        valueRange = minLevel.toFloat()..maxLevel.toFloat(),
+        modifier = modifier,
+        seamless = false,
+        showTickMark = true,
+        enabled = enabled,
     )
 }
 
