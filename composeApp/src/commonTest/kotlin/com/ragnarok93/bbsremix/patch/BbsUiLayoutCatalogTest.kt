@@ -7,25 +7,31 @@ import kotlin.test.assertTrue
 
 class BbsUiLayoutCatalogTest {
     @Test
-    fun inspected_layouts_have_unique_nonoverlapping_bounded_ranges() {
+    fun supported_layouts_have_unique_nonoverlapping_source_ranges() {
         val items = BbsUiLayoutCatalog.suppliedCandidates
-        assertEquals(8, items.size)
+        assertTrue(items.size >= 25, "Expected the verified multi-category research catalog.")
         assertEquals(items.size, items.map { it.archive to it.offsetInArchive }.distinct().size)
+        val expectedArchiveSizes = mapOf(
+            "BBS0.DAT" to 754655232L,
+            "BBS1.DAT" to 206092288L,
+            "BBS3.DAT" to 206391296L,
+        )
         items.forEach { item ->
-            assertEquals("BBS1.DAT", item.archive)
+            assertEquals(expectedArchiveSizes[item.archive], item.archiveSize)
             assertTrue(item.offsetInArchive >= 2048L)
             assertTrue(item.layoutSize > 0)
             assertTrue(item.offsetInArchive + item.layoutSize <= item.archiveSize)
             assertEquals(64, item.originalSha256.length)
             assertTrue(item.originalSha256.all { it in '0'..'9' || it in 'a'..'f' })
         }
-        items.sortedBy { it.offsetInArchive }.zipWithNext().forEach { (a, b) ->
-            assertTrue(a.offsetInArchive + a.layoutSize <= b.offsetInArchive)
+        items.groupBy { it.archive }.forEach { (_, group) ->
+            group.sortedBy { it.offsetInArchive }.zipWithNext().forEach { (a, b) ->
+                assertTrue(a.offsetInArchive + a.layoutSize <= b.offsetInArchive)
+            }
         }
-        assertTrue(items.any { it.element == UiScaleElement.COMMAND_DECK })
-        assertTrue(items.any { it.element == UiScaleElement.SHOTLOCK })
-        assertTrue(items.any { it.element == UiScaleElement.MENUS })
-        assertFalse(items.any { it.element == UiScaleElement.COMBAT_HUD })
+        for (element in UiScaleElement.entries.filterNot { it == UiScaleElement.SUBTITLES }) {
+            assertTrue(items.any { it.element == element }, "Missing " + element.title)
+        }
         assertFalse(items.any { it.element == UiScaleElement.SUBTITLES })
     }
 }
