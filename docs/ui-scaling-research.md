@@ -87,3 +87,36 @@ No game asset binaries have been committed to the repository.
    game's stock textures AND PPSSPP HD replacement profile.
 6. Enable category sliders only when the category's complete required resource
    set and runtime behavior have been confirmed. Fail closed otherwise.
+
+## Verified BBS0 linked CTD export (October 8, 2026)
+
+The second full `bbs0-ui.zip` export has a byte-for-byte matching BBS0 index
+(SHA-256 `18e80141ae690337d958fd06416c6f44cdee6a24ed9806efbe24ff8b70b65ea0`).
+All seven ARC-linked standalone CTDs are present at the index-predicted
+physical BBS0 offsets with matching source hashes and bounded data:
+
+| CTD | Allocated bytes | Layout rows | Messages | Notes |
+|---|---:|---:|---:|---|
+| CT00000.ctd | 16384 | 74 | 429 | 25 Subtitle (style=5), 38 System, 10 Dice, 1 Normal |
+| CT00500.ctd | 14336 | 2 | 498 | Dice (style=6) |
+| CT00200.ctd | 2048 | 2 | 10 | Dice |
+| CTit000.ctd | 8192 | 7 | 268 | Dice |
+| CTih000.ctd | 14336 | 8 | 271 | Dice |
+| CTmn600.ctd | 4096 | 13 | 35 | Dice |
+| CTrp500.ctd | 4096 | 9 | 72 | Dice |
+
+All 1,583 messages have valid layout references, bounded null-terminated text,
+and 115 layouts fit their allocated ranges. Every CTD reports version 1.
+The new `BbsCtdGeometry` research helper supports 70–100% (5% increments)
+for centered Subtitle-style CTD rows, retaining their horizontal center,
+bottom edge, existing message bytes, attributes and non-subtitle layouts.
+`BbsCtdLayoutCatalog` contains source-specific offsets and fingerprints
+for guarded experimental overlay planning; **neither helper is wired into
+shipping ISO patching**.
+
+**Coverage warning:** The BBS0 global directory has 15,093 indexed file
+entries, including **492 BBS0-resident entries in message-category ranges
+(0xD0–0xDB)**. These are **candidates, not all proven CTD files**. The seven
+ARC-referenced CTDs are not necessarily all text/subtitle layouts in the
+game. Enumerating and validating the global directory's remaining message
+resources, plus verifying in-game renderer behavior, are still required.
