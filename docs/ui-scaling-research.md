@@ -69,8 +69,9 @@ No game asset binaries have been committed to the repository.
    PPSSPP captures. Examine CTD (font positions and sizes).
 3. Re-derive the SQ2 animation key kinds and transforms, including texture UV
    invariants, clipping, centered coordinates and component anchors.
-4. Build a multi-entry, length-preserving ISO DAT overlay pipeline which
-   rejects unexpected input sizes/hashes and verifies changed output spans.
+4. Connect the completed low-memory ISO `IsoBytePatch` overlay primitive to
+   the identified DAT entries using exact L2D/ARC hashes, game-version guards
+   and post-rebuild verification of changed output spans.
 5. Validate repeated tests at 70, 75, 80, 85, 90, 95 and 100%, with the
    game's stock textures AND PPSSPP HD replacement profile.
 6. Enable category sliders only when the category's complete required resource

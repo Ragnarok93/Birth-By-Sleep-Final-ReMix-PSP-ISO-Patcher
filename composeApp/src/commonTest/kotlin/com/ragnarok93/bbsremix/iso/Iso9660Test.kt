@@ -140,6 +140,73 @@ class Iso9660Test {
     }
 
     @Test
+    fun guarded_byte_overlay_patches_other_entry_without_repacking_or_changing_eboot() {
+        val source = createFixture("overlay-source")
+        val dest = path("overlay-output")
+        val position = KEEP_SECTOR * SECTOR_SIZE.toLong() + 5L
+        try {
+            val image = reader.inspect(source)
+            val originalEboot = reader.readEntry(source, image.eboot)
+            val preimage = reader.readAt(source, position, 4)
+            val replacement = "TEST".encodeToByteArray()
+            rebuilder.rebuild(
+                source, dest, image, originalEboot,
+                extraPatches = listOf(IsoBytePatch(position, preimage, replacement, "test-layout")),
+            )
+            assertContentEquals(replacement, reader.readAt(dest, position, 4))
+            assertContentEquals(originalEboot, reader.readEntry(dest, reader.inspect(dest).eboot))
+            val sourceData = fileSystem.source(source).buffer().use { it.readByteArray() }
+            val outputData = fileSystem.source(dest).buffer().use { it.readByteArray() }
+            replacement.copyInto(sourceData, position.toInt())
+            assertContentEquals(sourceData, outputData)
+        } finally {
+            fileSystem.delete(source, mustExist = false)
+            fileSystem.delete(dest, mustExist = false)
+        }
+    }
+
+    @Test
+    fun overlay_rejects_wrong_preimage_and_eboot_overlap_without_creating_destination() {
+        val source = createFixture("overlay-reject-source")
+        val dest = path("overlay-reject-output")
+        try {
+            val image = reader.inspect(source)
+            val original = reader.readEntry(source, image.eboot)
+            val position = KEEP_SECTOR * SECTOR_SIZE.toLong()
+            assertFailsWith<IsoFormatException> {
+                rebuilder.rebuild(
+                    source, dest, image, original,
+                    extraPatches = listOf(
+                        IsoBytePatch(position, byteArrayOf(0x00), byteArrayOf(0x01), "wrong"),
+                    ),
+                )
+            }
+            assertTrue(!fileSystem.exists(dest))
+            assertFailsWith<IsoFormatException> {
+                rebuilder.rebuild(
+                    source, dest, image, original,
+                    extraPatches = listOf(
+                        IsoBytePatch(image.eboot.dataOffset, byteArrayOf(0), byteArrayOf(1), "overlap"),
+                    ),
+                )
+            }
+            assertTrue(!fileSystem.exists(dest))
+            assertFailsWith<IsoFormatException> {
+                rebuilder.rebuild(
+                    source, dest, image, original,
+                    extraPatches = listOf(
+                        IsoBytePatch(position, byteArrayOf(1), byteArrayOf(2, 3), "resize"),
+                    ),
+                )
+            }
+            assertTrue(!fileSystem.exists(dest))
+        } finally {
+            fileSystem.delete(source, mustExist = false)
+            fileSystem.delete(dest, mustExist = false)
+        }
+    }
+
+    @Test
     fun ambiguous_target_path_is_rejected() {
         val source = createFixture("ambiguous")
         try {

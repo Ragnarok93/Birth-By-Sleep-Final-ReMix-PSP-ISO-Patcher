@@ -291,6 +291,18 @@ class Iso9660Reader(
     }
 }
 
+/**
+ * A strictly size-preserving ISO byte overlay. The expected preimage is
+ * checked BEFORE creating any destination, so unfamiliar DAT representations
+ * or game versions cannot be silently modified.
+ */
+data class IsoBytePatch(
+    val absoluteOffset: Long,
+    val expected: ByteArray,
+    val replacement: ByteArray,
+    val label: String,
+)
+
 class Iso9660Rebuilder(
     private val fileSystem: FileSystem = FileSystem.SYSTEM,
 ) {
@@ -301,8 +313,33 @@ class Iso9660Rebuilder(
         replacement: ByteArray,
         cancellation: CancellationToken = NeverCancelled,
         progress: ProgressReporter = NoProgress,
+        extraPatches: List<IsoBytePatch> = emptyList(),
     ) {
         if (replacement.isEmpty()) throw IsoFormatException("Replacement EBOOT cannot be empty.")
+        // Input preimages are validated before any output file is opened.
+        // Keep multi-entry DAT replacements bounded: never stage hundreds of
+        // megabytes of game data merely to change a few layout coordinates.
+        val overlays = extraPatches.sortedBy { it.absoluteOffset }
+        var lastEnd = -1L
+        for (patch in overlays) {
+            val length = patch.expected.size.toLong()
+            if (length == 0L || patch.expected.size != patch.replacement.size ||
+                patch.absoluteOffset < 0L || patch.absoluteOffset > image.sourceSize ||
+                length > image.sourceSize - patch.absoluteOffset ||
+                patch.absoluteOffset < lastEnd
+            ) {
+                throw IsoFormatException("Unsafe, overlapping or size-changing ISO overlay: ${patch.label}.")
+            }
+            val ebootStart = image.eboot.dataOffset
+            val ebootEnd = ebootStart + image.eboot.allocatedSize
+            if (patch.absoluteOffset < ebootEnd && patch.absoluteOffset + length > ebootStart) {
+                throw IsoFormatException("ISO overlay ${patch.label} overlaps the separately patched EBOOT.")
+            }
+            if (!patch.expected.contentEquals(readPatchPreimage(source, patch))) {
+                throw IsoFormatException("ISO overlay ${patch.label} does not match its expected source bytes.")
+            }
+            lastEnd = patch.absoluteOffset + length
+        }
         val oldAllocated = image.eboot.allocatedSize
         val inPlace = replacement.size.toLong() <= oldAllocated
         val appendOffset = if (inPlace) 0L else alignUp(image.sourceSize, image.sectorSize.toLong())
@@ -335,6 +372,9 @@ class Iso9660Rebuilder(
                         recordPatches.forEach { (offset, patch) -> overlay(chunk, completed, offset, patch) }
                         volumePatches.forEach { (offset, patch) -> overlay(chunk, completed, offset, patch) }
                         if (inPlace) overlay(chunk, completed, image.eboot.dataOffset, replacement)
+                        overlays.forEach { patch ->
+                            overlay(chunk, completed, patch.absoluteOffset, patch.replacement)
+                        }
                         output.write(chunk)
                         completed += read
                         progress.report(PatchProgress(PatchPhase.REBUILDING_ISO, completed, image.sourceSize))
@@ -354,6 +394,16 @@ class Iso9660Rebuilder(
             throw error
         }
     }
+
+    private fun readPatchPreimage(source: Path, patch: IsoBytePatch): ByteArray =
+        try {
+            fileSystem.source(source).buffer().use { input ->
+                input.skip(patch.absoluteOffset)
+                input.readByteArray(patch.expected.size.toLong())
+            }
+        } catch (error: Exception) {
+            throw IsoFormatException("Failed to verify ISO overlay ${patch.label}: ${error.message}")
+        }
 
     private fun directoryRecordPatches(entry: IsoDirectoryEntry, extent: Long, size: Long): List<Pair<Long, ByteArray>> {
         val extentPatch = ByteArray(8).also { writeBothEndianU32(it, 0, extent) }
