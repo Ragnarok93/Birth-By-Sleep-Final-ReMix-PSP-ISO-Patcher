@@ -47,7 +47,7 @@ The current PSP-native camera profile exposes three independent camera features.
 - Critical Mode passives
 - Optional strict category exclusions
 
-Camera distance accepts `1.0–12.0`; camera height accepts `0.0–4.0`. The engine refuses unsupported size/hash, ELF program-header layout, occupied code caves, unexpected instruction bytes, invalid option values, malformed ISO directory records, ambiguous target paths, and output validation mismatches.
+The UI exposes five discrete camera levels. Distance levels 1–5 map to `2.0, 3.0, 4.0, 5.0, 6.0`; height levels 1–5 map linearly across `1.0–2.5` as `1.0, 1.375, 1.75, 2.125, 2.5`. The patch engine rejects values outside those validated ranges. The engine refuses unsupported size/hash, ELF program-header layout, occupied code caves, unexpected instruction bytes, invalid option values, malformed ISO directory records, ambiguous target paths, and output validation mismatches.
 
 
 ## Texture packs
@@ -128,8 +128,7 @@ The current geometry candidate therefore keeps the patched fallback Y (height) a
 (distance) values and replaces that camera-only copier in place with an equivalent resident
 word copy followed by the selected component overrides. This preserves unselected components
 from the loaded BCam resource, uses no overlay allocation or extra ELF segment, and does not
-change ELF program-header count or LOAD sizes. Runtime validation of the corrected geometry
-controls is pending. Better Battle System combat ports remain disabled. Verify
+change ELF program-header count or LOAD sizes. Runtime testing now confirms that both corrected geometry controls affect the live camera as intended. Better Battle System combat ports remain disabled. Verify
 Output checks structure and bytes; gameplay validation remains separate. See
 [PSP-native gameplay port restart](docs/psp-native-port-restart.md) and
 [Runtime remediation](docs/runtime-remediation.md).
