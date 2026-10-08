@@ -115,8 +115,10 @@
     "evidence_reference": "User runtime report: right-stick camera control working correctly"
   },
   "camera_geometry_candidate": {
-    "implementation": "resident PSP camera table data-only patch",
+    "implementation": "resident fallback camera values plus in-place BCam copy-time selected-component overrides",
     "table_va": "0x08B59F00",
+    "copy_routine_va": "0x0893DBF4",
+    "copy_size_bytes": 112,
     "mode1_height_va": "0x08B59F24",
     "mode1_distance_va": "0x08B59F28",
     "mode2_height_va": "0x08B59F54",
@@ -133,5 +135,13 @@
       "result": "pending",
       "evidence_reference": null
     }
+  },
+  "camera_geometry_previous_candidate": {
+    "implementation": "resident PSP camera table static-float patch",
+    "result": "no_visible_effect",
+    "right_stick_interference": "none observed",
+    "reported_at": "2026-10-08",
+    "evidence_reference": "User runtime report: neither camera height nor distance changed in-game; right-stick camera remained functional",
+    "root_cause": "Native BCam resource loading copies 0x70 bytes through 0x0893DBF4 over the resident working table, replacing the static Y/Z edits."
   }
 }
