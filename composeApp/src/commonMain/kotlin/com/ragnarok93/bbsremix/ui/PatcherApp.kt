@@ -1069,33 +1069,35 @@ private fun OptionsCard(
             )
             FeatureToggle(
                 title = "Camera distance",
-                description = "PSP-native player-camera Z distance for normal and lock-on modes. Preserved through BCam resource reloads; default 4.5.",
+                description = "PSP-native player-camera Z distance for normal and lock-on modes. Five validated levels map 2.0–6.0; default level 3 = 4.0.",
                 checked = options.cameraDistanceEnabled,
                 enabled = !busy,
                 onCheckedChange = { onOptionsChanged(options.copy(cameraDistanceEnabled = it)) },
             )
-            SliderSetting(
+            CameraLevelSlider(
                 label = "Camera Distance",
-                value = options.cameraDistance,
-                range = PatchOptions.CAMERA_DISTANCE_RANGE,
-                steps = 109,
+                level = PatchOptions.cameraDistanceLevel(options.cameraDistance),
+                actualValue = options.cameraDistance,
                 enabled = !busy && options.cameraDistanceEnabled,
-                onValueChange = { onOptionsChanged(options.copy(cameraDistance = it)) },
+                onLevelChange = { level ->
+                    onOptionsChanged(options.copy(cameraDistance = PatchOptions.cameraDistanceForLevel(level)))
+                },
             )
             FeatureToggle(
                 title = "Camera height",
-                description = "PSP-native player-camera Y height for normal and lock-on modes. Preserved through BCam resource reloads; default 1.0.",
+                description = "PSP-native player-camera Y height for normal and lock-on modes. Five validated levels map 1.0–2.5; default level 3 = 1.75.",
                 checked = options.cameraHeightEnabled,
                 enabled = !busy,
                 onCheckedChange = { onOptionsChanged(options.copy(cameraHeightEnabled = it)) },
             )
-            SliderSetting(
+            CameraLevelSlider(
                 label = "Camera Height",
-                value = options.cameraHeight,
-                range = PatchOptions.CAMERA_HEIGHT_RANGE,
-                steps = 39,
+                level = PatchOptions.cameraHeightLevel(options.cameraHeight),
+                actualValue = options.cameraHeight,
                 enabled = !busy && options.cameraHeightEnabled,
-                onValueChange = { onOptionsChanged(options.copy(cameraHeight = it)) },
+                onLevelChange = { level ->
+                    onOptionsChanged(options.copy(cameraHeight = PatchOptions.cameraHeightForLevel(level)))
+                },
             )
 
             HorizontalDivider()
@@ -1247,27 +1249,39 @@ private fun ExpandableRow(
 }
 
 @Composable
-private fun SliderSetting(
+private fun CameraLevelSlider(
     label: String,
-    value: Float,
-    range: ClosedFloatingPointRange<Float>,
-    steps: Int,
+    level: Int,
+    actualValue: Float,
     enabled: Boolean,
-    onValueChange: (Float) -> Unit,
+    onLevelChange: (Int) -> Unit,
 ) {
-    val tenths = (value * 10f).toInt()
-    val formattedValue = "${tenths / 10}.${kotlin.math.abs(tenths % 10)}"
+    val hundredths = kotlin.math.round(actualValue * 100f).toInt()
+    val whole = hundredths / 100
+    val fraction = kotlin.math.abs(hundredths % 100)
+    val formattedValue = if (fraction == 0) {
+        "$whole.0"
+    } else if (fraction % 10 == 0) {
+        "$whole.${fraction / 10}"
+    } else {
+        "$whole.${fraction.toString().padStart(2, '0')}"
+    }
+
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(label, style = MaterialTheme.typography.bodyMedium)
             Spacer(Modifier.weight(1f))
-            Text(formattedValue, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+            Text(
+                "Level $level · $formattedValue",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+            )
         }
         PatcherSlider(
-            value = value,
-            onValueChange = { onValueChange((it * 10f).toInt() / 10f) },
-            valueRange = range,
-            steps = steps,
+            value = level.toFloat(),
+            onValueChange = { onLevelChange(kotlin.math.round(it).toInt().coerceIn(1, 5)) },
+            valueRange = PatchOptions.CAMERA_LEVEL_RANGE,
+            steps = PatchOptions.CAMERA_LEVEL_STEPS,
             enabled = enabled,
             modifier = Modifier.fillMaxWidth(),
         )
