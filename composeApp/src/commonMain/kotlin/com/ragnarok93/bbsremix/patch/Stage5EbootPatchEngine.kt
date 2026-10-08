@@ -45,6 +45,9 @@ class Stage5EbootPatchEngine : EbootPatchEngine {
         }
 
         val postInput = options.combatFeatures
+        if (options.appliesFrameRate) {
+            PspNativeFrameRatePatch.validateSource(data, problems)
+        }
         if (options.rightStickCamera) {
             PspNativeRightStickPatch.validateSource(data, problems)
         }
@@ -66,6 +69,9 @@ class Stage5EbootPatchEngine : EbootPatchEngine {
         }
 
         var output = data.copyOf()
+        if (options.appliesFrameRate) {
+            PspNativeFrameRatePatch.apply(output, options.fpsTarget)
+        }
         if (options.rightStickCamera) {
             PspNativeRightStickPatch.apply(output)
         }
@@ -200,6 +206,7 @@ class Stage5EbootPatchEngine : EbootPatchEngine {
             problems += "The output EBOOT contains an unselected Stage 5 segment."
         }
 
+        PspNativeFrameRatePatch.verifyPatched(data, options.fpsTarget, problems)
         PspNativeCameraGeometryPatch.verifyPatched(data, options, problems)
 
         return PatchVerification(problems.isEmpty(), problems.distinct())
