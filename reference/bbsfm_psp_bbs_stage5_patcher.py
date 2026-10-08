@@ -383,7 +383,7 @@ def add_stage5(out:bytearray,cfg:int,camera_distance:float,critical_passives:boo
     if len(out)<S4_FILE_OFF: out.extend(b'\0'*(S4_FILE_OFF-len(out)))
     out.extend(blob)
 
-def patch(data:bytes,fps_target:int=30,camera_controls:bool=True,post_input:bool=False,cfg:int=0,camera_distance_enabled:bool=False,camera_distance:float=4.0,camera_height_enabled:bool=False,camera_height:float=1.75,critical_passives:bool=False)->bytearray:
+def patch(data:bytes,fps_target:int=30,camera_controls:bool=True,post_input:bool=False,cfg:int=0,camera_distance_enabled:bool=False,camera_distance:float=2.0,camera_height_enabled:bool=False,camera_height:float=1.0,critical_passives:bool=False)->bytearray:
     if fps_target not in FPS_TARGETS:
         raise ValueError('FPS target must be 30, 60, 90, or 120')
     if not (fps_target!=30 or camera_controls or camera_distance_enabled or camera_height_enabled):
@@ -452,9 +452,9 @@ def main():
         fps_target=args.fps,
         camera_controls=camera_controls,
         camera_distance_enabled=distance_enabled,
-        camera_distance=args.camera_distance if distance_enabled else 4.0,
+        camera_distance=args.camera_distance if distance_enabled else 2.0,
         camera_height_enabled=height_enabled,
-        camera_height=args.camera_height if height_enabled else 1.75,
+        camera_height=args.camera_height if height_enabled else 1.0,
     )
     dst=args.output or args.input.with_name(args.input.stem + '.psp-native-mods.BIN')
     dst.write_bytes(out)
