@@ -191,6 +191,60 @@ The names may belong to different script namespaces/classes. They are
 promising candidates for a correct hit-event path instead of interpreting
 the arbitrary low bits of `player+0x23C`.
 
+### October 9 exported-log follow-up: distinguish names from handlers
+
+The later user-exported inspector log (`ULJM05775_10092026 (4).log`)
+confirms the supported original source, **8/8 native opcode signatures**,
+**13/13 script API registrations**, and the same six hit-event names in
+three string neighborhoods. The log comes from **Inspect Combat Hooks**,
+which explicitly operates read-only; it is **not a PPSSPP trace**, and
+its matches do not establish that any combat event was invoked.
+
+Inspection of the original EBOOT identified a more specific layout:
+each of these six NUL-terminated event names is followed at the next
+4-byte aligned boundary by a 32-bit word pointing **back to that same
+name**. The reference is a constant-table self-pointer, not a pointer
+to executable callback code.
+
+| Name | String VA | Following self-pointer word VA |
+| --- | --- | --- |
+| `OnHitAttack` | `0x08B2DE9C` | `0x08B2DEA8` |
+| `OnHitAttack` | `0x08B2FE34` | `0x08B2FE40` |
+| `OnHitAttack` | `0x08B31C04` | `0x08B31C10` |
+| `OnHitBody` | `0x08B2DF70` | `0x08B2DF7C` |
+| `OnHitBody` | `0x08B31C88` | `0x08B31C94` |
+| `OnHitAttackBg` | `0x08B2DEAC` | `0x08B2DEBC` |
+
+These six constant patterns were independently checked against
+the exact 3,589,832-byte EBOOT. The in-app read-only
+`PspCombatEventEvidence` now reports both the names and which matches
+have a validated aligned self-pointer. Synthetic regression tests
+cover valid, corrupted, non-executable-section, and bounds-limited
+conditions.
+
+**Nearby event names differ by cluster.** Near `0x08B2DE9C` there
+are `OnUpdate`, `OnHitAttackBg`, `OnDamage`, `OnDamageBefore`,
+`OnReturnDamage` and `OnHitBody`. Around `0x08B2FE34`, there
+are `HasFunction`, `OnUpdate`, `OnHitBg`, `OnGuard` and
+`OnReflect`. Near `0x08B31C04`, there are `OnUpdate`,
+`OnDamage`, `OnGuard`, `OnHitBody`, `OnDestroy` and
+`OnDead`. This **suggests different script/event constant groups**,
+but their script class, dispatch routines and hit-receiver ownership
+are not established.
+
+A scan of text for a simple `lui` followed within nine instructions by
+`addiu/ori` rebuilding any of the six literal event-string addresses
+found no matches. This narrow check does **not** exclude GP-relative
+access, indexed tables, link-time relocation, indirect dispatch or
+other address-building patterns. The native handler cannot responsibly
+be identified just from a matching string name.
+
+A broad executable-offset scan also finds hundreds of `lw/sw`
+instructions referencing `+0x23C` across **many different object
+types**. The number of offset matches does not authenticate a player
+structure, a collision receiver, or Steam's `hitLandedType` values.
+Only traced object provenance and field ownership would suffice.
+
 ### Unresolved static tasks
 
 1. Attribute the event name descriptors to the script dispatcher and their
