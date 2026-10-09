@@ -28,7 +28,7 @@ class CombatDecisionModelTest {
 
     @Test
     fun all_combat_groups_remain_disabled_by_default() {
-        val d = model.evaluate(scene(pressed = setOf(model.Input.CROSS)), PatchOptions())
+        val d = model.evaluate(scene(pressed = setOf(CombatDecisionModel.Input.CROSS)), PatchOptions())
         assertTrue(d.availableCancels.isEmpty())
         assertNull(d.requestedCancel)
         assertNull(d.neutralState)
@@ -39,18 +39,18 @@ class CombatDecisionModelTest {
     @Test
     fun hit_aware_rules_distinguish_whiffs_landed_hits_and_finishers() {
         val enabled = PatchOptions(hitAwareCancels = true)
-        assertTrue(model.Input.TRIANGLE in model.evaluate(scene(hit = 0), enabled).availableCancels)
+        assertTrue(CombatDecisionModel.Input.TRIANGLE in model.evaluate(scene(hit = 0), enabled).availableCancels)
         assertTrue(model.evaluate(scene(hit = 1), enabled).availableCancels.isEmpty())
-        assertFalse(model.Input.CROSS in model.evaluate(scene(hit = 2, frame = 45f), enabled).availableCancels)
-        assertTrue(model.Input.CROSS in model.evaluate(scene(hit = 2, frame = 46f), enabled).availableCancels)
-        assertTrue(model.Input.CROSS in model.evaluate(
+        assertFalse(CombatDecisionModel.Input.CROSS in model.evaluate(scene(hit = 2, frame = 45f), enabled).availableCancels)
+        assertTrue(CombatDecisionModel.Input.CROSS in model.evaluate(scene(hit = 2, frame = 46f), enabled).availableCancels)
+        assertTrue(CombatDecisionModel.Input.CROSS in model.evaluate(
             scene(hit = 2, airborne = true, frame = 0f), enabled,
         ).availableCancels)
-        assertTrue(model.Input.TRIANGLE in model.evaluate(
+        assertTrue(CombatDecisionModel.Input.TRIANGLE in model.evaluate(
             scene(hit = 2, airborne = true, frame = 0f), enabled,
         ).availableCancels)
-        assertTrue(model.Input.CROSS in model.evaluate(
-            scene(character = model.Character.AQUA, hit = 2, frame = 38f), enabled,
+        assertTrue(CombatDecisionModel.Input.CROSS in model.evaluate(
+            scene(character = CombatDecisionModel.Character.AQUA, hit = 2, frame = 38f), enabled,
         ).availableCancels)
     }
 
@@ -58,21 +58,21 @@ class CombatDecisionModelTest {
     fun command_threshold_is_character_specific_and_category_gated() {
         val options = PatchOptions(commandCancels = true)
         for ((character, minFrame) in listOf(
-            model.Character.TERRA to 45f,
-            model.Character.VENTUS to 35f,
-            model.Character.AQUA to 40f,
+            CombatDecisionModel.Character.TERRA to 45f,
+            CombatDecisionModel.Character.VENTUS to 35f,
+            CombatDecisionModel.Character.AQUA to 40f,
         )) {
-            assertFalse(model.Input.TRIANGLE in model.evaluate(
+            assertFalse(CombatDecisionModel.Input.TRIANGLE in model.evaluate(
                 scene(character = character, frame = minFrame - 1f, type = 3), options,
             ).availableCancels)
-            assertTrue(model.Input.TRIANGLE in model.evaluate(
+            assertTrue(CombatDecisionModel.Input.TRIANGLE in model.evaluate(
                 scene(character = character, frame = minFrame, type = 3), options,
             ).availableCancels)
         }
-        assertFalse(model.Input.TRIANGLE in model.evaluate(
+        assertFalse(CombatDecisionModel.Input.TRIANGLE in model.evaluate(
             scene(frame = 45f, motionId = 0x5f, type = 3), options,
         ).availableCancels)
-        assertTrue(model.Input.TRIANGLE in model.evaluate(
+        assertTrue(CombatDecisionModel.Input.TRIANGLE in model.evaluate(
             scene(frame = 46f, motionId = 0x5f, type = 3), options,
         ).availableCancels)
         for (category in listOf(null, 0xe, 0xf, 4, 7)) {
@@ -86,19 +86,19 @@ class CombatDecisionModelTest {
     fun extended_defense_uses_guard_minimum_and_native_neutral_modes() {
         val options = PatchOptions(extendedDefense = true)
         assertTrue(model.evaluate(scene(state = 0x16, frame = 4f), options).availableCancels.isEmpty())
-        assertTrue(model.Input.CROSS in model.evaluate(
+        assertTrue(CombatDecisionModel.Input.CROSS in model.evaluate(
             scene(state = 0x16, frame = 5f), options,
         ).availableCancels)
         val grounded = model.evaluate(
-            scene(state = 0x10, pressed = setOf(model.Input.SQUARE)), options,
+            scene(state = 0x10, pressed = setOf(CombatDecisionModel.Input.SQUARE)), options,
         )
-        assertEquals(model.Input.SQUARE, grounded.requestedCancel)
+        assertEquals(CombatDecisionModel.Input.SQUARE, grounded.requestedCancel)
         assertEquals(1, grounded.neutralState)
         val airborne = model.evaluate(
-            scene(state = 0x10, airborne = true, pressed = setOf(model.Input.SQUARE)), options,
+            scene(state = 0x10, airborne = true, pressed = setOf(CombatDecisionModel.Input.SQUARE)), options,
         )
         assertEquals(4, airborne.neutralState)
-        assertFalse(model.Input.CIRCLE in airborne.availableCancels)
+        assertFalse(CombatDecisionModel.Input.CIRCLE in airborne.availableCancels)
     }
 
     @Test
@@ -111,10 +111,10 @@ class CombatDecisionModelTest {
             assertTrue(d.availableCancels.isEmpty(), "Protected state $state")
             assertTrue(d.exclusionsApplied)
         }
-        assertFalse(model.Input.TRIANGLE in model.evaluate(
+        assertFalse(CombatDecisionModel.Input.TRIANGLE in model.evaluate(
             scene(type = 3, action = 0x75), options,
         ).availableCancels)
-        assertFalse(model.Input.CROSS in model.evaluate(
+        assertFalse(CombatDecisionModel.Input.CROSS in model.evaluate(
             scene(type = 3, action = 0x82), options,
         ).availableCancels)
         assertTrue(model.evaluate(
@@ -139,8 +139,8 @@ class CombatDecisionModelTest {
         assertTrue(model.evaluate(scene(state = 1, motionId = 0x20), options).criticalBonuses.isEmpty())
         val crit = model.evaluate(scene(state = 1, difficulty = 3), options).criticalBonuses
         assertEquals(6, crit.size)
-        assertTrue(model.CriticalBonus.SECOND_CHANCE in crit)
-        assertTrue(model.CriticalBonus.DOUBLE_CP in crit)
+        assertTrue(CombatDecisionModel.CriticalBonus.SECOND_CHANCE in crit)
+        assertTrue(CombatDecisionModel.CriticalBonus.DOUBLE_CP in crit)
         assertEquals(2, model.evaluate(
             scene(difficulty = 3), PatchOptions(criticalModeAbilities = true),
         ).criticalBonuses.size)
