@@ -53,6 +53,20 @@ internal object PspCombatNativeEvidence {
             ),
         ),
         Signature(
+            "player attack-status +0x23C: native bit-28 setter (NOT a proven hit-confirm)",
+            0x08B07094,
+            intArrayOf(
+                0x8C86023C.toInt(), 0x3C07F000, 0x24E7FFFF,
+                0x30A50001, 0x00C73024, 0x00052F00,
+                0x00C52825, 0x03E00008, 0xAC85023C.toInt(),
+            ),
+        ),
+        Signature(
+            "player attack-status +0x23C: native bit-28 getter",
+            0x08B070B8,
+            intArrayOf(0x8C84023C.toInt(), 0x3C051000, 0x00851024, 0x03E00008, 0x00021702),
+        ),
+        Signature(
             "post-input instruction: saved register s0 restoration",
             INPUT_RESTORE_VA,
             intArrayOf(0x8FB00048.toInt(), 0x8FB1004C.toInt(), 0x8FB20050.toInt()),
@@ -81,7 +95,9 @@ internal object PspCombatNativeEvidence {
             lines += "STATIC PROOF: PSP-native bit 0x${CANCEL_FLAG.toString(16)} in " +
                 "player+0x${PLAYER_FLAG_OFFSET.toString(16)} is set/tested/cleared; " +
                 "native state handlers use player+0x22C."
-            lines += "UNPROVEN: input timing, hit-confirm flag bits at player+0x23C, " +
+            lines += "STATIC PROOF: native setter/getter for bit 0x10000000 at player+0x23C; " +
+                "its gameplay meaning is NOT established and must not be treated as hit-confirm."
+            lines += "UNPROVEN: input timing, hit-confirm semantics at player+0x23C, " +
                 "invulnerability field ownership, runtime player-pointer lifetime, " +
                 "Critical bonus ability layout, and safe resident hook/dispatch."
         } else {
