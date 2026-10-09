@@ -268,6 +268,49 @@ addresses overlap executable segments in **eight of ten** auxiliary
 ELF modules. Continue treating `0x08B70000` and `0x08B71280`
 as unsafe permanent storage.
 
+## 17:28 ISO export: corrected OpenKh BBSA directory interpretation
+
+The new `ULJM05775_10092026 (1).log` finished cleanly and supplied
+the first results of the experimental partition correlation:
+
+- `g01lua` in `BBS1.DAT` still has external ARC directory ID
+  **`0x4D4D4947`**, and the BBS0 file-directory table has **0 exact
+  matches across 15,093 entries** in its directory-path-hash field.
+- The previous report printed `BBSA partition table: count=15 byte_offset=332`
+  and `matching_BBSA_partitions=0`. **That conclusion is invalid.**
+  By comparing against the actual OpenKh C# implementation, we found
+  that `0x10` in the header (332) points to the *partition-file-entry
+  array*, **not** the partition descriptors. Partition descriptors
+  begin at fixed byte offset **`0x30`**, and each record is 8 bytes
+  (`path ID`, `file count`, `file-entry index`).
+- **Critical discovery:** OpenKh's
+  `OpenKh.Bbs/Bbsa.cs` explicitly maps the fixed directory ID
+  **`0x4D4D4947` to `arc/gimmick`**. That value is also readable
+  as `GIMM` in little-endian bytes; it is a known path identifier,
+  **not** a dynamically calculated CRC32 name hash.
+- Filename hashes are different: OpenKh's
+  `OpenKh.Bbs/Bbsa.Hash.cs` uses standard reflected IEEE CRC32
+  on UTF-8 bytes, making `CRC32("g01lua") == 0x64B5573A`.
+  The correct evidence path is now to locate the **`arc/gimmick`
+  partition header** at fixed offset `0x30`, then examine its
+  bounded 8-byte file entries for this specific filename hash.
+- **Only the new code can answer that lookup.** The uploaded log
+  predates the correction, so its missing partition match is **not**
+  evidence against the existence of an indexed `g01lua` script
+  resource. Even a filename match is a location lead, not proof
+  of Lua execution or any combat-callback connection.
+
+The read-only inspector now authenticates every partition file-entry
+range, prints known directory labels for ARC links, and reports exact
+partition-name/filename hash matches with packed sector metadata.
+It does **not** extract game data, allocate overlay code, or activate
+any unsafe combat mod.
+
+**Implementation references:** [OpenKh BBSA structure
+`OpenKh.Bbs/Bbsa.cs`](https://github.com/OpenKH/OpenKh/blob/master/OpenKh.Bbs/Bbsa.cs);
+[OpenKh CRC32 implementation
+`OpenKh.Bbs/Bbsa.Hash.cs`](https://github.com/OpenKH/OpenKh/blob/master/OpenKh.Bbs/Bbsa.Hash.cs).
+
 ## Verification
 
 Tests exercise a synthetic ISO with a main EBOOT, a second MIPS ELF,
