@@ -11,17 +11,17 @@ class UiScaleExpectedDigestsTest {
     @Test
     fun every_selected_resource_has_six_independent_reference_profiles() {
         val layouts = BbsUiLayoutCatalog.suppliedCandidates
-        assertEquals(29, layouts.size)
-        assertEquals(layouts.size + 1, UiScaleExpectedDigests.profileCount)
+        assertEquals(41, layouts.size)
+        assertEquals(30, UiScaleExpectedDigests.profileCount)
         for (candidate in layouts) {
             assertTrue(
-                UiScaleExpectedDigests.contains(candidate.archive, candidate.offsetInArchive),
+                UiScaleExpectedDigests.contains(candidate.digestArchive, candidate.digestOffset),
                 "Unmapped expected scale hashes for " + candidate.archive + "/" + candidate.layout,
             )
             for (percent in 70..95 step 5) {
                 val expected = assertNotNull(
                     UiScaleExpectedDigests.expectedPrefix(
-                        candidate.archive, candidate.offsetInArchive, percent,
+                        candidate.digestArchive, candidate.digestOffset, percent,
                     ),
                 )
                 assertEquals(32, expected.length)

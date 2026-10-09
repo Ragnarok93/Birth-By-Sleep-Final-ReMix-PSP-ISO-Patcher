@@ -9,6 +9,7 @@ class BbsUiLayoutCatalogTest {
     @Test
     fun supported_layouts_have_unique_nonoverlapping_source_ranges() {
         val items = BbsUiLayoutCatalog.suppliedCandidates
+        assertEquals(41, items.size) // 29 originals + 12 exact duplicate resources
         assertTrue(items.size >= 25, "Expected the verified multi-category research catalog.")
         assertEquals(items.size, items.map { it.archive to it.offsetInArchive }.distinct().size)
         val expectedArchiveSizes = mapOf(
