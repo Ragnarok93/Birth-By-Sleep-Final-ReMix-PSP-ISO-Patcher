@@ -80,5 +80,7 @@ class PspCombatApiCatalogTest {
         assertContains(desc.getValue("GetCommandCategory"), "0x08B1AE44")
         assertContains(desc.getValue("GetPlayerState"), "+0x220")
         assertContains(desc.getValue("GetSubState"), "+0x22C")
+        assertContains(desc.getValue("GetCommandState"), "+0x22E")
+        assertContains(desc.getValue("GetCommandSubcate"), "16) + 3")
     }
 }
