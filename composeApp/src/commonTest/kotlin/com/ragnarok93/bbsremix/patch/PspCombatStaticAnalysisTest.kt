@@ -88,6 +88,19 @@ class PspCombatStaticAnalysisTest {
     }
 
     @Test
+    fun direct_call_totals_remain_exact_above_sample_limit() {
+        val elf = sectionedElf()
+        elf.writeIntLe(0x13c, 0x40) // 16 instructions in .text
+        for (i in 0 until 14) {
+            elf.writeIntLe(0x200 + i * 4, jal(0x089E74A8))
+        }
+        val summary = PspCombatStaticAnalysis.inspect(elf).joinToString("\\n")
+        assertContains(summary, "guarded player resolver 0x089E74A8: 14 direct JAL call(s)")
+        assertFalse(summary.contains("12+ (report cap)"))
+        assertTrue(summary.contains("sample site(s):"))
+    }
+
+    @Test
     fun malformed_or_out_of_bounds_section_maps_are_not_scanned() {
         val original = sectionedElf()
         val badTable = original.copyOf().apply { writeIntLe(0x20, 0x3ff) }
