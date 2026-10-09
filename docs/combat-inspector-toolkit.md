@@ -311,6 +311,62 @@ any unsafe combat mod.
 [OpenKh CRC32 implementation
 `OpenKh.Bbs/Bbsa.Hash.cs`](https://github.com/OpenKH/OpenKh/blob/master/OpenKh.Bbs/Bbsa.Hash.cs).
 
+## October 9, 18:09 — valid gimmick partition, unresolved g01lua filename
+
+The uploaded `ULJM05775_10092026 (2).log` confirms the corrected
+OpenKh BBSA partition-descriptor layout is now working on the selected
+ULJM05775 source. The observed result is **not** the earlier invalid
+partition lookup:
+
+- BBSA version 6; BBS0 index prefix SHA-256
+  `18e80141ae690337d958fd06416c6f44cdee6a24ed9806efbe24ff8b70b65ea0`.
+- `arc/gimmick` directory ID `0x4D4D4947` appears as **one actual
+  partition descriptor at BBS0 index byte 128**, with **333** file
+  entries starting at array index **1196**.
+- Its valid OpenKh CRC32 filename search for `g01lua`
+  (`0x64B5573A`) returns **zero matches among those 333
+  partition-file entries**. The separate 15,093-record BBS0
+  file-directory path-hash search also returns zero exact matches
+  for directory ID `0x4D4D4947`.
+- BBS1's six-entry ARC at byte `156127232` still has the
+  structurally valid `g01lua` external dependency, and BBS2's
+  four-entry ARC at byte `2048` remains valid. No runtime script
+  contents, actor ownership, or handler invocation were recovered.
+- Eight of ten auxiliary ELF modules declare executable loads
+  overlapping both historical Stage4/5 addresses, which remain
+  unsuitable for permanently resident combat hooks.
+
+**Interpretation:** an authenticated ARC link references the
+`arc/gimmick` namespace, but the exact `g01lua` filename hash does
+not appear among that namespace's 333 partition entries. The link
+could be absent, aliased, resolved differently, stored under
+another namespace, or intentionally unused. The log cannot
+distinguish those possibilities.
+
+### Follow-up research added
+
+`IsoBbsaDirectoryEvidence` now performs an additional bounded,
+read-only **global filename-hash census**, independently of the
+link's directory ID. For each validated ARC external link, it checks:
+
+1. The **file-name hash field** of all BBS0 12-byte directory
+   records, showing any different directory/path IDs and broad
+   category hints (e.g. the documented `0xC0` Lua category).
+2. The **file-name hash field** in all valid BBSA partition-file
+   entry ranges, showing source partition IDs and packed sector
+   metadata, capped at eight examples per link.
+
+It reports exact match counts and distinguishes an invalid
+partition index (**UNVERIFIED**) from a valid zero-match census.
+The search is bounded by the existing 64-link selection and an
+additional 100,000 partition-file-entry traversal ceiling.
+Filename hashes alone do not prove the linked resource exists,
+its extension, executable script format, or runtime invocation.
+There is **no whole-archive extraction or modification**.
+
+This new census has **not yet run on the user's game ISO**;
+its results will appear in the next exported inspector log.
+
 ## Verification
 
 Tests exercise a synthetic ISO with a main EBOOT, a second MIPS ELF,
