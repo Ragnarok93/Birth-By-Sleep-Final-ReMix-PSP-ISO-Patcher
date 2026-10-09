@@ -25,20 +25,7 @@ internal object BbsL2dGeometry {
                 fontSizeFieldsChanged + animationPositionKeysChanged
     }
 
-    /**
-     * Menu layouts use both LY2 child nodes and SQ2 Base/Offset keys as
-     * positions in the native 480×272 screen coordinate system. Preserve
-     * these placements, prevent overscan sprites from entering the viewport,
-     * and resize visible menu sprites around each sprite's *local alignment
-     * edge*. Most BBS menus position text and bar sprites against the same
-     * top/left animation anchor, not their visual centres. The non-menu HUD
-     * uses its existing scaling path.
-     */
-    fun scale(
-        source: ByteArray,
-        percent: Int,
-        preserveMenuAnchors: Boolean = false,
-    ): Result {
+    fun scale(source: ByteArray, percent: Int): Result {
         require(UiScaleSettings.isSelectable(percent)) {
             "L2D scale must be 70–100% in 5% increments."
         }
@@ -90,7 +77,7 @@ internal object BbsL2dGeometry {
         for (i in 0 until nodeCount) {
             val item = nodeOffset + i * 0x20
             val parent = output.readShortLe(item + 0x14).toShort().toInt()
-            if (parent < 0 || preserveMenuAnchors) continue
+            if (parent < 0) continue
             if (scaleInt16(output, item + 0x16, percent)) nodes++
             if (scaleInt16(output, item + 0x18, percent)) nodes++
         }
@@ -159,91 +146,10 @@ internal object BbsL2dGeometry {
                     disjoint(nodeOffset, nodeCount * 0x20) &&
                     disjoint(fontOffset, fontCount * 0x10)
             ) { "SP2 on-screen geometry overlaps texture, animation or layout metadata." }
-            if (preserveMenuAnchors) {
-                // A SP2 Sprite is a set of adjacent quads sharing one visual
-                // object. Shrinking them around their bbox centre displaced
-                // bar left edges by 15-34 PSP pixels at 70% while native
-                // text remained at its original screen/sequence anchor.
-                // Use a common *alignment edge* for the complete sprite:
-                // the near-origin left/top edge for positive local geometry,
-                // the corresponding right/bottom edge for negative geometry,
-                // and local (0,0) where a sprite straddles that origin.
-                // Never choose a separate pivot for each adjacent quad.
-                //
-                // SP2 vertex coordinates are local, NOT directly screen-space.
-                // A valid menu panel can extend far beyond ±240/±136 before
-                // LY2/SQ2 transforms place it. Previously a single vertex
-                // outside this box exempted its WHOLE sprite from resizing,
-                // leaving many full-screen panels at 100% when set to 70%.
-                //
-                // Protect sprites wholly outside the native window, and
-                // full-screen backdrops which enclose the entire viewport.
-                // A large bar which crosses one screen edge but does not
-                // span both axes remains eligible for size scaling.
-                val claimed = BooleanArray(groupCount)
-                for (spriteIndex in 0 until spriteCount) {
-                    val sprite = spriteOffset + spriteIndex * 4
-                    val count = output.readShortLe(sprite).toInt() and 0xffff
-                    val first = output.readShortLe(sprite + 2).toInt() and 0xffff
-                    require(first <= groupCount && count <= groupCount - first) {
-                        "SP2 Sprite references groups outside its L2D."
-                    }
-                    if (count == 0) continue
-                    var minX = Int.MAX_VALUE
-                    var minY = Int.MAX_VALUE
-                    var maxX = Int.MIN_VALUE
-                    var maxY = Int.MIN_VALUE
-                    for (group in first until first + count) {
-                        require(!claimed[group]) {
-                            "SP2 Sprite groups overlap in menu layout."
-                        }
-                        claimed[group] = true
-                        val item = groupOffset + group * 0x0c
-                        val x0 = output.readShortLe(item).toShort().toInt()
-                        val y0 = output.readShortLe(item + 2).toShort().toInt()
-                        val x1 = output.readShortLe(item + 4).toShort().toInt()
-                        val y1 = output.readShortLe(item + 6).toShort().toInt()
-                        minX = minOf(minX, x0, x1)
-                        minY = minOf(minY, y0, y1)
-                        maxX = maxOf(maxX, x0, x1)
-                        maxY = maxOf(maxY, y0, y1)
-                    }
-                    val fullyOutOfLocalWindow =
-                        maxX < -240 || minX > 240 ||
-                            maxY < -136 || minY > 136
-                    // Proven by PPSSPP GE captures ULJM05775_0003/0004:
-                    // camp.l2d SP2 Sprite 10 (group 54), bbox
-                    // (-280,-186)..(279,187), and Sprite 14 (groups 80..88),
-                    // bbox (-277,-172)..(281,171), cover the whole viewport.
-                    // When these are scaled to 70%, the 559x373 backdrop
-                    // shrinks to 391x261 and exposes empty margins even though
-                    // the menu must still cover the PSP's entire 480x272.
-                    //
-                    // Unlike a normal overscanning button/panel, full-screen
-                    // window backdrops are NOT resizable UI chrome. Preserve
-                    // all groups of the complete sprite, including tiled
-                    // strips, while smaller local UI objects still shrink.
-                    val fillsNativeViewport =
-                        minX <= -240 && maxX >= 240 &&
-                            minY <= -136 && maxY >= 136
-                    if (fullyOutOfLocalWindow || fillsNativeViewport) continue
-                    val pivotXTwice = 2 * menuLocalPivot(minX, maxX)
-                    val pivotYTwice = 2 * menuLocalPivot(minY, maxY)
-                    for (group in first until first + count) {
-                        val item = groupOffset + group * 0x0c
-                        if (scaleInt16Around(output, item, percent, pivotXTwice)) groups++
-                        if (scaleInt16Around(output, item + 2, percent, pivotYTwice)) groups++
-                        if (scaleInt16Around(output, item + 4, percent, pivotXTwice)) groups++
-                        if (scaleInt16Around(output, item + 6, percent, pivotYTwice)) groups++
-                    }
-                }
-                require(claimed.all { it }) { "Unclaimed menu sprite groups." }
-            } else {
-                for (j in 0 until groupCount) {
-                    val item = groupOffset + j * 0x0c
-                    for (field in 0..3) {
-                        if (scaleInt16(output, item + field * 2, percent)) groups++
-                    }
+            for (j in 0 until groupCount) {
+                val item = groupOffset + j * 0x0c
+                for (field in 0..3) {
+                    if (scaleInt16(output, item + field * 2, percent)) groups++
                 }
             }
 
@@ -253,13 +159,8 @@ internal object BbsL2dGeometry {
             // at animation +8. See OpenKh's documented SQ2 format and the
             // supplied character/deck layout data.
             //
-            // Menus have flat LY2 node graphs with even parented nodes using
-            // absolute viewport positions (e.g. parent=0, X=-230). Both SQ2
-            // Base and Offset can likewise position their own widgets or
-            // transition overlays, so leave ALL menu positional keys intact.
-            // Combat/other layouts retain the previously verified treatment.
-            // Never scale SQ2 ScaleX/Y: SP2 sprite geometry already shrinks.
-            // Do not reinterpret color/status values as IEEE floats.
+            // Only positional BaseX/Y and OffsetX/Y keys are scaled.
+            // Preserve timing, colors, rotations and sprite-scale curves.
             for (animation in 0 until animationCount) {
                 val anim = animationOffset + animation * 0x18
                 var keyIndex = (output[anim + 6].toInt() and 0xff) or
@@ -270,9 +171,7 @@ internal object BbsL2dGeometry {
                         // Some shipping files have unused animations with
                         // nOfsKeyData outside the declared key count. Skip
                         // those rather than reading into unrelated tables.
-                        val scaleThisKind =
-                            !preserveMenuAnchors && kind in 1..4
-                        if (keyIndex < keyCount && scaleThisKind) {
+                        if (keyIndex < keyCount && kind in 1..4) {
                             val position = keyOffset + keyIndex * 0x0c + 4
                             if (visitedAnimatedKeys.add(position)) {
                                 val original = Float.fromBits(output.readIntLe(position))
@@ -322,35 +221,6 @@ internal object BbsL2dGeometry {
         require(offset >= 0 && offset <= bytes.size && count >= 0 && stride > 0 &&
             count <= (bytes.size - offset) / stride
         ) { "$description exceeds the bounded L2D asset." }
-    }
-
-    /**
-     * Local layout origin is normally an alignment edge. The four-unit
-     * tolerance includes genuine -1/-2/-4 sprite borders and glow pixels;
-     * these should not move a command label away from its bar. Preserve
-     * symmetric sprites' origin instead of choosing an arbitrary side.
-     */
-    private fun menuLocalPivot(min: Int, max: Int): Int = when {
-        min >= -4 && max > 4 -> min
-        max <= 4 && min < -4 -> max
-        else -> 0
-    }
-
-    private fun scaleInt16Around(
-        bytes: ByteArray, offset: Int, percent: Int, pivotTwice: Int,
-    ): Boolean {
-        val old = bytes.readShortLe(offset).toShort().toInt()
-        // exact rational: pivot + (old - pivot) * percent/100.
-        // pivotTwice supports a half-pixel centre without precision loss.
-        val numerator = pivotTwice * (100 - percent) + 2 * old * percent
-        val rounded = (kotlin.math.abs(numerator) + 100) / 200
-        val value = if (numerator < 0) -rounded else rounded
-        require(value in Short.MIN_VALUE..Short.MAX_VALUE) {
-            "Scaled sprite vertex does not fit an int16."
-        }
-        if (value == old) return false
-        bytes.writeShortLe(offset, value)
-        return true
     }
 
     private fun scaleInt16(bytes: ByteArray, offset: Int, percent: Int): Boolean {
