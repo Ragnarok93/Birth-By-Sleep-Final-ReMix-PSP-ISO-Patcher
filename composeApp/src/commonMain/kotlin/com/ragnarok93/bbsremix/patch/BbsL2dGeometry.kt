@@ -29,9 +29,10 @@ internal object BbsL2dGeometry {
      * Menu layouts use both LY2 child nodes and SQ2 Base/Offset keys as
      * positions in the native 480×272 screen coordinate system. Preserve
      * these placements, prevent overscan sprites from entering the viewport,
-     * and resize visible menu sprites around each whole sprite's original
-     * centre, not around the entire screen's origin. The non-menu HUD uses
-     * its existing scaling path.
+     * and resize visible menu sprites around each sprite's *local alignment
+     * edge*. Most BBS menus position text and bar sprites against the same
+     * top/left animation anchor, not their visual centres. The non-menu HUD
+     * uses its existing scaling path.
      */
     fun scale(
         source: ByteArray,
@@ -160,10 +161,14 @@ internal object BbsL2dGeometry {
             ) { "SP2 on-screen geometry overlaps texture, animation or layout metadata." }
             if (preserveMenuAnchors) {
                 // A SP2 Sprite is a set of adjacent quads sharing one visual
-                // object. Its original centre is the stable scale pivot:
-                // scaling every quad around screen (0,0) moves right-aligned
-                // labels left and left-aligned panels right, separating the
-                // backgrounds from text drawn in the game's native renderer.
+                // object. Shrinking them around their bbox centre displaced
+                // bar left edges by 15-34 PSP pixels at 70% while native
+                // text remained at its original screen/sequence anchor.
+                // Use a common *alignment edge* for the complete sprite:
+                // the near-origin left/top edge for positive local geometry,
+                // the corresponding right/bottom edge for negative geometry,
+                // and local (0,0) where a sprite straddles that origin.
+                // Never choose a separate pivot for each adjacent quad.
                 //
                 // Off-screen sprites act as window masks, full-screen chrome,
                 // transition backdrops and overscan. Preserve *all* of their
@@ -203,8 +208,8 @@ internal object BbsL2dGeometry {
                         ) overscan = true
                     }
                     if (overscan) continue
-                    val pivotXTwice = minX + maxX
-                    val pivotYTwice = minY + maxY
+                    val pivotXTwice = 2 * menuLocalPivot(minX, maxX)
+                    val pivotYTwice = 2 * menuLocalPivot(minY, maxY)
                     for (group in first until first + count) {
                         val item = groupOffset + group * 0x0c
                         if (scaleInt16Around(output, item, percent, pivotXTwice)) groups++
@@ -298,6 +303,18 @@ internal object BbsL2dGeometry {
         require(offset >= 0 && offset <= bytes.size && count >= 0 && stride > 0 &&
             count <= (bytes.size - offset) / stride
         ) { "$description exceeds the bounded L2D asset." }
+    }
+
+    /**
+     * Local layout origin is normally an alignment edge. The four-unit
+     * tolerance includes genuine -1/-2/-4 sprite borders and glow pixels;
+     * these should not move a command label away from its bar. Preserve
+     * symmetric sprites' origin instead of choosing an arbitrary side.
+     */
+    private fun menuLocalPivot(min: Int, max: Int): Int = when {
+        min >= -4 && max > 4 -> min
+        max <= 4 && min < -4 -> max
+        else -> 0
     }
 
     private fun scaleInt16Around(
