@@ -1,13 +1,15 @@
 package com.ragnarok93.bbsremix.patch
 
 /**
- * Research-stage editor for the static geometry inside a BBS L2D asset.
+ * Screen-anchor-preserving editor for UI geometry inside a BBS L2D asset.
  *
  * OpenKh documents the LY2 layout/node coordinate fields and SP2 group's
  * on-screen vertices, positive LY2 font-size bytes and SQ2 animation
  * translation keys (BaseX/Y and OffsetX/Y). SP2 UVs and RGBA, SQ2 frame
  * times/colors/rotations/scale curves and font style metadata are preserved.
- * Runtime-generated HUD geometry and position anchoring remain experimental.
+ * Keeps LY2 top-level placement and parentless node anchors intact while
+ * resizing geometry relative to them. Runtime-generated HUD geometry remains
+ * experimental and needs visual in-game verification.
  */
 internal object BbsL2dGeometry {
     data class Result(
@@ -59,15 +61,23 @@ internal object BbsL2dGeometry {
         requireRange(output, nodeOffset, nodeCount, 0x20, "LY2 nodes")
         requireRange(output, fontOffset, fontCount, 0x10, "LY2 fonts")
 
-        var layouts = 0
-        for (i in 0 until layoutCount) {
-            val item = layoutOffset + i * 0x10
-            if (scaleInt16(output, item + 0x0c, percent)) layouts++
-            if (scaleInt16(output, item + 0x0e, percent)) layouts++
-        }
+        // A LY2 Layout's X/Y is the SCREEN-SPACE PLACEMENT of its subtree,
+        // measured from the native 480x272 screen centre, not sprite geometry.
+        // Examples from the actual game include (-240,-136), (-239,40),
+        // (187,103), and (235,-130). Scaling these by 0.70 shifts the
+        // entire widget 72 PSP pixels towards the centre and is exactly the
+        // drift visible in user gameplay/menu screenshots.
+        //
+        // Keep the top-level placement unchanged. Scale only local node
+        // translations, sprite-group vertices, fonts and SQ2 key offsets.
+        // Root LY2 nodes (Parent IDX < 0) are placement anchors too: do NOT
+        // move them. Child node coordinates remain relative and must shrink.
+        val layouts = 0
         var nodes = 0
         for (i in 0 until nodeCount) {
             val item = nodeOffset + i * 0x20
+            val parent = output.readShortLe(item + 0x14).toShort().toInt()
+            if (parent < 0) continue
             if (scaleInt16(output, item + 0x16, percent)) nodes++
             if (scaleInt16(output, item + 0x18, percent)) nodes++
         }
