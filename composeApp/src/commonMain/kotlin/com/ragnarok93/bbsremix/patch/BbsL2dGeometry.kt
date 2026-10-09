@@ -176,12 +176,10 @@ internal object BbsL2dGeometry {
                 // outside this box exempted its WHOLE sprite from resizing,
                 // leaving many full-screen panels at 100% when set to 70%.
                 //
-                // As a conservative fallback, avoid drawing a fully-off-box
-                // sprite into view when its untransformed geometry has no
-                // intersection with the native window. Do not apply this
-                // exemption to any sprite that *intersects* the local
-                // viewport, even if some vertices exceed those coordinates.
-                // A runtime frame dump is needed to certify clipping.
+                // Protect sprites wholly outside the native window, and
+                // full-screen backdrops which enclose the entire viewport.
+                // A large bar which crosses one screen edge but does not
+                // span both axes remains eligible for size scaling.
                 val claimed = BooleanArray(groupCount)
                 for (spriteIndex in 0 until spriteCount) {
                     val sprite = spriteOffset + spriteIndex * 4
@@ -213,7 +211,22 @@ internal object BbsL2dGeometry {
                     val fullyOutOfLocalWindow =
                         maxX < -240 || minX > 240 ||
                             maxY < -136 || minY > 136
-                    if (fullyOutOfLocalWindow) continue
+                    // Proven by PPSSPP GE captures ULJM05775_0003/0004:
+                    // camp.l2d SP2 Sprite 10 (group 54), bbox
+                    // (-280,-186)..(279,187), and Sprite 14 (groups 80..88),
+                    // bbox (-277,-172)..(281,171), cover the whole viewport.
+                    // When these are scaled to 70%, the 559x373 backdrop
+                    // shrinks to 391x261 and exposes empty margins even though
+                    // the menu must still cover the PSP's entire 480x272.
+                    //
+                    // Unlike a normal overscanning button/panel, full-screen
+                    // window backdrops are NOT resizable UI chrome. Preserve
+                    // all groups of the complete sprite, including tiled
+                    // strips, while smaller local UI objects still shrink.
+                    val fillsNativeViewport =
+                        minX <= -240 && maxX >= 240 &&
+                            minY <= -136 && maxY >= 136
+                    if (fullyOutOfLocalWindow || fillsNativeViewport) continue
                     val pivotXTwice = 2 * menuLocalPivot(minX, maxX)
                     val pivotYTwice = 2 * menuLocalPivot(minY, maxY)
                     for (group in first until first + count) {
