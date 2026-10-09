@@ -224,7 +224,21 @@ internal class IsoCombatResearchService(
                 ) {
                     cancellation.throwIfCancelled()
                     val index = reader.readAt(source, entry.dataOffset, indexSize.toInt())
-                    lines += IsoBbsaDirectoryEvidence.inspect(index, linkCandidates, cancellation).lines
+                    val correlation = IsoBbsaDirectoryEvidence.inspect(
+                        index, linkCandidates, cancellation,
+                    )
+                    lines += correlation.lines
+                    val archives = files.mapNotNull { dat ->
+                        val normalized = normalize(dat.path)
+                        val number = (0..4).firstOrNull {
+                            normalized == "PSP_GAME/USRDIR/BBS$it.DAT"
+                        }
+                        if (number != null && validExtent(dat, image)) number to dat
+                        else null
+                    }.toMap()
+                    lines += IsoBbsaIndexedPayloadProbe.inspect(
+                        source, index, archives, correlation, reader, cancellation,
+                    ).lines
                 } else {
                     lines += "BBSA link correlation skipped: malformed/unbounded BBS0 index prefix."
                 }
