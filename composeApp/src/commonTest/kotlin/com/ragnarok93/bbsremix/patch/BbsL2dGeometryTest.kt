@@ -310,6 +310,62 @@ class BbsL2dGeometryTest {
     }
 
     @Test
+    fun full_screen_camp_background_stays_at_native_size_at_all_percentages() {
+        // Real camp.l2d SP2 Sprite 10 / Group 54, recovered by matching
+        // both PPSSPP GE dumps' unchanged UV coordinates.
+        val source = fixture().apply {
+            writeShortLe(0xd0, -280)
+            writeShortLe(0xd2, -186)
+            writeShortLe(0xd4, 279)
+            writeShortLe(0xd6, 187)
+        }
+        for (percent in 70..100 step 5) {
+            val result = BbsL2dGeometry.scale(
+                source, percent, preserveMenuAnchors = true,
+            )
+            assertContentEquals(source.copyOfRange(0xd0, 0xdc),
+                result.bytes.copyOfRange(0xd0, 0xdc))
+            assertEquals(0, result.groupFieldsChanged)
+            if (percent < 100) {
+                assertTrue(result.fontSizeFieldsChanged > 0)
+            }
+        }
+    }
+
+    @Test
+    fun tiled_full_screen_background_is_protected_as_one_sprite() {
+        // Real camp.l2d SP2 Sprite 14 / Groups 80..88 is nine strips,
+        // each only 39px high; its UNION fills the PSP's whole window.
+        val source = fixture().apply {
+            copyInto(this, 0x1a0, 0xe0, 0xf8)
+            writeIntLe(0xa4, 0x110) // relocate part table out of groups
+            writeIntLe(0xb4, 0x130) // descriptor at 0x1c0
+            writeIntLe(0xa8, 2)    // two vertical strips in one sprite
+            writeShortLe(0x1c0, 2) // both strips must share one policy
+            writeShortLe(0x1c2, 0)
+            writeShortLe(0xd0, -277)
+            writeShortLe(0xd2, -172)
+            writeShortLe(0xd4, 281)
+            writeShortLe(0xd6, -1)
+            writeShortLe(0xdc, -277)
+            writeShortLe(0xde, -1)
+            writeShortLe(0xe0, 281)
+            writeShortLe(0xe2, 171)
+        }
+        for (percent in 70..100 step 5) {
+            val result = BbsL2dGeometry.scale(
+                source, percent, preserveMenuAnchors = true,
+            )
+            assertContentEquals(source.copyOfRange(0xd0, 0xe8),
+                result.bytes.copyOfRange(0xd0, 0xe8))
+            assertEquals(0, result.groupFieldsChanged)
+        }
+        assertContentEquals(source, BbsL2dGeometry.scale(
+            source, 100, preserveMenuAnchors = true,
+        ).bytes)
+    }
+
+    @Test
     fun full_width_menu_panels_are_not_exempt_for_touching_screen_edges() {
         // Formerly any vertex beyond the native resolution exempted entire
         // menu panels from scaling, leaving many elements at stock size.
