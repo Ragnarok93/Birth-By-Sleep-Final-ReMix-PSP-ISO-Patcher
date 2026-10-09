@@ -22,7 +22,9 @@ Encrypted PSP PRX containers (`~PSP`/`~SCE`) are identified and rejected before 
 
 1. Select a source `.iso` with the Android document picker or native desktop file dialog.
 2. Review the expandable Detected Game pane. When present, the patcher loads PSP cover art from `PSP_GAME/ICON0.PNG`.
-3. Toggle **60 FPS** above the camera options, then select any combination of **Right-stick camera control**, **Camera distance**, and **Camera height**. With the switch off the game keeps stock 30 FPS behavior; with it on the patch forces the validated native 60 FPS mode. Combat Mods remain disabled.
+3. Toggle **60 FPS** above the camera options, then select any combination of **Right-stick camera control**, **Camera distance**, and **Camera height**. With the switch off the game keeps stock 30 FPS behavior; with it on the patch forces the validated native 60 FPS mode. Combat Mods remain disabled for patching; after selecting an original ISO,
+   use **Combat Mods → Inspect combat hooks (read-only)** to record executable
+   provenance and overlay-memory hazards in Logs. This does not alter the ISO.
 4. Select a separate output path.
 5. Use **Diagnostic rebuild** first when validating a new environment. It writes the original EBOOT unchanged and requires the complete output to compare byte-for-byte equal to the staged source.
 6. Use **Patch ISO** to create the selected resident PSP-native FPS/camera profile. Right-stick control modifies resident MainApp input/camera instructions. Distance and height update the resident camera table and replace the camera-only 0x70-byte BCam copier in place so loaded camera resources cannot overwrite the selected values. The original two ELF program headers remain intact and the legacy overlay payload region is untouched.
@@ -30,6 +32,21 @@ Encrypted PSP PRX containers (`~PSP`/`~SCE`) are identified and rejected before 
 8. Export the live operation log to a user-chosen location. The filename uses the detected game ID and local date; when the ISO has no valid ID, the filename clearly says the serial is unavailable.
 
 The app does not ask the user to extract EBOOT.BIN, run Python, decrypt files, or repackage an ISO. It does not upload images or collect analytics.
+
+## Combat development status
+
+The project now includes an **ISO-based, read-only combat hook inspector**.
+After selecting the supported original ISO, expand **Combat Mods** and press
+**Inspect combat hooks (read-only)**. The report lists the source EBOOT
+fingerprint, bounded PSP ELF program-header metadata, original post-input
+hook instruction, selected native instruction windows, and the historical
+Stage 4/5 dynamic-overlay collision. Export it from the Logs page.
+
+No combat gameplay behavior has been enabled by this diagnostic. The original
+Steam Better Battle System needs an independently verified PSP-native runtime
+mapping, safe resident patch area and per-option implementation. The old
+Stage 4/5 payloads are **not** safe to activate as-is. See
+[PSP combat port evidence and gates](docs/psp-combat-port.md).
 
 ## Patch options
 
