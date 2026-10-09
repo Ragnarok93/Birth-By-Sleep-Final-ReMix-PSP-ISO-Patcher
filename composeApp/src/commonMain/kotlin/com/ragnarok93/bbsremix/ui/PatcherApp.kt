@@ -1570,7 +1570,8 @@ private fun OutputCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
-                "Patch ISO supports the FPS selector plus resident PSP-native right-stick, camera distance, and camera height mods. Non-stock UI scaling is blocked until the game layout/rendering offsets are validated.",
+                "Patch ISO supports 30/60 FPS, right-stick/camera mods, and experimental per-element UI scaling. " +
+                    "On Android, Choose output may create an empty placeholder. Only use the ISO after Patch ISO reports success and verifies the saved file.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
