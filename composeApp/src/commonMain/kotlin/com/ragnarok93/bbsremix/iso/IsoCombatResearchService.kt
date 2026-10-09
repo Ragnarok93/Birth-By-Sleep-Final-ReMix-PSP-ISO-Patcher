@@ -30,6 +30,7 @@ internal class IsoCombatResearchService(
         const val MAX_TOTAL_ELF_BYTES = 64L * 1024L * 1024L
         const val MAX_MODULE_LINES = 9
         const val MAX_ARCHIVE_HEADER = 64
+        const val MAX_BBSA_INDEX_BYTES = 4 * 1024 * 1024
         val EXECUTABLE_EXTENSIONS = setOf("ELF", "PRX", "BIN", "SELF")
         val RESEARCH_EXTENSIONS = setOf(
             "DAT", "ARC", "PAK", "CPK", "BBS", "PBD", "REL", "LUA", "LUB",
@@ -145,6 +146,9 @@ internal class IsoCombatResearchService(
             )
             val kind = classify(header)
             if (kind == "encrypted PSP ~PSP") encrypted++
+            if (kind == "BBSA game archive") {
+                lines += inspectBbsaIndex(source, entry, header, cancellation)
+            }
             val isMainEboot = normalize(entry.path) == "PSP_GAME/SYSDIR/EBOOT.BIN"
             val candidate = kind == "MIPS ELF32"
             if (candidate) discoveredElf++
@@ -204,6 +208,28 @@ internal class IsoCombatResearchService(
         return Report(files.size, directoryCount, elfCount, probes, truncated, findings, lines)
     }
 
+    private fun inspectBbsaIndex(
+        iso: Path,
+        entry: IsoDirectoryEntry,
+        header: ByteArray,
+        cancellation: CancellationToken,
+    ): String {
+        if (header.size < 0x1c) return "  BBSA ${entry.path}: incomplete header."
+        val version = u32(header, 4)
+        val indexBytes = u16(header, 0x1a).toLong() * 2048L
+        if (version !in 5L..6L || indexBytes < 2048L ||
+            indexBytes > MAX_BBSA_INDEX_BYTES || indexBytes > entry.size
+        ) {
+            return "  BBSA ${entry.path}: version=$version declared_index=$indexBytes " +
+                "(invalid/unsupported; index NOT decoded)."
+        }
+        cancellation.throwIfCancelled()
+        val index = reader.readAt(iso, entry.dataOffset, indexBytes.toInt())
+        cancellation.throwIfCancelled()
+        return "  BBSA ${entry.path}: version=$version index_bytes=$indexBytes " +
+            "index_sha256=${sha256Hex(index)} (header/index metadata only)."
+    }
+
     private fun validExtent(entry: IsoDirectoryEntry, image: IsoImageInfo): Boolean =
         !entry.isDirectory && entry.size >= 0L && entry.dataOffset >= 0L &&
             entry.dataOffset <= image.sourceSize &&
@@ -225,6 +251,9 @@ internal class IsoCombatResearchService(
         header.size >= 4 && header[0] == '~'.code.toByte() &&
             header[1] == 'P'.code.toByte() && header[2] == 'S'.code.toByte() &&
             header[3] == 'P'.code.toByte() -> "encrypted PSP ~PSP"
+        header.size >= 4 && header[0] == 'b'.code.toByte() &&
+            header[1] == 'b'.code.toByte() && header[2] == 's'.code.toByte() &&
+            header[3] == 'a'.code.toByte() -> "BBSA game archive"
         header.size >= 4 && header[0] == 'P'.code.toByte() &&
             header[1] == 'S'.code.toByte() && header[2] == 'A'.code.toByte() &&
             header[3] == 'R'.code.toByte() -> "PSAR container (not decoded)"
@@ -243,4 +272,7 @@ internal class IsoCombatResearchService(
 
     private fun u16(bytes: ByteArray, offset: Int): Int =
         (bytes[offset].toInt() and 255) or ((bytes[offset + 1].toInt() and 255) shl 8)
+
+    private fun u32(bytes: ByteArray, offset: Int): Long =
+        u16(bytes, offset).toLong() or (u16(bytes, offset + 2).toLong() shl 16)
 }
