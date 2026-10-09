@@ -1,5 +1,11 @@
 # PSP L2D/CTD experimental UI scaling — source audit and runtime limitations
 
+> **Current product status (October 9, 2026):** Pause / Main Menu Scaling
+> was retired and removed because incorrect sprite placement remained.
+> References to menu geometry below are historical investigation only,
+> not selectable features or patch targets. The other six scaling controls
+> remain experimental.
+
 **Implementation status:** non-stock scale selections now generate real
 source-fingerprinted, size-preserving DAT overlays through the ISO rebuild
 pipeline. The app authenticates replacement bytes after rebuilding, while
