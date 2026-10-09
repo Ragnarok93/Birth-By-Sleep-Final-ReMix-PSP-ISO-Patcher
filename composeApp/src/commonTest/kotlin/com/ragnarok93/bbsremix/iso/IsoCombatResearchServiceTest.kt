@@ -30,6 +30,8 @@ class IsoCombatResearchServiceTest {
             assertContains(text, "MIPS ELF32")
             assertContains(text, "EBOOT.BIN")
             assertContains(text, "DATA.DAT")
+            assertContains(text, "BBSA game archive")
+            assertContains(text, "index_sha256=")
             assertContains(text, "PSAR container")
             assertContains(text, "encrypted PSP")
             assertContains(text, "No combat patch")
@@ -48,6 +50,7 @@ class IsoCombatResearchServiceTest {
     fun known_header_classification_avoids_confusing_encrypted_or_other_elf_with_mips() {
         val research = IsoCombatResearchService(reader)
         assertEquals("empty file", research.classify(ByteArray(0)))
+        assertEquals("BBSA game archive", research.classify("bbsa".encodeToByteArray()))
         assertEquals("encrypted PSP ~PSP", research.classify("~PSP".encodeToByteArray()))
         assertEquals("CPK archive (not decoded)", research.classify("CPK ".encodeToByteArray()))
         assertEquals("PSAR container (not decoded)", research.classify("PSAR".encodeToByteArray()))
@@ -86,7 +89,7 @@ class IsoCombatResearchServiceTest {
             record("\u0001", 20, 2048, true),
             record("PSP_GAME", 21, 2048, true),
             record("MODULE.ELF;1", 23, 128, false),
-            record("DATA.DAT;1", 25, 64, false),
+            record("DATA.DAT;1", 25, 2048, false),
             record("CRYPT.PRX;1", 26, 64, false),
             record("EVENT.PAK;1", 27, 64, false),
         ))
@@ -107,7 +110,11 @@ class IsoCombatResearchServiceTest {
         otherElf[18] = 8
         otherElf.copyInto(iso, 23 * 2048)
         ByteArray(256) { 1 }.copyInto(iso, 24 * 2048)
-        "raw archive".encodeToByteArray().copyInto(iso, 25 * 2048)
+        val bbsa = ByteArray(2048)
+        "bbsa".encodeToByteArray().copyInto(bbsa, 0)
+        bbsa[4] = 5 // version 5
+        bbsa[0x1a] = 1 // index occupies one 2048-byte sector
+        bbsa.copyInto(iso, 25 * 2048)
         "~PSP".encodeToByteArray().copyInto(iso, 26 * 2048)
         "PSAR".encodeToByteArray().copyInto(iso, 27 * 2048)
         fs.sink(path).buffer().use { it.write(iso) }
