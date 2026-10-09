@@ -367,6 +367,40 @@ There is **no whole-archive extraction or modification**.
 This new census has **not yet run on the user's game ISO**;
 its results will appear in the next exported inspector log.
 
+## October 9, 18:20 — filename case normalization correction
+
+The latest supplied `ULJM05775_10092026 (3).log` completed successfully,
+with the original EBOOT identity and static combat signatures unchanged.
+It reports `g01lua` as a validated external ARC dependency inside
+`BBS1.DAT`, referencing known directory ID `0x4D4D4947`
+(`arc/gimmick`). That directory still has 333 valid BBSA partition
+file entries and a partition descriptor at BBS0 index offset 128.
+
+**Crucial newly identified false-negative risk:** the global census
+reported `CRC32=0x64B5573A`, with 0 filename matches in the 15,093
+twelve-byte index entries and 0 partition-file matches. However,
+OpenKh's `Bbsa.cs` resolves file names by calling
+**`GetHash(name.ToUpper())`**. The uppercase name `G01LUA`
+(which also appears in OpenKh's `resources/bbsa.txt` filename
+dictionary) hashes to **`0xF5BE1086`**. Earlier reports looked up
+the lowercase string hash **`0x64B5573A`**, so they cannot establish
+whether `G01LUA` is absent from the relevant indexes.
+
+The inspector now normalizes ARC filename text to uppercase before
+UTF-8 CRC32 lookup in **all** BBSA partition and global file-hash
+scans. New regression tests explicitly distinguish lower-case raw
+CRC32 from the correct normalized lookup hash and preserve the
+read-only/bounded scanning contract.
+
+Until a new ISO inspection is exported, there is **no game-source
+lookup result for `0xF5BE1086`**; do not claim the resource is either
+located or absent. Even if a matching archive entry is found, it
+would not prove hit-confirm behavior, runtime script execution, or a
+safe permanent combat hook.
+
+Source: [OpenKh's exact-name lookup in Bbsa.cs](https://github.com/OpenKH/OpenKh/blob/master/OpenKh.Bbs/Bbsa.cs)
+and [BBSA CRC32 implementation](https://github.com/OpenKH/OpenKh/blob/master/OpenKh.Bbs/Bbsa.Hash.cs).
+
 ## Verification
 
 Tests exercise a synthetic ISO with a main EBOOT, a second MIPS ELF,
