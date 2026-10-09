@@ -170,11 +170,18 @@ internal object BbsL2dGeometry {
                 // and local (0,0) where a sprite straddles that origin.
                 // Never choose a separate pivot for each adjacent quad.
                 //
-                // Off-screen sprites act as window masks, full-screen chrome,
-                // transition backdrops and overscan. Preserve *all* of their
-                // groups when any vertex extends outside native 480x272.
-                // Otherwise those masks slide into view when -277 becomes
-                // -194 at 70%, creating the enormous blue menu overlays.
+                // SP2 vertex coordinates are local, NOT directly screen-space.
+                // A valid menu panel can extend far beyond ±240/±136 before
+                // LY2/SQ2 transforms place it. Previously a single vertex
+                // outside this box exempted its WHOLE sprite from resizing,
+                // leaving many full-screen panels at 100% when set to 70%.
+                //
+                // As a conservative fallback, avoid drawing a fully-off-box
+                // sprite into view when its untransformed geometry has no
+                // intersection with the native window. Do not apply this
+                // exemption to any sprite that *intersects* the local
+                // viewport, even if some vertices exceed those coordinates.
+                // A runtime frame dump is needed to certify clipping.
                 val claimed = BooleanArray(groupCount)
                 for (spriteIndex in 0 until spriteCount) {
                     val sprite = spriteOffset + spriteIndex * 4
@@ -188,7 +195,6 @@ internal object BbsL2dGeometry {
                     var minY = Int.MAX_VALUE
                     var maxX = Int.MIN_VALUE
                     var maxY = Int.MIN_VALUE
-                    var overscan = false
                     for (group in first until first + count) {
                         require(!claimed[group]) {
                             "SP2 Sprite groups overlap in menu layout."
@@ -203,11 +209,11 @@ internal object BbsL2dGeometry {
                         minY = minOf(minY, y0, y1)
                         maxX = maxOf(maxX, x0, x1)
                         maxY = maxOf(maxY, y0, y1)
-                        if (minOf(x0, x1) < -240 || maxOf(x0, x1) > 240 ||
-                            minOf(y0, y1) < -136 || maxOf(y0, y1) > 136
-                        ) overscan = true
                     }
-                    if (overscan) continue
+                    val fullyOutOfLocalWindow =
+                        maxX < -240 || minX > 240 ||
+                            maxY < -136 || minY > 136
+                    if (fullyOutOfLocalWindow) continue
                     val pivotXTwice = 2 * menuLocalPivot(minX, maxX)
                     val pivotYTwice = 2 * menuLocalPivot(minY, maxY)
                     for (group in first until first + count) {
