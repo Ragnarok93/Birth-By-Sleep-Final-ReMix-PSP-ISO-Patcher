@@ -123,6 +123,20 @@ internal object IsoBbsaDirectoryEvidence {
         val matches = selected.mapIndexed { i, reference ->
             Match(reference, matchCounts[i], matchLists[i])
         }
+        lines += "  Link candidates=${references.size}; checked=${selected.size}; " +
+            "BBSA 12-byte FILE/DIRECTORY record path-hash field only."
+        for (match in matches) {
+            lines += "  ${match.external.archive}@${match.external.arcRelativeOffset} " +
+                "${match.external.name} dir_hash=${hex(match.external.directoryHash)}: " +
+                "matching_BBSA_directory_entries=${match.matchingRecords}."
+            match.examples.forEach { record ->
+                lines += "    candidate index_byte_offset=${record.indexByteOffset} " +
+                    "file_name_hash=${hex(record.fileNameHash)} " +
+                    "start_sector=${record.startSector} sector_count=${record.sectorCount}" +
+                    if (record.sectorCount == 0xfff) " (streaming sentinel)" else ""
+            }
+        }
+
 
         // OpenKh.Bbs/Bbsa.cs: partition HEADERS start at fixed 0x30.
         // Header +0x10 is the base offset of the separate 8-byte
