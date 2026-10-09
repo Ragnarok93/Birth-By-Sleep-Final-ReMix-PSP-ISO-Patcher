@@ -4,10 +4,10 @@ package com.ragnarok93.bbsremix.patch
  * Research-stage editor for the static geometry inside a BBS L2D asset.
  *
  * OpenKh documents the LY2 layout/node coordinate fields and SP2 group's
- * on-screen vertices, and documented LY2 font-size bytes. SP2 texture
- * coordinates, RGBA, animation control data and font style metadata remain
- * unchanged. This is an experimental test build: runtime-generated gauges,
- * SQ2 animated translation/scale and in-game HUD anchoring remain unverified.
+ * on-screen vertices, positive LY2 font-size bytes and SQ2 animation
+ * translation keys (BaseX/Y and OffsetX/Y). SP2 UVs and RGBA, SQ2 frame
+ * times/colors/rotations/scale curves and font style metadata are preserved.
+ * Runtime-generated HUD geometry and position anchoring remain experimental.
  */
 internal object BbsL2dGeometry {
     data class Result(
@@ -16,9 +16,11 @@ internal object BbsL2dGeometry {
         val nodeFieldsChanged: Int,
         val groupFieldsChanged: Int,
         val fontSizeFieldsChanged: Int,
+        val animationPositionKeysChanged: Int,
     ) {
         val totalFieldsChanged: Int get() =
-            layoutFieldsChanged + nodeFieldsChanged + groupFieldsChanged + fontSizeFieldsChanged
+            layoutFieldsChanged + nodeFieldsChanged + groupFieldsChanged +
+                fontSizeFieldsChanged + animationPositionKeysChanged
     }
 
     fun scale(source: ByteArray, percent: Int): Result {
@@ -78,6 +80,8 @@ internal object BbsL2dGeometry {
         }
 
         var groups = 0
+        var animatedPositions = 0
+        val visitedAnimatedKeys = mutableSetOf<Int>()
         for (i in 0 until sequenceSetCount) {
             val sq2p = relative(output, sequenceTable, sequenceTable + i * 4, "SQ2P pointer")
             requireRange(output, sq2p, 1, 0x40, "SQ2P header")
@@ -103,6 +107,9 @@ internal object BbsL2dGeometry {
             val keyCount = output.readIntLe(sq2 + 0x28)
             val keyOffset = relative(output, sq2, sq2 + 0x2c, "SQ2 keys")
             requireRange(output, keyOffset, keyCount, 0x0c, "SQ2 keys")
+            val animationCount = output.readIntLe(sq2 + 0x20)
+            val animationOffset = relative(output, sq2, sq2 + 0x24, "SQ2 animations")
+            requireRange(output, animationOffset, animationCount, 0x18, "SQ2 animations")
             val groupEnd = groupOffset + groupCount * 0x0c
             fun disjoint(otherOffset: Int, otherSize: Int): Boolean =
                 groupCount == 0 || otherSize == 0 ||
@@ -122,11 +129,53 @@ internal object BbsL2dGeometry {
                     if (scaleInt16(output, item + field * 2, percent)) groups++
                 }
             }
+
+            // SQ2.Animation packs 11 per-kind key counts (status, BaseX/Y,
+            // OffsetX/Y, RotateX/Y/Z, ScaleX/Y, Color). nOfsKeyData at +6
+            // gives the first entry in the SQ2 key table; the counts start
+            // at animation +8. See OpenKh's documented SQ2 format and the
+            // supplied character/deck layout data.
+            //
+            // Scale *positional* floats, not SQ2 scale factors: the sprite
+            // vertices are already scaled, so changing ScaleX/Y again would
+            // double-shrink elements below the selected 70% floor.
+            // Do not reinterpret color/status values as IEEE floats.
+            for (animation in 0 until animationCount) {
+                val anim = animationOffset + animation * 0x18
+                var keyIndex = (output[anim + 6].toInt() and 0xff) or
+                    ((output[anim + 7].toInt() and 0xff) shl 8)
+                for (kind in 0..10) {
+                    val numberOfKeys = output[anim + 8 + kind].toInt() and 0xff
+                    for (key in 0 until numberOfKeys) {
+                        // Some shipping files have unused animations with
+                        // nOfsKeyData outside the declared key count. Skip
+                        // those rather than reading into unrelated tables.
+                        if (keyIndex < keyCount && kind in 1..4) {
+                            val position = keyOffset + keyIndex * 0x0c + 4
+                            if (visitedAnimatedKeys.add(position)) {
+                                val original = Float.fromBits(output.readIntLe(position))
+                                if (original.isFinite() &&
+                                    original in -5000f..5000f &&
+                                    original != 0f
+                                ) {
+                                    val scaled =
+                                        (original.toDouble() * (percent.toDouble() / 100.0)).toFloat()
+                                    if (scaled != original) {
+                                        output.writeIntLe(position, scaled.toBits())
+                                        animatedPositions++
+                                    }
+                                }
+                            }
+                        }
+                        keyIndex++
+                    }
+                }
+            }
         }
         if (percent == UiScaleSettings.STOCK_PERCENT) {
             check(output.contentEquals(source)) { "100% L2D scaling changed the stock input." }
         }
-        return Result(output, layouts, nodes, groups, fonts)
+        return Result(output, layouts, nodes, groups, fonts, animatedPositions)
     }
 
     private fun requireSignature(bytes: ByteArray, offset: Int, magic: String) {
