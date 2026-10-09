@@ -67,6 +67,15 @@ internal object PspCombatNativeEvidence {
             intArrayOf(0x8C84023C.toInt(), 0x3C051000, 0x00851024, 0x03E00008, 0x00021702),
         ),
         Signature(
+            "player script resolver: null-check and virtual player dispatch (no global pointer assumption)",
+            0x089E74C0,
+            intArrayOf(
+                0x12000010, 0x00000000, 0x8E04001C.toInt(),
+                0x24840030, 0x84850000.toInt(), 0x8C860004.toInt(),
+                0x00C0F809, 0x02052021,
+            ),
+        ),
+        Signature(
             "post-input instruction: saved register s0 restoration",
             INPUT_RESTORE_VA,
             intArrayOf(0x8FB00048.toInt(), 0x8FB1004C.toInt(), 0x8FB20050.toInt()),
@@ -97,6 +106,8 @@ internal object PspCombatNativeEvidence {
                 "native state handlers use player+0x22C."
             lines += "STATIC PROOF: native setter/getter for bit 0x10000000 at player+0x23C; " +
                 "its gameplay meaning is NOT established and must not be treated as hit-confirm."
+            lines += "STATIC PROOF: script player resolver performs null-check, virtual dispatch, " +
+                "and runtime object validation; do not replace it with an unchecked static pointer."
             lines += "UNPROVEN: input timing, hit-confirm semantics at player+0x23C, " +
                 "invulnerability field ownership, runtime player-pointer lifetime, " +
                 "Critical bonus ability layout, and safe resident hook/dispatch."
