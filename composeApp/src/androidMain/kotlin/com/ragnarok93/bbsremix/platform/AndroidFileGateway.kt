@@ -22,6 +22,7 @@ import okio.FileSystem
 import okio.Path
 import okio.Path.Companion.toPath
 import okio.buffer
+import java.security.MessageDigest
 import java.util.UUID
 import java.time.LocalDate
 import java.time.LocalTime
@@ -147,30 +148,87 @@ class AndroidFileGateway(
         progress: ProgressReporter,
     ) {
         val uri = destination.token as? Uri ?: throw FileGatewayException("The Android output selection is invalid.")
-        val output = resolver.openOutputStream(uri, "w") ?: throw FileGatewayException("Unable to open the selected output location.")
+        val total = fileSystem.metadata(temporary).size
+            ?: throw FileGatewayException("Unable to determine the completed ISO's length.")
+        if (total <= 0L || total % 2048L != 0L) {
+            throw FileGatewayException("The completed ISO has an invalid length; refusing to export.")
+        }
+
+        // SAF "w" has provider-dependent truncation behavior. Always request
+        // truncation and independently read back the finalized document.
+        val expectedHash = MessageDigest.getInstance("SHA-256")
         try {
-            fileSystem.source(temporary).buffer().use { input ->
-                output.use { stream ->
+            val stream = resolver.openOutputStream(uri, "wt")
+                ?: throw FileGatewayException("Unable to open the document in write/truncate mode.")
+            stream.use { output ->
+                fileSystem.source(temporary).buffer().use { input ->
                     val buffer = ByteArray(COPY_BUFFER_SIZE)
                     var completed = 0L
-                    val total = fileSystem.metadata(temporary).size ?: 0L
                     while (true) {
                         cancellation.throwIfCancelled()
                         val read = input.read(buffer)
                         if (read < 0) break
                         if (read == 0) continue
-                        stream.write(buffer, 0, read)
+                        output.write(buffer, 0, read)
+                        expectedHash.update(buffer, 0, read)
                         completed += read
-                        progress.report(PatchProgress(PatchPhase.COMMITTING_OUTPUT, completed, total, "Writing output ISO"))
+                        progress.report(PatchProgress(
+                            PatchPhase.COMMITTING_OUTPUT, completed, total, "Writing output ISO",
+                        ))
                     }
-                    stream.flush()
+                    if (completed != total) {
+                        throw FileGatewayException("ISO source was truncated during export.")
+                    }
+                    output.flush()
                 }
+            }
+
+            // Reading back the SAF URI detects silently truncated writes,
+            // filesystem-full failures, cloud-provider inconsistencies and
+            // unsuccessful flush/close operations before reporting success.
+            val actualHash = MessageDigest.getInstance("SHA-256")
+            var verifiedBytes = 0L
+            val returned = resolver.openInputStream(uri)
+                ?: throw FileGatewayException("The exported ISO could not be reopened for verification.")
+            returned.use { input ->
+                val buffer = ByteArray(COPY_BUFFER_SIZE)
+                while (true) {
+                    cancellation.throwIfCancelled()
+                    val count = input.read(buffer)
+                    if (count < 0) break
+                    if (count == 0) continue
+                    if (verifiedBytes > total - count) {
+                        throw FileGatewayException("The exported ISO contains unexpected trailing data.")
+                    }
+                    actualHash.update(buffer, 0, count)
+                    verifiedBytes += count
+                    progress.report(PatchProgress(
+                        PatchPhase.COMMITTING_OUTPUT, verifiedBytes, total,
+                        "Verifying committed ISO against the original output",
+                    ))
+                }
+            }
+            if (verifiedBytes != total ||
+                !MessageDigest.isEqual(expectedHash.digest(), actualHash.digest())
+            ) {
+                throw FileGatewayException(
+                    "Exported ISO verification failed: size or SHA-256 differs from the patched ISO. " +
+                        "The destination may be incomplete or corrupted.",
+                )
             }
         } catch (error: kotlinx.coroutines.CancellationException) {
             throw error
         } catch (error: Throwable) {
-            throw FileGatewayException("The output ISO could not be committed: ${error.message}")
+            if (error is com.ragnarok93.bbsremix.patch.PatchCancelledException) throw error
+            throw FileGatewayException("The output ISO was not safely committed: ${error.message}")
         }
+    }
+
+    override suspend fun discardUncommittedOutput(destination: PlatformOutputSelection) {
+        val uri = destination.token as? Uri ?: return
+        // CreateDocument creates a new destination before the patch begins.
+        // Delete that incomplete placeholder after *any* failed attempt.
+        runCatching { resolver.delete(uri, null, null) }
     }
 
     override suspend fun deleteTemp(path: Path) {
