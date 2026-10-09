@@ -15,6 +15,14 @@ class IsoBbsaDirectoryEvidenceTest {
         bytes.writeU32(4, 6)
         bytes.writeU16(0x0e, 3)
         bytes.writeU32(0x14, 0x40)
+        bytes.writeU16(0x08, 2) // BBSA partition directory count
+        bytes.writeU32(0x10, 0x80) // table offset
+        bytes.writeU32(0x80, 0x4D4D4947) // partition hash matches link
+        bytes.writeU16(0x84, 7)
+        bytes.writeU16(0x86, 0x38)
+        bytes.writeU32(0x88, 0xCAFE1234.toInt()) // unrelated partition
+        bytes.writeU16(0x8c, 3)
+        bytes.writeU16(0x8e, 0x48)
         // Three BBSA directory records; two share the same directory hash
         // but represent different filename hashes. Hash agreement by itself
         // does not resolve the "g01lua" link's file identity.
@@ -47,6 +55,11 @@ class IsoBbsaDirectoryEvidenceTest {
         assertContains(report.lines.joinToString("\n"), "g01lua dir_hash=0x4D4D4947")
         assertContains(report.lines.joinToString("\n"), "streaming sentinel")
         assertContains(report.lines.joinToString("\n"), "does NOT resolve")
+        assertTrue(report.partitionValid)
+        assertEquals(2, report.partitionCount)
+        assertEquals(1, report.partitionMatches.single().matchingPartitions)
+        assertEquals(7, report.partitionMatches.single().examples.single().fileCount)
+        assertContains(report.lines.joinToString("\n"), "matching_BBSA_partitions=1")
         assertTrue(source.contentEquals(original))
     }
 
@@ -57,7 +70,20 @@ class IsoBbsaDirectoryEvidenceTest {
         ))
         assertTrue(report.validIndex)
         assertEquals(0, report.matches.single().matchingRecords)
+        assertEquals(0, report.partitionMatches.single().matchingPartitions)
         assertContains(report.lines.joinToString("\n"), "matching_BBSA_directory_entries=0")
+    }
+
+    @Test
+    fun invalid_partition_table_cannot_claim_a_zero_match_when_file_table_is_valid() {
+        val source = index().apply { writeU32(0x10, 2047) }
+        val report = IsoBbsaDirectoryEvidence.inspect(source, listOf(external))
+        assertTrue(report.validIndex)
+        assertFalse(report.partitionValid)
+        assertTrue(report.partitionMatches.isEmpty())
+        assertEquals(2, report.matches.single().matchingRecords)
+        assertContains(report.lines.joinToString("\n"), "BBSA partition table UNVERIFIED")
+        assertContains(report.lines.joinToString("\n"), "no partition match/no-match conclusions")
     }
 
     @Test
