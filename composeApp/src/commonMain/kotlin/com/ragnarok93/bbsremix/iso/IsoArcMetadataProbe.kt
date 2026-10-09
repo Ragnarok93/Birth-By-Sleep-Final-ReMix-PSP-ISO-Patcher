@@ -34,6 +34,9 @@ internal object IsoArcMetadataProbe {
         val payloadRecords: Int,
         val sampledNames: List<String>,
         val observations: List<String>,
+        // Populated only when all records pass structural checks. At most
+        // 1024 records are stored; no game asset payloads are read.
+        val entries: List<Entry> = emptyList(),
     )
 
     fun inspect(
@@ -110,12 +113,30 @@ internal object IsoArcMetadataProbe {
                 "payload_records=$payloads structural_status=${if (valid) "VALID" else "UNVERIFIED"}",
         )
         observations += "Name examples: " + names.joinToString(", ")
+        if (valid) {
+            // Directory metadata is actionable only with its actual link
+            // identifier or bounded archive-relative payload address.
+            // Do not label a "lua" name as a confirmed script file.
+            entries.take(MAX_SAMPLES).forEach { entry ->
+                observations += if (entry.isExternalLink) {
+                    "  external_ref ${entry.name}: raw_id=0x" +
+                        entry.reference.toString(16).uppercase().padStart(8, '0') +
+                        (if (entry.name.contains("lua", ignoreCase = true)) {
+                            " (script-name candidate ONLY; destination unresolved)"
+                        } else "")
+                } else {
+                    "  local_resource ${entry.name}: arc_relative_offset=${entry.payloadOffset}" +
+                        " size=${entry.payloadSize} (bytes not extracted)"
+                }
+            }
+        }
         if (count > MAX_SAMPLES) observations += "  ...${count - MAX_SAMPLES} additional entry names not displayed."
         observations += if (valid)
             "ARC table structural bounds passed; resource identity/meaning NOT proven."
         else
             "ARC table has $errors invalid name/range record(s); treat magic as a candidate only."
-        return Result(valid, count, good, links, payloads, names, observations)
+        return Result(valid, count, good, links, payloads, names, observations,
+            if (valid) entries else emptyList())
     }
 
     private fun hasArcMagic(bytes: ByteArray): Boolean =
