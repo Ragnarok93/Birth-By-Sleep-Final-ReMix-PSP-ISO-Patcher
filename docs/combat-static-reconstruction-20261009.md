@@ -118,6 +118,17 @@ table index; code that evaluates an arbitrary kind must validate it before
 using the table. It would be unsafe to copy an unvalidated Steam command ID
 directly as a PSP definition index.
 
+**Player object lifetime:** the common script-player resolver at
+`0x089E74A8` first obtains an object via `0x088E8E9C`, checks for null,
+reads a callback from its metadata (`object+0x1C`, with a small
+`+0x30` metadata displacement), invokes it using `jalr`, and accepts
+the object only after checking the callback result against `0x00010001`.
+Otherwise it returns null. This demonstrates a native guard/virtual-dispatch
+contract; simply dereferencing a historical static player-manager pointer
+cannot be assumed equivalent across scenes, unloaded actors or cutscenes.
+The inspector fingerprints the corresponding instructions. It remains
+unclear how to safely call the resolver from a new native resident hook.
+
 **Player status clarification:** native small setter/getter functions at
 `0x08B07094` and `0x08B070B8` manipulate/test bit `0x10000000`
 at `player+0x23C`. That establishes a flag's presence, but **does not
