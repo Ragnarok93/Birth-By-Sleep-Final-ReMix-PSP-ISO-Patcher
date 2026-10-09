@@ -75,13 +75,18 @@ internal object CombatPortInspector {
             "overlay_collision=$collision"
         lines += "Input-site ${hex(INPUT_HOOK_VA.toLong())}: current=${hookWord?.let { hex(it.toUInt().toLong()) } ?: "unavailable"} " +
             "expected=${hex(INPUT_HOOK_EXPECTED.toUInt().toLong())} matches=$hookMatches"
+        if (hookMatches) {
+            lines += "ABI HAZARD at 0x08816904: original instruction restores saved register s0 " +
+                "(lw s0, +0x48(sp)); it is NOT an unused post-input slot. Replacing it " +
+                "with JAL without preserving the restore changes the caller's machine state."
+        }
         lines += "Candidate instruction windows below are for manual PSP disassembly; they do not establish combat semantics."
         // Only a small fixed set of windows, all inside the exact supported
         // resident EBOOT's original segment; never export bulk game code.
         for ((label, va) in listOf(
             "controller/post-input" to 0x088168F0,
             "legacy candidate state reader" to 0x08B16D20,
-            "native player state" to 0x08B6A490,
+            "candidate player-state data (unverified)" to 0x08B6A490,
         )) {
             val off = va - VA_FILE_DELTA
             if (!elf || off < 0 || off > source.size - 0x30) {
@@ -93,6 +98,7 @@ internal object CombatPortInspector {
             }
             lines += "$label @ ${hex(va.toLong())}: $values"
         }
+        lines += PspCombatStaticAnalysis.inspect(source)
         lines += "Known PC-port gameplay groups: hit-aware cancels; invincibility; extended defense; " +
             "command cancels; Critical abilities/passives; exclusions; telemetry."
         lines += "Status: UNVALIDATED. No gameplay feature is enabled by this report. " +
