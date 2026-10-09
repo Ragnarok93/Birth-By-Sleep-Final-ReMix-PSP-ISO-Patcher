@@ -65,6 +65,39 @@ The opcode windows are evidence for disassembly **only**; they are not
 proof that a candidate hook is reachable at runtime or preserves registers
 and delay-slot behavior.
 
+## October 9, 2026: user-supplied EBOOT inspection
+
+The read-only log for ULJM05775 reports the expected decrypted ELF fingerprint
+(`8c8947e83b829199f82370c4c638856718886d9a0a525892fed22ce6a8b26ca7`)
+and matching original instruction at `0x08816904`. This authenticates the
+**source**, not the behavior of any combat modification.
+
+Three independent blockers emerge:
+
+1. **Overlay lifetime:** both `0x08B70000` and `0x08B71280` are above the
+   resident/overlay boundary `0x08B6EE7C`, so the Stage 4/5 payload cannot be
+   made live just by allocating a new ELF program header.
+2. **Register restoration:** the old proposed `0x08816904` insertion point
+   contains `0x8FB00048` (`lw s0, +0x48(sp)`). It is an epilogue restore, not
+   an empty call slot. Replacing it with a JAL without re-executing the original
+   load violates the calling convention even if the destination code is safe.
+3. **No field evidence:** the raw words at `0x08B6A490` resemble a table of
+   pointers/data; the six `jr ra`/NOP pairs at `0x08B16D20` resemble stubs.
+   Neither establishes combat state ownership, a hit flag, command category,
+   invincibility behavior, or a patch-safe player object.
+
+The enhanced inspector now reports ELF32 section ownership and bounded static
+JAL cross-references **from executable sections only**. It identifies the
+original input restoration as an ABI hazard. Invalid section tables fail closed.
+This is intentionally a research tool; static cross-references do not validate
+runtime state semantics, indirect calls, dynamic overlays, or gameplay outcomes.
+
+**Next evidence required before writing combat state:** a PPSSPP runtime trace
+or debugger capture for at least one native PSP attack/hit/command transition,
+including call stack, object identity, relevant field values before/after,
+and module load state. Compare Terra/Ventus/Aqua and a neutral baseline.
+The Stage 4/5 code remains disabled until that evidence exists.
+
 ## Required gates before first enabled combat option
 
 1. **Native mapping:** Match a concrete PSP function and its call sites,
