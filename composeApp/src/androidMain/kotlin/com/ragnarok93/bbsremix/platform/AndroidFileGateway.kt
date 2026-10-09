@@ -236,11 +236,11 @@ class AndroidFileGateway(
         }
     }
 
-    override suspend fun discardUncommittedOutput(destination: PlatformOutputSelection) {
-        val uri = destination.token as? Uri ?: return
+    override suspend fun discardUncommittedOutput(destination: PlatformOutputSelection): Boolean {
+        val uri = destination.token as? Uri ?: return false
         // CreateDocument creates a new destination before the patch begins.
-        // Delete that incomplete placeholder after *any* failed attempt.
-        runCatching { resolver.delete(uri, null, null) }
+        // Providers may decline deletion; report that rather than claiming success.
+        return runCatching { resolver.delete(uri, null, null) > 0 }.getOrDefault(false)
     }
 
     override suspend fun deleteTemp(path: Path) {

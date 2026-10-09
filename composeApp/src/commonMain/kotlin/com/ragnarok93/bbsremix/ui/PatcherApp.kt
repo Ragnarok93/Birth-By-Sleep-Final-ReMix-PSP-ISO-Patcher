@@ -301,11 +301,16 @@ fun PatcherApp(
                     }
                 } catch (error: Throwable) {
                     if (!outputCommitted) {
-                        withContext(NonCancellable) {
+                        val discarded = withContext(NonCancellable) {
                             fileGateway.discardUncommittedOutput(outputSelection)
                         }
                         if (output === outputSelection) output = null
-                        appendLog("Incomplete ISO destination discarded; choose a new output after correcting the error.")
+                        appendLog(if (discarded) {
+                            "Incomplete ISO destination deleted. Choose a new output after correcting the error."
+                        } else {
+                            "WARNING: The output document might still exist but be empty or incomplete. " +
+                                "Delete it manually before retrying."
+                        })
                     }
                     throw error
                 } finally {
@@ -357,10 +362,14 @@ fun PatcherApp(
                         "Diagnostic rebuild committed to ${outputSelection.location}; complete ISO is byte-identical to the staged source. The source remains staged for a camera patch test.",
                     )
                 } catch (error: Throwable) {
-                    withContext(NonCancellable) {
+                    val discarded = withContext(NonCancellable) {
                         fileGateway.discardUncommittedOutput(outputSelection)
                     }
-                    appendLog("Incomplete diagnostic ISO destination discarded.")
+                    appendLog(if (discarded) {
+                        "Incomplete diagnostic ISO destination deleted."
+                    } else {
+                        "WARNING: Incomplete diagnostic ISO may remain. Check and remove the selected output."
+                    })
                     throw error
                 } finally {
                     fileGateway.deleteTemp(temporary)

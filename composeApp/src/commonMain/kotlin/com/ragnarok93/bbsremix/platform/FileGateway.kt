@@ -63,7 +63,7 @@ interface FileGateway {
      * Called when CreateDocument selected an output but the patch or commit
      * failed. Providers may create an empty placeholder immediately.
      */
-    suspend fun discardUncommittedOutput(destination: PlatformOutputSelection) { }
+    suspend fun discardUncommittedOutput(destination: PlatformOutputSelection): Boolean = false
 
     suspend fun deleteTemp(path: Path)
 
