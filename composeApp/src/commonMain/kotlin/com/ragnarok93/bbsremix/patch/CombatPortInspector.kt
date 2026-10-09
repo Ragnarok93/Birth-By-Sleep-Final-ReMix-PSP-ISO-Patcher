@@ -100,6 +100,7 @@ internal object CombatPortInspector {
         }
         lines += PspCombatNativeEvidence.inspect(source, exact).lines
         lines += PspCombatApiCatalog.inspect(source, exact).lines
+        lines += PspCombatEventEvidence.inspect(source)
         lines += PspCombatStaticAnalysis.inspect(source)
         lines += "Known PC-port gameplay groups: hit-aware cancels; invincibility; extended defense; " +
             "command cancels; Critical abilities/passives; exclusions; telemetry."
