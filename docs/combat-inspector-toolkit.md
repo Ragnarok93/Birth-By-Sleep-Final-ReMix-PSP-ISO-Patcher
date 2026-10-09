@@ -31,6 +31,8 @@ is activated.
 | Whole disc | `IsoCombatResearchService` | Recursive ISO9660 directory/file inventory, extension counts, relevant file names/sizes, file-format header probes |
 | Additional game modules | `IsoCombatResearchService` | SHA-256, ELF sections, executable JAL/JALR totals, event-name candidates and sampled offset-opcode counts for bounded unencrypted ELF modules |
 | BBSA archive header | `IsoCombatResearchService` | Recognized `bbsa` game DAT archive, version (5/6), bounded index size and SHA-256; embedded asset index *not* decoded |
+| BBS0–BBS4 DAT reconnaissance | `IsoArchiveSectorResearch` | SHA-256 and first 16 bytes of initial sector; bounded, evenly distributed 2 KiB-sector probes; ARC-like header candidates, without decoding assets or pretending a zero-sample result is exhaustive |
+| Auxiliary ELF load map | `PspElfModuleMap` | PT_LOAD file/virtual ranges, memory and file sizes, segment flags, entry point, executable-section addresses and bounds checks; no runtime overlay reservation claim |
 | Unsupported/packed content | `IsoCombatResearchService` | Type classification of encrypted `~PSP`, PSAR/CPK/ZIP; raw/packed DAT/ARC/etc marked **not decoded** |
 
 ## Strict limits and nonclaims
@@ -44,6 +46,10 @@ is activated.
   index prefix hashed, bounded to **4 MiB**, with no internal extraction.
 - At most **24 additional ELF modules**, each up to **12 MiB** and
   **64 MiB total**, are staged for full static decoding.
+- DAT sector reconnaissance probes at most **48 sector headers** per archive
+  (first 8, last 8 and 32 evenly distributed probes), using constant memory.
+  It is a **sample**, not an exhaustive ARC scan; zero candidates found does
+  not prove the archive contains no ARC resources.
 - No more than **48 candidate file records** are printed individually.
 - Large/unsafe ELF sections are omitted from the deep opcode census.
 - Each opcode and pointer category has a limited number of example PCs.
@@ -82,6 +88,32 @@ encrypted PSP modules, auxiliary binaries, and archive candidates
 without asking the user to collect manual MIPS debugger traces.
 The tool does **not** falsely label an archive's internal scripts as
 analyzed if only its outer header was visible.
+
+## Findings from the October 9 full-ISO log
+
+`ULJM05775_10092026 (6).log` demonstrates real source-image coverage
+for a 1,671,329,792-byte ULJM05775 game ISO:
+
+- 29 ISO files, 7 directories, no directory truncation.
+- 10 separately stored MIPS ELF modules under
+  `PSP_GAME/USRDIR/MODULE/`; all staged within size limits.
+- EBOOT's original SHA-256 and the 8/8 native instruction and 13/13
+  script-API signatures continue to match.
+- BBS0.DAT is a version-6 BBSA archive with a **256,000-byte index** and
+  index SHA-256 `18e80141ae690337d958fd06416c6f44cdee6a24ed9806efbe24ff8b70b65ea0`.
+- BBS1.DAT, BBS2.DAT, BBS3.DAT and BBS4.DAT have unrecognized initial
+  headers; their internal combat resources are **not** decoded.
+- The opcode census on EBOOT examines **805,656 instructions**, reports
+  49,042 JAL, 3,401 JALR and 23,401 JR instructions. The field-offset
+  counts describe arbitrary object types, not confirmed player data.
+- No dynamic hit-confirm state, safe resident hook or correct Stage4/5
+  gameplay implementation has been verified.
+
+The added sparse DAT probes are designed to provide more evidence about
+the four unrecognized files in the *next* exported log. Finding an ARC-like
+header would be a structural lead, not proof of valid combat asset content.
+The auxiliary ELF program-header mapping should similarly be interpreted
+as **static** layout evidence, not a runtime address map.
 
 ## Verification
 
