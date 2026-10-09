@@ -133,7 +133,19 @@ class AndroidFileGateway(
                     if (read == 0) continue
                     output.write(buffer, 0, read)
                     completed += read
+                    if (total > 0L && completed > total) {
+                        throw FileGatewayException("The source ISO is larger than its document size declaration.")
+                    }
                     progress.report(PatchProgress(PatchPhase.STAGING_EBOOT, completed, total, "Copying source file to private workspace"))
+                }
+                if (total > 0L && completed != total) {
+                    throw FileGatewayException(
+                        "The source ISO was truncated during Android document import " +
+                            "(" + completed + "/" + total + " bytes).",
+                    )
+                }
+                if (completed == 0L || completed % 2048L != 0L) {
+                    throw FileGatewayException("The selected source is empty or is not a whole-sector ISO image.")
                 }
             }
         } finally {
