@@ -88,6 +88,8 @@ claim of matching the supported revision.
 | `GetPlayerState` | `0x089E924C` | `lw +0x220` on resolved player |
 | `GetSubState` | `0x089E92B4` | `lh +0x22C` on resolved player |
 | `GetCommandKind` | `0x089E78F4` | `lhu +0x268` on resolved player |
+| `GetCommandState` | `0x089E91E4` | `lh +0x22E` on resolved player |
+| `GetCommandSubcate` | `0x089E7970` | `lhu +0x268`, lookup from `0x08B1AE44 + kind*16 + 3` |
 | `GetCommandCategory` | `0x089E7A38` | `lhu +0x268`, lookup from `0x08B1AE44 + kind*16 + 1` |
 | `SetTrgFlagCancel` | `0x089E7604` | sets/clears bit `0x1000` at player `+0x238` |
 | `IsTrgFlagCancel` | `0x089E8BC0` | tests bit `0x1000` at player `+0x238` |
@@ -106,7 +108,11 @@ byte has no justified equivalence in this PSP executable.
 
 **New command-category proof:** the actual PSP wrapper computes its category
 from the current command kind as a 16-byte indexed definition table and
-reads byte `+1`. This supports the existing PSP-only category exclusion
+reads byte `+1`, while the distinct `GetCommandSubcate` wrapper uses
+byte `+3`. `GetCommandState` reads a signed halfword at
+`player+0x22E`. These operations establish the real PSP command metadata
+layout and rule out treating command kind, category, subcategory and current
+command state as interchangeable. This supports the existing PSP-only category exclusion
 model. The wrapper does not perform an explicit bounds check around the
 table index; code that evaluates an arbitrary kind must validate it before
 using the table. It would be unsafe to copy an unvalidated Steam command ID
