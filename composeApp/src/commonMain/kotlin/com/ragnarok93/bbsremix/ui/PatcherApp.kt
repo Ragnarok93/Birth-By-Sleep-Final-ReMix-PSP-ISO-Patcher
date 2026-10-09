@@ -77,6 +77,7 @@ import com.ragnarok93.bbsremix.texture.TextureProfileCatalog
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okio.Path
@@ -298,6 +299,15 @@ fun PatcherApp(
                         appendLog("Verified " + result.uiAssetsPatched + " patched game UI assets in the generated ISO.")
                         result.uiPatchDetails.forEach { detail -> appendLog("UI asset: " + detail) }
                     }
+                } catch (error: Throwable) {
+                    if (!outputCommitted) {
+                        withContext(NonCancellable) {
+                            fileGateway.discardUncommittedOutput(outputSelection)
+                        }
+                        if (output === outputSelection) output = null
+                        appendLog("Incomplete ISO destination discarded; choose a new output after correcting the error.")
+                    }
+                    throw error
                 } finally {
                     fileGateway.deleteTemp(temporary)
                     if (outputCommitted && stagedSource == sourcePath) {
@@ -346,6 +356,12 @@ fun PatcherApp(
                     appendLog(
                         "Diagnostic rebuild committed to ${outputSelection.location}; complete ISO is byte-identical to the staged source. The source remains staged for a camera patch test.",
                     )
+                } catch (error: Throwable) {
+                    withContext(NonCancellable) {
+                        fileGateway.discardUncommittedOutput(outputSelection)
+                    }
+                    appendLog("Incomplete diagnostic ISO destination discarded.")
+                    throw error
                 } finally {
                     fileGateway.deleteTemp(temporary)
                 }
