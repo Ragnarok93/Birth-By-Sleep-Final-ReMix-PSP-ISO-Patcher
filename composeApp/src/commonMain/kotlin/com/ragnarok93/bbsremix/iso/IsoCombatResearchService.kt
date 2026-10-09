@@ -22,6 +22,7 @@ internal class IsoCombatResearchService(
     private companion object {
         const val MAX_ENTRIES = 8192
         const val MAX_DIRECTORY_DEPTH = 12
+        const val MAX_DIRECTORY_BYTES = 4L * 1024L * 1024L
         const val MAX_FILE_HEADER_PROBES = 512
         const val MAX_REPORTED_FILES = 48
         const val MAX_ELF_FILES = 24
@@ -76,6 +77,12 @@ internal class IsoCombatResearchService(
             if (directoryCount > MAX_ENTRIES) {
                 truncated = true
                 break
+            }
+            if (directory.size > MAX_DIRECTORY_BYTES) {
+                lines += "  Oversized directory ${directory.path.ifEmpty { "/" }}: " +
+                    "${directory.size} bytes; skipped by 4 MiB research limit."
+                truncated = true
+                continue
             }
             // Malformed ISO records fail the analysis with an explicit
             // error; treating malformed directories as empty would lie.
