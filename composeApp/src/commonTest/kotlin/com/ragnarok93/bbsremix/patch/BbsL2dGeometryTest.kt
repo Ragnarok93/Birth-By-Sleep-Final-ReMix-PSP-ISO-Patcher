@@ -80,24 +80,70 @@ class BbsL2dGeometryTest {
         assertEquals(-68, result.bytes.readShortLe(0xd2).toShort().toInt())
         assertEquals(85, result.bytes.readShortLe(0xd4).toShort().toInt())
         assertEquals(51, result.bytes.readShortLe(0xd6).toShort().toInt())
-        assertEquals(-204, result.bytes.readShortLe(0x24c).toShort().toInt())
-        assertEquals(-115, result.bytes.readShortLe(0x24e).toShort().toInt())
-        assertEquals(51, result.bytes.readShortLe(0x266).toShort().toInt())
-        assertEquals(-17, result.bytes.readShortLe(0x268).toShort().toInt())
+        // Screen-space layout and root-node anchors remain at stock XY.
+        assertEquals(-240, result.bytes.readShortLe(0x24c).toShort().toInt())
+        assertEquals(-135, result.bytes.readShortLe(0x24e).toShort().toInt())
+        assertEquals(60, result.bytes.readShortLe(0x266).toShort().toInt())
+        assertEquals(-20, result.bytes.readShortLe(0x268).toShort().toInt())
         assertContentEquals(source.copyOfRange(0xe0, 0xf8), result.bytes.copyOfRange(0xe0, 0xf8))
         assertContentEquals(source.copyOfRange(0x110, 0x150), result.bytes.copyOfRange(0x110, 0x150))
         assertContentEquals(source.copyOfRange(0x150, 0x170), result.bytes.copyOfRange(0x150, 0x170))
         assertEquals(68f.toBits(), result.bytes.readIntLe(0x174))
         assertEquals((-42.5f).toBits(), result.bytes.readIntLe(0x180))
         assertEquals(2, result.animationPositionKeysChanged)
-        assertEquals(2, result.layoutFieldsChanged)
-        assertEquals(2, result.nodeFieldsChanged)
+        assertEquals(0, result.layoutFieldsChanged)
+        assertEquals(0, result.nodeFieldsChanged)
         assertEquals(4, result.groupFieldsChanged)
         assertEquals(1, result.fontSizeFieldsChanged)
         assertEquals(15, result.bytes[0x278].toInt() and 0xff)
         assertEquals(2, result.bytes[0x279].toInt() and 0xff)
         assertEquals(1, result.bytes[0x27a].toInt() and 0xff)
         assertContentEquals(source, fixture()) // source untouched
+    }
+
+    @Test
+    fun native_psp_screen_edge_anchors_are_preserved_at_every_supported_scale() {
+        val bare = fixture()
+        for (percent in 70..100 step 5) {
+            val scaled = BbsL2dGeometry.scale(bare, percent)
+            assertContentEquals(
+                bare.copyOfRange(0x24c, 0x250),
+                scaled.bytes.copyOfRange(0x24c, 0x250),
+            )
+            assertContentEquals(
+                bare.copyOfRange(0x266, 0x26a),
+                scaled.bytes.copyOfRange(0x266, 0x26a),
+            )
+        }
+        val rightTop = fixture().apply {
+            writeShortLe(0x24c, 235)
+            writeShortLe(0x24e, -136)
+        }
+        val rightScaled = BbsL2dGeometry.scale(rightTop, 70)
+        assertEquals(235, rightScaled.bytes.readShortLe(0x24c).toShort().toInt())
+        assertEquals(-136, rightScaled.bytes.readShortLe(0x24e).toShort().toInt())
+    }
+
+    @Test
+    fun a_child_node_shrinks_relative_to_its_unchanged_parent_anchor() {
+        val source = fixture().apply {
+            // Make room for a second, parented node; move font info clear of it.
+            writeIntLe(0x22c, 0xa0)
+            copyInto(this, destinationOffset = 0x2a0, startIndex = 0x270, endIndex = 0x280)
+            writeIntLe(0x220, 2)
+            writeShortLe(0x284, 0) // parent node index 0
+            writeShortLe(0x286, 40)
+            writeShortLe(0x288, -30)
+        }
+        val scaled = BbsL2dGeometry.scale(source, 70)
+        // Root placement remains anchored.
+        assertEquals(60, scaled.bytes.readShortLe(0x266).toShort().toInt())
+        assertEquals(-20, scaled.bytes.readShortLe(0x268).toShort().toInt())
+        // Child offset contracts relative to the root.
+        assertEquals(28, scaled.bytes.readShortLe(0x286).toShort().toInt())
+        assertEquals(-21, scaled.bytes.readShortLe(0x288).toShort().toInt())
+        assertEquals(2, scaled.nodeFieldsChanged)
+        assertEquals(13, scaled.bytes[0x2a8].toInt() and 0xff) // font 18 -> 13
     }
 
     @Test
