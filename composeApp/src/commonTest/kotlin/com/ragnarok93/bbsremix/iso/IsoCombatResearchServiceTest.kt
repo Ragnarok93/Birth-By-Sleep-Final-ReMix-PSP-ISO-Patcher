@@ -21,7 +21,7 @@ class IsoCombatResearchServiceTest {
             val before = fs.source(source).buffer().use { it.readByteArray() }
             val report = IsoCombatResearchService(reader).inspect(source, image)
             val text = report.lines.joinToString("\n")
-            assertEquals(5, report.fileCount)
+            assertEquals(6, report.fileCount)
             assertEquals(3, report.directories)
             assertEquals(1, report.scannedModules)
             assertFalse(report.truncated)
@@ -32,6 +32,9 @@ class IsoCombatResearchServiceTest {
             assertContains(text, "DATA.DAT")
             assertContains(text, "BBSA game archive")
             assertContains(text, "index_sha256=")
+            assertContains(text, "DAT SPARSE PROBE PSP_GAME/USRDIR/BBS1.DAT")
+            assertContains(text, "ARC candidate relative_sector=1")
+            assertContains(text, "Zero sampled hits does NOT imply")
             assertContains(text, "PSAR container")
             assertContains(text, "encrypted PSP")
             assertContains(text, "No combat patch")
@@ -65,6 +68,21 @@ class IsoCombatResearchServiceTest {
         assertEquals("MIPS ELF32", research.classify(other))
     }
 
+    @Test
+    fun sparse_sector_sampler_is_bounded_deterministic_and_includes_archive_edges() {
+        assertTrue(IsoArchiveSectorResearch.sampledSectors(0).isEmpty())
+        assertTrue(IsoArchiveSectorResearch.sampledSectors(63).isEmpty())
+        assertEquals(listOf(0L), IsoArchiveSectorResearch.sampledSectors(2048))
+        assertEquals(listOf(0L, 1L, 2L, 3L),
+            IsoArchiveSectorResearch.sampledSectors(4L * 2048))
+        val huge = IsoArchiveSectorResearch.sampledSectors(206_092_288L)
+        assertTrue(huge.size <= 48)
+        assertEquals(huge.distinct().sorted(), huge)
+        assertEquals(0L, huge.first())
+        assertEquals(206_092_288L / 2048L - 1, huge.last())
+        assertTrue(huge.any { it > 10 && it < huge.last() - 10 })
+    }
+
     private fun fixture(label: String): Path {
         val path = FileSystem.SYSTEM_TEMPORARY_DIRECTORY / "bbs-combat-research-$label.iso"
         fs.delete(path, mustExist = false)
@@ -92,6 +110,7 @@ class IsoCombatResearchServiceTest {
             record("DATA.DAT;1", 25, 2048, false),
             record("CRYPT.PRX;1", 26, 64, false),
             record("EVENT.PAK;1", 27, 64, false),
+            record("BBS1.DAT;1", 28, 4 * 2048, false),
         ))
         directory(iso, 21, listOf(
             record("\u0000", 21, 2048, true),
@@ -117,6 +136,12 @@ class IsoCombatResearchServiceTest {
         bbsa.copyInto(iso, 25 * 2048)
         "~PSP".encodeToByteArray().copyInto(iso, 26 * 2048)
         "PSAR".encodeToByteArray().copyInto(iso, 27 * 2048)
+        "opaque-packed-header".encodeToByteArray().copyInto(iso, 28 * 2048)
+        val arc = ByteArray(64)
+        "ARC\u0000".encodeToByteArray().copyInto(arc)
+        arc[4] = 1 // v1 ARC header
+        arc[6] = 2 // two entries; only a header candidate, not decoded
+        arc.copyInto(iso, 29 * 2048)
         fs.sink(path).buffer().use { it.write(iso) }
         return path
     }
