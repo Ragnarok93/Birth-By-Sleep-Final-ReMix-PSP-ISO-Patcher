@@ -366,6 +366,39 @@ class BbsL2dGeometryTest {
     }
 
     @Test
+    fun exact_nine_strip_camp_backdrop_never_exposes_viewport_margins() {
+        // camp.l2d Sprite 14, group indices 80..88, recovered from
+        // ULJM05775_0003/0004 GE draws and original SP2 source records.
+        // Nine strips collectively cover -277..281, -172..171.
+        val source = fixture().copyOf(0x400).apply {
+            writeIntLe(0x2c, size)
+            writeIntLe(0xa8, 9)     // group count
+            writeIntLe(0xac, 0x220) // 0x90 + 0x220 = 0x2b0
+            writeShortLe(0xf8, 9)  // all nine share one sprite descriptor
+            writeShortLe(0xfa, 0)
+            for (i in 0 until 9) {
+                val pos = 0x2b0 + i * 0x0c
+                val y = -172 + 38 * i
+                writeShortLe(pos, -277)
+                writeShortLe(pos + 2, y)
+                writeShortLe(pos + 4, 281)
+                writeShortLe(pos + 6, y + 39)
+                writeShortLe(pos + 8, 0)
+                writeShortLe(pos + 10, 0)
+            }
+        }
+        for (percent in 70..95 step 5) {
+            val result = BbsL2dGeometry.scale(
+                source, percent, preserveMenuAnchors = true,
+            )
+            assertEquals(0, result.groupFieldsChanged)
+            assertContentEquals(source.copyOfRange(0x2b0, 0x31c),
+                result.bytes.copyOfRange(0x2b0, 0x31c))
+            assertTrue(result.fontSizeFieldsChanged > 0)
+        }
+    }
+
+    @Test
     fun full_width_menu_panels_are_not_exempt_for_touching_screen_edges() {
         // Formerly any vertex beyond the native resolution exempted entire
         // menu panels from scaling, leaving many elements at stock size.
