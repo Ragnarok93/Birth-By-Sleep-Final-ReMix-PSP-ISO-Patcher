@@ -401,6 +401,45 @@ safe permanent combat hook.
 Source: [OpenKh's exact-name lookup in Bbsa.cs](https://github.com/OpenKH/OpenKh/blob/master/OpenKh.Bbs/Bbsa.cs)
 and [BBSA CRC32 implementation](https://github.com/OpenKH/OpenKh/blob/master/OpenKh.Bbs/Bbsa.Hash.cs).
 
+## October 9, 18:33 — G01LUA confirmed indexed in arc/gimmick
+
+The new complete user export `ULJM05775_10092026 (4).log`
+shows a **positive exact index lookup** following the corrected OpenKh
+uppercase hashing rules:
+
+| Evidence field | Verified in log |
+| --- | --- |
+| Source EBOOT | Supported ULJM05775, SHA-256 `8c8947e83b829199f82370c4c638856718886d9a0a525892fed22ce6a8b26ca7` |
+| External reference | `g01lua`, validated BBS1 ARC link |
+| Directory | `arc/gimmick`, ID `0x4D4D4947` |
+| Filename normalized for index | `G01LUA`, CRC32 `0xF5BE1086` |
+| BBS0 partition | Descriptor index offset 128; 333 file entries |
+| Exact directory AND filename hit | **1**, index byte offset `12452` |
+| Encoded global sector / count | **439523** / **2 sectors** |
+| Global filename search | 0/15093 in the separate 12-byte directory entry names; **1** in the partition-file entries |
+
+This is a **located BBSA partition-file index entry**, not yet a
+read or decoding of the target's data. Earlier reports of zero
+filename matches were caused by hashing lowercase `g01lua` rather
+than `G01LUA`; those were not evidence of absence. The independent
+12-byte *directory-path-ID* zero-match result refers to a different
+index namespace and is not inconsistent with this partition hit.
+
+The new `IsoBbsaIndexedPayloadProbe` follows OpenKh's
+`CalculateArchiveOffset` rules to map the confirmed **global
+sector** to a specific `BBS0.DAT`–`BBS4.DAT` physical sector,
+validates archive boundary ordering and the ISO file extent, then
+reads **at most the first 2048 bytes**. It records the prefix hex,
+sample SHA-256, and signature classification (including `1B 4C 75
+61` Lua bytecode) without exporting content or claiming to interpret
+the bytecode. Streaming sentinel, malformed/cross-boundary/absent
+archive mapping, and unverified index tables all fail closed.
+No PSP hook, resident code cave, or combat flag is modified.
+
+The provided (4) log **predates** this targeted payload-probe
+addition; a subsequent inspector export is required to establish
+the mapped physical DAT address and inspect its source header.
+
 ## Verification
 
 Tests exercise a synthetic ISO with a main EBOOT, a second MIPS ELF,
