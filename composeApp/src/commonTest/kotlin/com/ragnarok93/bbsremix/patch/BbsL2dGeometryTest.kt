@@ -135,6 +135,53 @@ class BbsL2dGeometryTest {
     }
 
     @Test
+    fun exact_single_block_zero_padding_is_preserved_when_scaling() {
+        val bare = fixture()
+        val arcEntry = bare.copyOf(bare.size + 0x10)
+        assertEquals(0x300, arcEntry.readIntLe(0x2c))
+        assertEquals(0x310, arcEntry.size)
+
+        val stock = BbsL2dGeometry.scale(arcEntry, 100)
+        assertContentEquals(arcEntry, stock.bytes)
+        assertEquals(0, stock.totalFieldsChanged)
+
+        for (scale in 70..95 step 5) {
+            val padded = BbsL2dGeometry.scale(arcEntry, scale)
+            val expected = BbsL2dGeometry.scale(bare, scale)
+            assertEquals(arcEntry.size, padded.bytes.size)
+            assertContentEquals(expected.bytes,
+                padded.bytes.copyOfRange(0, bare.size))
+            assertContentEquals(ByteArray(0x10),
+                padded.bytes.copyOfRange(bare.size, arcEntry.size))
+            assertEquals(expected.totalFieldsChanged, padded.totalFieldsChanged)
+        }
+        assertContentEquals(bare, fixture())
+    }
+
+    @Test
+    fun rejects_nonzero_or_oversized_arc_padding_and_declared_size_overflows() {
+        val bare = fixture()
+        assertFailsWith<IllegalArgumentException> {
+            BbsL2dGeometry.scale(bare.copyOf(bare.size + 0x10).apply {
+                this[lastIndex] = 1
+            }, 70)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            BbsL2dGeometry.scale(bare.copyOf(bare.size + 0x20), 70)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            BbsL2dGeometry.scale(bare.copyOf().apply {
+                writeIntLe(0x2c, size + 0x10)
+            }, 70)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            BbsL2dGeometry.scale(bare.copyOf().apply {
+                writeIntLe(0x2c, 0x30)
+            }, 70)
+        }
+    }
+
+    @Test
     fun rejects_out_of_range_unexpected_signatures_and_invalid_offsets() {
         val source = fixture()
         for (percent in listOf(0, 69, 71, 99, 101, 120)) {
