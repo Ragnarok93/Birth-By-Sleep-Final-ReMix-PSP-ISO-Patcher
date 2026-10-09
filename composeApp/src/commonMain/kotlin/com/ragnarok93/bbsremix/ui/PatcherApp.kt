@@ -328,6 +328,20 @@ fun PatcherApp(
             }
         }
 
+        fun inspectCombatHooks() {
+            val sourcePath = stagedSource ?: run {
+                appendLog("Combat inspection requires a selected original ISO.")
+                return
+            }
+            start("Inspect Combat Hooks") { token ->
+                val lines = withContext(Dispatchers.Default) {
+                    patchingService.inspectCombatPort(sourcePath, token)
+                }
+                lines.forEach(::appendLog)
+                appendLog("Combat port inspection recorded in Logs; export the log to share the MIPS hook report.")
+            }
+        }
+
         fun diagnosticRebuild() {
             val sourcePath = stagedSource ?: return
             val sourceSelection = source ?: return
@@ -588,6 +602,7 @@ fun PatcherApp(
                                 onSelectOutput = ::selectOutput,
                                 onPatch = ::patchIso,
                                 onDiagnosticRebuild = ::diagnosticRebuild,
+                                onInspectCombat = ::inspectCombatHooks,
                                 onCancel = ::cancelCurrentOperation,
                                 isPatching = activeOperation == "Patch ISO",
                                 isDiagnosticRebuild = activeOperation == "Diagnostic rebuild",
@@ -654,6 +669,7 @@ fun PatcherApp(
                                 onSelectOutput = ::selectOutput,
                                 onPatch = ::patchIso,
                                 onDiagnosticRebuild = ::diagnosticRebuild,
+                                onInspectCombat = ::inspectCombatHooks,
                                 onCancel = ::cancelCurrentOperation,
                                 isPatching = activeOperation == "Patch ISO",
                                 isDiagnosticRebuild = activeOperation == "Diagnostic rebuild",
@@ -734,6 +750,7 @@ private fun PatcherPage(
     onSelectOutput: () -> Unit,
     onPatch: () -> Unit,
     onDiagnosticRebuild: () -> Unit,
+    onInspectCombat: () -> Unit,
     onCancel: () -> Unit,
     isPatching: Boolean,
     isDiagnosticRebuild: Boolean,
@@ -750,7 +767,7 @@ private fun PatcherPage(
         if (compact) {
             SourceCard(source, status, preflight, progress, onSelectSource, onVerifySource, busy)
             DetectedGamePane(preflight, compact = true)
-            OptionsCard(options, onOptionsChanged, busy)
+            OptionsCard(options, onOptionsChanged, busy, canWriteOutput, onInspectCombat)
             OutputCard(
                 output = output,
                 onSelect = onSelectOutput,
@@ -776,7 +793,7 @@ private fun PatcherPage(
                 Box(Modifier.weight(1f)) { DetectedGamePane(preflight, compact = false) }
             }
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                OptionsCard(options, onOptionsChanged, busy, Modifier.fillMaxWidth(0.88f))
+                OptionsCard(options, onOptionsChanged, busy, canWriteOutput, onInspectCombat, Modifier.fillMaxWidth(0.88f))
             }
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                 OutputCard(
@@ -1230,6 +1247,8 @@ private fun OptionsCard(
     options: PatchOptions,
     onOptionsChanged: (PatchOptions) -> Unit,
     busy: Boolean,
+    canInspectCombat: Boolean,
+    onInspectCombat: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var combatExpanded by remember { mutableStateOf(true) }
@@ -1414,6 +1433,19 @@ private fun OptionsCard(
                             enabled = false,
                             onCheckedChange = { onOptionsChanged(options.copy(strictSteamExclusions = it)) },
                         )
+                    }
+                    Text(
+                        "Combat development: inspect this ISO's ELF and input-hook instructions " +
+                            "without writing or enabling experimental Stage 4/5 gameplay code. " +
+                            "Open Logs after inspection to export the report.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    TextButton(
+                        onClick = onInspectCombat,
+                        enabled = !busy && canInspectCombat,
+                    ) {
+                        Text("Inspect combat hooks (read-only)")
                     }
                 }
             }
