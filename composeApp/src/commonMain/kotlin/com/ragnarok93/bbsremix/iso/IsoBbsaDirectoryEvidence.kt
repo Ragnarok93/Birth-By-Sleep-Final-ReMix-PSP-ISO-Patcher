@@ -40,10 +40,20 @@ internal object IsoBbsaDirectoryEvidence {
         val entryOffset: Int,
     )
 
+    data class PartitionFileCandidate(
+        val indexByteOffset: Int,
+        val fileNameHash: Long,
+        val startSector: Long,
+        val sectorCount: Int,
+    )
+
     data class PartitionMatch(
         val external: ExternalReference,
         val matchingPartitions: Int,
         val examples: List<PartitionRecord>,
+        val filenameHash: Long = 0,
+        val matchingFiles: Int = 0,
+        val candidateFiles: List<PartitionFileCandidate> = emptyList(),
     )
 
     data class Match(
@@ -114,73 +124,130 @@ internal object IsoBbsaDirectoryEvidence {
             Match(reference, matchCounts[i], matchLists[i])
         }
 
-        // BBSA has a second, independent namespace: partition directory
-        // records (8 bytes each), distinct from its 12-byte file records.
-        // This is a bounded hash-field comparison, not arbitrary byte search.
+        // OpenKh.Bbs/Bbsa.cs: partition HEADERS start at fixed 0x30.
+        // Header +0x10 is the base offset of the separate 8-byte
+        // PARTITION-FILE-ENTRY ARRAY, *not* the partition header table.
+        // Earlier versions mistakenly decoded the array as 15 headers,
+        // yielding an invalid "0/15 partition matches" conclusion.
         val partitionCount = u16(indexPrefix, 0x08)
-        val partitionOffset = u32(indexPrefix, 0x10)
-        val partitionBytes = partitionCount.toLong() * PARTITION_RECORD_BYTES
-        val partitionValid = partitionCount in 1..MAX_PARTITION_RECORDS &&
-            partitionOffset >= HEADER_BYTES &&
-            partitionOffset <= indexPrefix.size.toLong() &&
-            partitionBytes <= indexPrefix.size.toLong() - partitionOffset
-        val partitionMatches = if (partitionValid) {
-            val partitionLists = selected.map { mutableListOf<PartitionRecord>() }
-            val partitionCounts = IntArray(selected.size)
+        val partitionFileEntriesBase = u32(indexPrefix, 0x10)
+        val partitionHeaderLength = partitionCount.toLong() * PARTITION_RECORD_BYTES
+        var partitionValid = partitionCount in 1..MAX_PARTITION_RECORDS &&
+            HEADER_BYTES + partitionHeaderLength <= indexPrefix.size.toLong() &&
+            partitionFileEntriesBase >= HEADER_BYTES + partitionHeaderLength &&
+            partitionFileEntriesBase <= indexPrefix.size.toLong()
+        data class ParsedPartition(
+            val record: PartitionRecord,
+            val fileStart: Int,
+            val fileEnd: Int,
+        )
+        val partitions = mutableListOf<ParsedPartition>()
+        if (partitionValid) {
             for (i in 0 until partitionCount) {
                 if (i % 64 == 0) cancellation.throwIfCancelled()
-                val at = partitionOffset.toInt() + i * PARTITION_RECORD_BYTES
+                val at = HEADER_BYTES + i * PARTITION_RECORD_BYTES
                 val dirHash = u32(indexPrefix, at)
                 val files = u16(indexPrefix, at + 4)
-                val fileTableOffset = u16(indexPrefix, at + 6)
-                for (j in selected.indices) {
-                    if (selected[j].directoryHash != dirHash) continue
-                    partitionCounts[j]++
-                    if (partitionLists[j].size < MAX_REPORTED_MATCHES) {
-                        partitionLists[j] += PartitionRecord(at, dirHash, files, fileTableOffset)
+                val fileTableIndex = u16(indexPrefix, at + 6)
+                val fileStart = partitionFileEntriesBase + fileTableIndex.toLong() * 8L
+                val fileBytes = files.toLong() * 8L
+                if (fileStart > indexPrefix.size || fileBytes > indexPrefix.size - fileStart) {
+                    partitionValid = false
+                    break
+                }
+                partitions += ParsedPartition(
+                    PartitionRecord(at, dirHash, files, fileTableIndex),
+                    fileStart.toInt(), (fileStart + fileBytes).toInt(),
+                )
+            }
+        }
+        val partitionMatches = if (partitionValid) selected.map { reference ->
+            val matching = partitions.filter {
+                it.record.directoryHash == reference.directoryHash
+            }
+            val wantedFileHash = fileNameHash(reference.name)
+            var totalFiles = 0
+            val fileExamples = mutableListOf<PartitionFileCandidate>()
+            for (part in matching) {
+                for (at in part.fileStart until part.fileEnd step 8) {
+                    val nameHash = u32(indexPrefix, at)
+                    if (nameHash != wantedFileHash) continue
+                    totalFiles++
+                    if (fileExamples.size < MAX_REPORTED_MATCHES) {
+                        val info = u32(indexPrefix, at + 4)
+                        fileExamples += PartitionFileCandidate(
+                            at, nameHash, info ushr 12, (info and 0xfff).toInt(),
+                        )
                     }
                 }
             }
-            selected.mapIndexed { i, ref ->
-                PartitionMatch(ref, partitionCounts[i], partitionLists[i])
-            }
+            PartitionMatch(
+                reference, matching.size, matching.take(MAX_REPORTED_MATCHES).map { it.record },
+                wantedFileHash, totalFiles, fileExamples,
+            )
         } else emptyList()
-        lines += "  Link candidates=${references.size}; checked=${selected.size}; " +
-            "only BBSA index DIRECTORY fields were matched (not raw-byte occurrences)."
-        for (match in matches) {
-            val hash = hex(match.external.directoryHash)
-            lines += "  ${match.external.archive}@${match.external.arcRelativeOffset} " +
-                "${match.external.name} dir_hash=$hash: " +
-                "matching_BBSA_directory_entries=${match.matchingRecords}."
-            match.examples.forEach { record ->
-                lines += "    candidate index_byte_offset=${record.indexByteOffset} " +
-                    "file_name_hash=${hex(record.fileNameHash)} " +
-                    "start_sector=${record.startSector} sector_count=${record.sectorCount}" +
-                    if (record.sectorCount == 0xfff) " (streaming sentinel)" else ""
-            }
-        }
         if (partitionValid) {
-            lines += "  BBSA partition table: count=$partitionCount " +
-                "byte_offset=$partitionOffset; exact partition directory-hash comparison:"
+            lines += "  BBSA partition headers: count=$partitionCount fixed_offset=48 " +
+                "partition_file_entries_base=$partitionFileEntriesBase " +
+                "(correct OpenKh layout; 0x10 is NOT the header offset)."
             for (match in partitionMatches) {
-                lines += "  ${match.external.name} hash=${hex(match.external.directoryHash)}: " +
-                    "matching_BBSA_partitions=${match.matchingPartitions}."
+                lines += "  ${match.external.name} directory=${hex(match.external.directoryHash)} " +
+                    "(${knownArcDirectory(match.external.directoryHash)}): " +
+                    "matching_BBSA_partition_headers=${match.matchingPartitions}; " +
+                    "filename_crc32=${hex(match.filenameHash)}; " +
+                    "matching_files_within_partition=${match.matchingFiles}."
                 match.examples.forEach { record ->
-                    lines += "    partition index_byte_offset=${record.indexByteOffset} " +
-                        "directory_hash=${hex(record.directoryHash)} " +
-                        "files=${record.fileCount} raw_file_table_offset=${record.entryOffset}"
+                    lines += "    partition descriptor_at=${record.indexByteOffset} " +
+                        "directory_id=${hex(record.directoryHash)} " +
+                        "files=${record.fileCount} file_entry_start_index=${record.entryOffset}"
+                }
+                match.candidateFiles.forEach { candidate ->
+                    lines += "    indexed file candidate at=${candidate.indexByteOffset} " +
+                        "name_hash=${hex(candidate.fileNameHash)} " +
+                        "start_sector=${candidate.startSector} " +
+                        "sector_count=${candidate.sectorCount}" +
+                        if (candidate.sectorCount == 0xfff) " (streaming sentinel)" else ""
                 }
             }
         } else {
-            lines += "  BBSA partition table UNVERIFIED: declared=$partitionCount " +
-                "offset=$partitionOffset out of bounded index range; " +
-                "no partition match/no-match conclusions."
+            lines += "  BBSA partition headers UNVERIFIED: count=$partitionCount " +
+                "file_entries_base=$partitionFileEntriesBase malformed/truncated index. " +
+                "No partition match/no-match claim."
         }
         lines += "LIMIT: directory-hash agreement alone does NOT resolve the named ARC link. " +
             "The index may include multiple filenames for one directory, and " +
             "the referenced file/partition and actual script data remain unknown."
         return Report(true, directoryCount, offset, matches, lines,
             partitionValid, partitionCount, partitionMatches)
+    }
+
+    /** Known path IDs from OpenKh.Bbs/Bbsa.cs, not CRC32 values. */
+    internal fun knownArcDirectory(hash: Long): String = when (hash) {
+        0x4D4D4947L -> "arc/gimmick"
+        0x53534F42L -> "arc/boss"
+        0x4D454E45L -> "arc/enemy"
+        0x4E455645L -> "arc/event"
+        0x0043504EL -> "arc/npc"
+        0x00004350L -> "arc/pc"
+        0x0050414DL -> "arc/map"
+        0x00435445L -> "arc/etc"
+        0x00535953L -> "arc/system"
+        0x554E454DL -> "arc/menu"
+        else -> "unknown path ID"
+    }
+
+    /** OpenKh.Bbs/Bbsa.Hash.cs: standard reflected UTF-8 CRC32. */
+    internal fun fileNameHash(name: String): Long {
+        var crc = -1
+        for (ch in name.encodeToByteArray()) {
+            var index = (crc xor (ch.toInt() and 255)) and 255
+            repeat(8) {
+                index = if ((index and 1) != 0) (index ushr 1) xor 0xEDB88320.toInt()
+                    else index ushr 1
+            }
+            crc = (crc ushr 8) xor index
+        }
+        return crc.inv().toUInt().toLong()
     }
 
     private fun invalid(lines: List<String>, reason: String): Report =
