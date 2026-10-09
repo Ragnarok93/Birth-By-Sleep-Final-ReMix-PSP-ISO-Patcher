@@ -22,6 +22,8 @@ internal object BbsUiLayoutCatalog {
         val offsetInArchive: Long,
         val layoutSize: Int,
         val originalSha256: String,
+        val digestArchive: String = archive,
+        val digestOffset: Long = offsetInArchive,
     )
 
     val suppliedCandidates: List<Candidate> = listOf(
@@ -85,6 +87,45 @@ internal object BbsUiLayoutCatalog {
             204970528L, 34944, "b52113745660e74ca7926261f2dea7bf341228625727fe95ab5cab29b4a6c6e4"),
         Candidate(UiScaleElement.MENUS, "BBS3.DAT", 206391296L, "t_menu.l2d",
             128612640L, 31296, "4c644369254782fa1baa510f76b88b5f9e843d7783505232627f48021ca0dac8"),
+        // Independent archive entries may load the same *identical* layout
+        // bytes in a different world/scenario. All aliases inherit their
+        // known source's scale profile but have their own physical ISO offset.
+        Candidate(UiScaleElement.COMBAT_HUD, "BBS1.DAT", BBS1_SIZE, "wind_00.l2d",
+            1403120L, 41088, "52622079cf63f7d2b66557c5bac49a4085022b5d1d869b9f7d32ccee661da759",
+            digestOffset = 117104L),
+        Candidate(UiScaleElement.COMBAT_HUD, "BBS1.DAT", BBS1_SIZE, "wind_00.l2d",
+            2744560L, 41088, "52622079cf63f7d2b66557c5bac49a4085022b5d1d869b9f7d32ccee661da759",
+            digestOffset = 117104L),
+        Candidate(UiScaleElement.COMBAT_HUD, "BBS1.DAT", BBS1_SIZE, "wind_00.l2d",
+            4053264L, 41088, "52622079cf63f7d2b66557c5bac49a4085022b5d1d869b9f7d32ccee661da759",
+            digestOffset = 117104L),
+        Candidate(UiScaleElement.COMBAT_HUD, "BBS1.DAT", BBS1_SIZE, "wind_00.l2d",
+            4964656L, 41088, "52622079cf63f7d2b66557c5bac49a4085022b5d1d869b9f7d32ccee661da759",
+            digestOffset = 117104L),
+        Candidate(UiScaleElement.COMBAT_HUD, "BBS1.DAT", BBS1_SIZE, "wind_00.l2d",
+            5943408L, 41088, "52622079cf63f7d2b66557c5bac49a4085022b5d1d869b9f7d32ccee661da759",
+            digestOffset = 117104L),
+        Candidate(UiScaleElement.PORTRAITS, "BBS1.DAT", BBS1_SIZE, "cface_12.l2d",
+            204423600L, 10400, "e58369a8d910e28addd3ca35d1a7e296803c6ef812999cbb4bfc35d320c31bf1",
+            digestOffset = 14647424L),
+        Candidate(UiScaleElement.PORTRAITS, "BBS1.DAT", BBS1_SIZE, "cface_11.l2d",
+            204952320L, 10400, "6a9e0d40ae43d49098ac644340f84d2c324b5dc6a39c0b5225b4d4bf02f823cb",
+            digestOffset = 14657824L),
+        Candidate(UiScaleElement.PORTRAITS, "BBS1.DAT", BBS1_SIZE, "cface_10.l2d",
+            205005472L, 10400, "b64c91f1bacd33746dc2ad8be6f9ed979c4565114b51683a6daebdacc51158c3",
+            digestOffset = 14676032L),
+        Candidate(UiScaleElement.MENUS, "BBS1.DAT", BBS1_SIZE, "c_icon_00.l2d",
+            205035568L, 34944, "b52113745660e74ca7926261f2dea7bf341228625727fe95ab5cab29b4a6c6e4",
+            digestOffset = 204970528L),
+        Candidate(UiScaleElement.PORTRAITS, "BBS3.DAT", 206391296L, "cface_10.l2d",
+            126664752L, 10400, "b64c91f1bacd33746dc2ad8be6f9ed979c4565114b51683a6daebdacc51158c3",
+            digestArchive = "BBS1.DAT", digestOffset = 14676032L),
+        Candidate(UiScaleElement.PORTRAITS, "BBS3.DAT", 206391296L, "cface_11.l2d",
+            133998640L, 10400, "6a9e0d40ae43d49098ac644340f84d2c324b5dc6a39c0b5225d4bf02f823cb",
+            digestArchive = "BBS1.DAT", digestOffset = 14657824L),
+        Candidate(UiScaleElement.PORTRAITS, "BBS3.DAT", 206391296L, "cface_12.l2d",
+            146206768L, 10400, "e58369a8d910e28addd3ca35d1a7e296803c6ef812999cbb4bfc35d320c31bf1",
+            digestArchive = "BBS1.DAT", digestOffset = 14647424L),
     )
 
     /**
