@@ -23,7 +23,7 @@ class IsoBbsaDirectoryEvidenceTest {
         bytes.writeU32(0x38, 0xCAFE1234.toInt()) // descriptor 1: unrelated path
         bytes.writeU16(0x3c, 1)
         bytes.writeU16(0x3e, 2) // entry index 2
-        bytes.writeU32(0x80, 0xF5BE1086) // CRC32("G01LUA")
+        bytes.writeU32(0x80, 0xF5BE1086.toInt()) // CRC32("G01LUA")
         bytes.writeU32(0x84, (0x1AA shl 12) or 2)
         bytes.writeU32(0x88, 0xBBAADDCC.toInt()) // other gimmick file hash
         bytes.writeU32(0x8c, (0x1AB shl 12) or 1)
@@ -136,10 +136,10 @@ class IsoBbsaDirectoryEvidenceTest {
     @Test
     fun same_filename_in_another_index_namespace_is_not_called_a_resolved_link() {
         val source = index()
-        source.writeU32(0x58, 0xF5BE1086) // third 12-byte record filename
+        source.writeU32(0x58, 0xF5BE1086.toInt()) // third 12-byte record filename
         source.writeU32(0x60, 0xC0000000.toInt()) // lua-category path hint
         source.writeU32(0x80, 0xBBAADDCC.toInt()) // remove gimmick filename match
-        source.writeU32(0x90, 0xF5BE1086) // move filename to other partition
+        source.writeU32(0x90, 0xF5BE1086.toInt()) // move filename to other partition
         val report = IsoBbsaDirectoryEvidence.inspect(source, listOf(external))
         assertTrue(report.validIndex)
         assertTrue(report.partitionValid)
