@@ -22,18 +22,20 @@ class IsoCombatResearchServiceTest {
             val report = IsoCombatResearchService(reader).inspect(source, image)
             val text = report.lines.joinToString("\n")
             assertEquals(6, report.fileCount)
-            assertEquals(3, report.directories)
+            assertEquals(4, report.directories)
             assertEquals(1, report.scannedModules)
             assertFalse(report.truncated)
             assertTrue(report.sampledHeaders >= 3)
             assertContains(text, "MODULE.ELF")
             assertContains(text, "MIPS ELF32")
             assertContains(text, "EBOOT.BIN")
-            assertContains(text, "DATA.DAT")
+            assertContains(text, "BBS0.DAT")
             assertContains(text, "BBSA game archive")
             assertContains(text, "index_sha256=")
-            assertContains(text, "DAT SPARSE PROBE BBS1.DAT")
+            assertContains(text, "DAT SPARSE PROBE PSP_GAME/USRDIR/BBS1.DAT")
             assertContains(text, "ARC candidate relative_sector=1")
+            assertContains(text, "g01lua dir_hash=0x4D4D4947")
+            assertContains(text, "matching_BBSA_directory_entries=1")
             assertContains(text, "Zero sampled hits does NOT imply")
             assertContains(text, "PSAR container")
             assertContains(text, "encrypted PSP")
@@ -107,20 +109,27 @@ class IsoCombatResearchServiceTest {
             record("\u0001", 20, 2048, true),
             record("PSP_GAME", 21, 2048, true),
             record("MODULE.ELF;1", 23, 128, false),
-            record("DATA.DAT;1", 25, 2048, false),
+
             record("CRYPT.PRX;1", 26, 64, false),
             record("EVENT.PAK;1", 27, 64, false),
-            record("BBS1.DAT;1", 28, 4 * 2048, false),
+
         ))
         directory(iso, 21, listOf(
             record("\u0000", 21, 2048, true),
             record("\u0001", 20, 2048, true),
             record("SYSDIR", 22, 2048, true),
+            record("USRDIR", 30, 2048, true),
         ))
         directory(iso, 22, listOf(
             record("\u0000", 22, 2048, true),
             record("\u0001", 21, 2048, true),
             record("EBOOT.BIN;1", 24, 256, false),
+        ))
+        directory(iso, 30, listOf(
+            record("\u0000", 30, 2048, true),
+            record("\u0001", 21, 2048, true),
+            record("BBS0.DAT;1", 25, 2048, false),
+            record("BBS1.DAT;1", 32, 4 * 2048, false),
         ))
         val otherElf = ByteArray(128)
         byteArrayOf(0x7f, 0x45, 0x4c, 0x46).copyInto(otherElf)
@@ -133,15 +142,34 @@ class IsoCombatResearchServiceTest {
         "bbsa".encodeToByteArray().copyInto(bbsa, 0)
         bbsa[4] = 5 // version 5
         bbsa[0x1a] = 1 // index occupies one 2048-byte sector
+        bbsa[0x0e] = 1 // one directory entry
+        bbsa[0x14] = 0x40 // byte offset of BBSA directory table
+        bbsa[0x40] = 0x78 // arbitrary file-name hash
+        bbsa[0x41] = 0x56
+        bbsa[0x42] = 0x34
+        bbsa[0x43] = 0x12
+        bbsa[0x44] = 0x01 // packed archive start/sector count
+        bbsa[0x48] = 0x47 // BBS1 external directory hash = 0x4D4D4947
+        bbsa[0x49] = 0x49
+        bbsa[0x4a] = 0x4D
+        bbsa[0x4b] = 0x4D
         bbsa.copyInto(iso, 25 * 2048)
         "~PSP".encodeToByteArray().copyInto(iso, 26 * 2048)
         "PSAR".encodeToByteArray().copyInto(iso, 27 * 2048)
-        "opaque-packed-header".encodeToByteArray().copyInto(iso, 28 * 2048)
-        val arc = ByteArray(64)
+        "opaque-packed-header".encodeToByteArray().copyInto(iso, 32 * 2048)
+        val arc = ByteArray(80)
         "ARC\u0000".encodeToByteArray().copyInto(arc)
         arc[4] = 1 // v1 ARC header
-        arc[6] = 2 // two entries; only a header candidate, not decoded
-        arc.copyInto(iso, 29 * 2048)
+        arc[6] = 2 // local file + external directory link
+        arc[16 + 4] = 80
+        arc[16 + 8] = 16
+        "actor.pmo".encodeToByteArray().copyInto(arc, 16 + 16)
+        arc[48] = 0x47
+        arc[49] = 0x49
+        arc[50] = 0x4D
+        arc[51] = 0x4D
+        "g01lua".encodeToByteArray().copyInto(arc, 48 + 16)
+        arc.copyInto(iso, 33 * 2048)
         fs.sink(path).buffer().use { it.write(iso) }
         return path
     }
