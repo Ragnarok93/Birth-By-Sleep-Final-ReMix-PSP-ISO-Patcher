@@ -18,7 +18,7 @@ internal object PspCombatNativeEvidence {
     )
 
     // Fails closed if the exact supported source was translated/updated.
-    private val signatures = listOf(
+    internal val signatures = listOf(
         Signature(
             "SetTrgFlagCancel: clear/set bit 0x1000 at player+0x238",
             0x08B07020,
