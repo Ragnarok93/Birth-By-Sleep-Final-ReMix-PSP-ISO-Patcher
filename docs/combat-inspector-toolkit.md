@@ -202,10 +202,15 @@ and lists the following fully validated ARC directory metadata:
 
 | Archive | ARC relative byte offset | Record | Evidence |
 | --- | ---: | --- | --- |
-| `BBS1.DAT` | 156,127,232 | `g01lua` | External directory hash **`0x4D4D4947`**, zero-length linked record |
+| `BBS1.DAT` | 156,127,232 | `g01lua` | External directory hash **`0x4D4D4947`**; length not printed by this older inspector build |
 | `BBS1.DAT` | 156,127,232 | `g01sb00.pmo` | Local payload at ARC-relative **928**, length **36,464** |
 | `BBS2.DAT` | 2,048 | `n01bd00.pmo` | Local payload at ARC-relative **144**, length **115,008** |
 | `BBS2.DAT` | 2,048 | `n01bd00.txa` | Local payload at ARC-relative **115,152**, length **51,040** |
+
+The current log does not expose the external record's payload-length
+field, so it cannot independently prove the new zero-length link check
+will pass on this source. That validation will be established in the
+next exported inspector log.
 
 The external `g01lua` label is a potential script-resource clue,
 **not proof that a Lua script has been located or executed**.
