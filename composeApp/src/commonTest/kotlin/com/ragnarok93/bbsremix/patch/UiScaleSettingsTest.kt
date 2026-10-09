@@ -11,6 +11,8 @@ class UiScaleSettingsTest {
     fun all_categories_accept_only_70_through_100_in_five_percent_steps() {
         val stock = UiScaleSettings()
         assertTrue(stock.isStock)
+        assertEquals(6, UiScaleElement.entries.size)
+        assertFalse(UiScaleElement.entries.any { it.title.contains("menu", ignoreCase = true) })
         for (element in UiScaleElement.entries) {
             for (percent in 70..100 step 5) {
                 val selection = stock.withPercent(element, percent)
@@ -35,7 +37,7 @@ class UiScaleSettingsTest {
             settings.withPercent(element, 70)
         }
         assertFalse(adjusted.isStock)
-        assertEquals(7, UiScaleElement.entries.count { adjusted[it] == 70 })
+        assertEquals(6, UiScaleElement.entries.count { adjusted[it] == 70 })
         val restored = UiScaleElement.entries.fold(adjusted) { settings, element ->
             settings.withPercent(element, 100)
         }
