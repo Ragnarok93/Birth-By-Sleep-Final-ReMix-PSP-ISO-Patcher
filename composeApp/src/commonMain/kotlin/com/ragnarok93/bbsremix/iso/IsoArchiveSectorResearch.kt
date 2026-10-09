@@ -64,6 +64,7 @@ internal object IsoArchiveSectorResearch {
         val total = (entry.size + SECTOR - 1L) / SECTOR
         val other = mutableMapOf<String, Int>()
         val arc = mutableListOf<ArcCandidate>()
+        val validatedArc = mutableListOf<String>()
         var arcLike = 0
         var firstSha = "unavailable"
         var firstHex = "unavailable"
@@ -92,7 +93,14 @@ internal object IsoArchiveSectorResearch {
                     16L + count.toLong() * 32L <= remaining
                 ) {
                     arcLike++
-                    if (arc.size < MAX_MATCHES) arc += ArcCandidate(index, version, count)
+                    if (arc.size < MAX_MATCHES) {
+                        arc += ArcCandidate(index, version, count)
+                        val table = IsoArcMetadataProbe.inspect(
+                            source, entry, index * SECTOR, reader, cancellation,
+                        )
+                        validatedArc += "    Sector $index: " +
+                            table.observations.joinToString(" | ")
+                    }
                 }
             } else {
                 val signature = when {
@@ -119,6 +127,7 @@ internal object IsoArchiveSectorResearch {
             lines += "    ARC candidate relative_sector=${it.sector} " +
                 "relative_offset=${it.sector * SECTOR} entries=${it.fileCount}."
         }
+        lines += validatedArc
         if (other.isNotEmpty()) {
             lines += "    Other sampled sector magic: " + other.toSortedMap()
                 .entries.joinToString(", ") { "${it.key}=${it.value}" }
