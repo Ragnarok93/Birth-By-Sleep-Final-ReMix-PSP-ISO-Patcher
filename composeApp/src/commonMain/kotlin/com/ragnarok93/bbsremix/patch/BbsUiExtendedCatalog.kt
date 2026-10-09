@@ -1,7 +1,7 @@
 package com.ragnarok93.bbsremix.patch
 
 /**
- * Extended per-scene L2D coverage from the user's matching BBS1–3 data files.
+ * Extended per-scene L2D coverage from the user's matching BBS1–3 data files.\n * Includes two bc01_00 Command Deck files identified by the PPSSPP GE dump.
  * Only bounded, individually SHA-256 fingerprinted original resources are
  * admitted. The extra rows have no independent post-scale digest: patch-time
  * verification compares every generated output byte to its known plan.
@@ -29,7 +29,9 @@ internal object BbsUiExtendedCatalog {
         }
     }
 
-    private const val RECORDS = """COMBAT_HUD|1|273408|41024|wind_00.l2d|562bf40ed3b9f18a094deeca350592d7b93cce5e8ce49468604c65ad0ecac4f7
+    private const val RECORDS = """COMMAND_DECK|1|659696|222544|bc01_00.l2d|bfee4970d4a0c8388f619b90f6e0fdada53cfb237ccff6899892a47ec9dd1601
+COMMAND_DECK|1|22768224|222560|bc01_00.l2d|9a16df7996b6a98f1f97487138d90bfe4462a26f5b784f56ad72d4ede47baf0c
+COMBAT_HUD|1|273408|41024|wind_00.l2d|562bf40ed3b9f18a094deeca350592d7b93cce5e8ce49468604c65ad0ecac4f7
 COMBAT_HUD|1|565520|90480|wind_00.l2d|296906ae9f7b44be73e7eff4bd210989ab7bc6dd39e5937203e8a0e79e0f549c
 COMBAT_HUD|1|882240|98352|wind_00.l2d|90b2cb646b5eeb998d4fdd1f972d31c32bcffe70ddd50cdb42288e4a2da23bb5
 COMBAT_HUD|1|1315088|41008|wind_00.l2d|aefeaeb8770c230afd90cc4b9e6c20a5b1a25af13cff81fffd353afbdd1959fa
