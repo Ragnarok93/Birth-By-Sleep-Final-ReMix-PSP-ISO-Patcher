@@ -30,6 +30,15 @@ internal object PspCombatStaticAnalysis {
         "controller poll callee" to 0x08B16D38L,
         "legacy stub candidate" to 0x08B16D20L,
         "native camera resource copier (reference only)" to 0x0893DBF4L,
+        "guarded player resolver" to 0x089E74A8L,
+        "native cancel flag setter" to 0x08B07020L,
+        "native cancel flag getter" to 0x08B07084L,
+        "native attack-status bit-28 setter" to 0x08B07094L,
+        "native attack-status bit-28 getter" to 0x08B070B8L,
+        "script cancel setter" to 0x089E7604L,
+        "script cancel getter" to 0x089E8BC0L,
+        "script GetMotionNowFrame" to 0x089DB50CL,
+        "script IsAttacking" to 0x089DC664L,
     )
 
     fun sectionMap(data: ByteArray): List<Section> {
@@ -112,6 +121,7 @@ internal object PspCombatStaticAnalysis {
         }
 
         val matches = targets.associate { it.second to mutableListOf<Pair<Long, Int>>() }
+        val callCounts = targets.associate { it.second to 0 }.toMutableMap()
         var scanned = 0L
         for (section in executable) {
             // Do not scan executable section contents when its VA/file mapping
@@ -125,6 +135,7 @@ internal object PspCombatStaticAnalysis {
                 val target = ((pc + 4) and 0xF0000000L) or
                     ((word.toLong() and 0x03FF_FFFFL) shl 2)
                 val collection = matches[target] ?: continue
+                callCounts[target] = callCounts.getValue(target) + 1
                 if (collection.size < MAX_REPORTED_CALLS) collection += pc to word
             }
         }
@@ -132,12 +143,12 @@ internal object PspCombatStaticAnalysis {
             "direct calls only (indirect JALR and runtime overlays not resolved)."
         for ((label, target) in targets) {
             val references = matches.getValue(target)
-            lines += "$label ${hex(target)}: ${references.size}" +
-                (if (references.size == MAX_REPORTED_CALLS) "+ (report cap)" else "") +
-                " sample call site(s)" +
-                if (references.isEmpty()) "" else
-                    " at " + references.joinToString(", ") { hex(it.first) }
+            lines += "$label ${hex(target)}: ${callCounts.getValue(target)} direct JAL call(s)" +
+                (if (references.isEmpty()) "" else
+                    "; sample site(s): " + references.joinToString(", ") { hex(it.first) })
         }
+        lines += "IMPORTANT: zero direct JAL calls does not mean a native helper is unused: " +
+            "script registration tables, function pointers and JALR dispatch are not resolved."
         lines += "Static XREFs and section flags do not prove gameplay semantics, hook reachability, " +
             "state ownership, or runtime safety."
         return lines
