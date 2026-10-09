@@ -15,9 +15,14 @@ on the app's **Setup → UI Scaling** panel. All start at **100% (stock)**.
 - Only changed categories are patched. The original ISO is never overwritten.
 - FPS, right-stick, and camera options remain independently selectable.
 
-**Scope:** 29 source-authenticated L2D assets across BBS0/BBS1/BBS3,
-plus CT00000 (25 subtitle layout rows). Some scene-specific layouts,
-SQ2 animated transform keys, dynamic HUD rendering and input hit areas
+**Scope:** 109 source-authenticated L2D assets across BBS0/BBS1/BBS2/BBS3,
+plus CT00000 (25 subtitle layout rows). The editor now also transforms
+SQ2 animated BaseX/Y and OffsetX/Y positions; it intentionally leaves
+SQ2 ScaleX/Y animation factors unchanged so already-scaled SP2 geometry
+cannot be double-shrunk. 41 original/identical-copy assets have
+independently calculated per-percent output digests, and 68 extended
+per-scene layouts have exact source SHA-256 plus patch-time output-byte
+verification. Dynamic HUD rendering and input hit areas
 are not yet adjusted or verified. Consequently the build is intended
 for visual/in-game testing, not presented as pixel-perfect HUD scaling.
 
