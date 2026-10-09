@@ -63,3 +63,32 @@ unsupported bytes.
   spans are compared byte-for-byte to the generated replacement.
 - A partial/incompatible output is not treated as successful.
 - Verified bytes **do not prove a valid in-game visual result**.
+
+## Corrupted ISO / Android storage-provider safeguards
+
+On Android, **Choose Output** invokes the system `CreateDocument` picker,
+which can create an empty placeholder before the patch starts. Do not run
+that file in PPSSPP. Only use the result after the app shows
+**Patched ISO ready** and the completed commit status.
+
+As of the October 9 SAF integrity fix, the exporter requests explicit
+**write + truncate**, then reopens the file and checks its **complete
+byte count and streaming SHA-256** against the locally built ISO. A
+mismatch is an error, never a successful patch. Aborted or failed
+operations attempt to remove the selected incomplete document and clear
+the pending output selection. The Android source staging step also
+rejects empty, non-sector-aligned and prematurely truncated source ISOs.
+
+If the patched ISO is still rejected by PPSSPP after the corrected build,
+compare these three files in order:
+
+1. The **original source ISO** (should launch as before).
+2. The app's **Diagnostic rebuild** (unchanged ISO, byte-for-byte
+   comparison enabled; should also launch).
+3. The **patched output**, initially with all UI controls at 100% and
+   other options held constant, then one scale changed to 85%.
+
+Export the app Logs for the failed operation. Capture the first
+PPSSPP loader error from the PPSSPP log when possible. Structural ISO
+checks cannot guarantee that the PSP executable and modded UI code
+will initialize without a game-specific runtime fault.
