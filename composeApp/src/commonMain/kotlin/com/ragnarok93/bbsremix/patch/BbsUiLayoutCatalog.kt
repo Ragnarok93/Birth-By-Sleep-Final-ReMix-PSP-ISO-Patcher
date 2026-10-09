@@ -163,7 +163,7 @@ internal object BbsUiLayoutCatalog {
         val scaled = try {
             BbsL2dGeometry.scale(
                 old, percent,
-                preserveAnimationBase = candidate.element == UiScaleElement.MENUS,
+                preserveMenuAnchors = candidate.element == UiScaleElement.MENUS,
             )
         } catch (error: IllegalArgumentException) {
             throw IsoFormatException(
