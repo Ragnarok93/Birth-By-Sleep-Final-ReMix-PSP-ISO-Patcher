@@ -13,7 +13,6 @@ enum class UiScaleElement(val title: String) {
     GAUGES("HP / Focus / D-Link"),
     PORTRAITS("Character portraits"),
     SHOTLOCK("Shotlock interface"),
-    MENUS("Pause / main menus"),
     SUBTITLES("Subtitles"),
 }
 
@@ -23,7 +22,6 @@ data class UiScaleSettings(
     val gauges: Int = STOCK_PERCENT,
     val portraits: Int = STOCK_PERCENT,
     val shotlock: Int = STOCK_PERCENT,
-    val menus: Int = STOCK_PERCENT,
     val subtitles: Int = STOCK_PERCENT,
 ) {
     operator fun get(element: UiScaleElement): Int = when (element) {
@@ -32,7 +30,6 @@ data class UiScaleSettings(
         UiScaleElement.GAUGES -> gauges
         UiScaleElement.PORTRAITS -> portraits
         UiScaleElement.SHOTLOCK -> shotlock
-        UiScaleElement.MENUS -> menus
         UiScaleElement.SUBTITLES -> subtitles
     }
 
@@ -46,7 +43,6 @@ data class UiScaleSettings(
             UiScaleElement.GAUGES -> copy(gauges = percent)
             UiScaleElement.PORTRAITS -> copy(portraits = percent)
             UiScaleElement.SHOTLOCK -> copy(shotlock = percent)
-            UiScaleElement.MENUS -> copy(menus = percent)
             UiScaleElement.SUBTITLES -> copy(subtitles = percent)
         }
     }
