@@ -290,7 +290,10 @@ fun PatcherApp(
                     }
                     outputCommitted = true
                     status = PatcherStatus.Complete(result, outputSelection.location)
-                    appendLog("Patched ISO committed to ${outputSelection.location}.")
+                    appendLog(
+                        "Patched ISO committed to " + outputSelection.location +
+                            " (" + result.outputSize + " bytes); destination copy verified.",
+                    )
                     if (options.appliesUiScaling) {
                         val requested = com.ragnarok93.bbsremix.patch.UiScaleElement.entries
                             .filter { options.uiScaling[it] != 100 }
@@ -1665,7 +1668,8 @@ private fun StatusCard(status: PatcherStatus, progress: PatchProgress?) {
             "Output: " + status.outputLocation +
                 "\nSource EBOOT SHA-256: " + status.result.sourceEbootSha256 +
                 "\nPatched EBOOT SHA-256: " + status.result.patchedEbootSha256 +
-                "\nUI resources patched: " + status.result.uiAssetsPatched,
+                "\nUI resources patched: " + status.result.uiAssetsPatched +
+                "\nOutput ISO bytes: " + status.result.outputSize,
         )
 
         is PatcherStatus.DiagnosticComplete -> MessageCard(
