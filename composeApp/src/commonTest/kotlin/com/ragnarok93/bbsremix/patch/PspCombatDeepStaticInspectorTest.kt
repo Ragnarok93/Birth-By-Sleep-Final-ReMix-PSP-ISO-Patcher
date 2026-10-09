@@ -49,6 +49,10 @@ class PspCombatDeepStaticInspectorTest {
         b.writeIntLe(0x210, 0xAE040238.toInt()) // sw a0,0x238(s0)
         b.writeIntLe(0x214, 0x8E05023C.toInt()) // lw a1,0x23c(s0)
         b.writeIntLe(0x218, 0xC4800024.toInt()) // lwc1 f0,0x24(a0) (not counted as +0x238)
+        b.writeIntLe(0x21c, 0x3C0808B2) // lui t0,0x08B2
+        b.writeIntLe(0x220, 0x3508DE9C.toInt()) // ori t0,t0,0xDE9C
+        b.writeIntLe(0x224, 0x3C0908B3) // lui t1,0x08B3
+        b.writeIntLe(0x228, 0x2529DE9C) // addiu t1,t1,-8548 = 0x08B2DE9C
         b.writeIntLe(0x300, 0x089E74A8)
         b.writeIntLe(0x304, 0x08B2DE9C)
     }
@@ -69,6 +73,11 @@ class PspCombatDeepStaticInspectorTest {
         assertEquals(listOf(0x0881600cL, 0x08816010L), cancel.sampleVas)
         assertEquals(1, report.pointerResults.single { it.address == 0x089E74A8L }.count)
         assertEquals(1, report.pointerResults.single { it.address == 0x08B2DE9CL }.count)
+        assertEquals(
+            2,
+            report.addressBuildResults.single { it.address == 0x08B2DE9CL }.count,
+        )
+        assertContains(report.lines.joinToString("\n"), "LUI+ADDIU/ORI")
         assertContains(report.lines.joinToString("\n"), "ALL object types")
         assertContains(report.lines.joinToString("\n"), "JALR targets unresolved")
         assertTrue(source.contentEquals(before))
