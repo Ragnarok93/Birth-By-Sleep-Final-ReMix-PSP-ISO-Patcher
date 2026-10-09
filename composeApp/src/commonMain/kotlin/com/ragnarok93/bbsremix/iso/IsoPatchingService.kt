@@ -106,7 +106,10 @@ class IsoPatchingService(
         cancellation.throwIfCancelled()
         val eboot = reader.readEntry(source, image.eboot)
         cancellation.throwIfCancelled()
-        return CombatPortInspector.inspect(eboot).lines
+        val lines = CombatPortInspector.inspect(eboot).lines.toMutableList()
+        cancellation.throwIfCancelled()
+        lines += IsoCombatResearchService(reader).inspect(source, image, cancellation).lines
+        return lines
     }
 
     fun verifyOutput(
