@@ -72,7 +72,7 @@ internal object CombatDecisionModel {
             available += Input.TRIANGLE
         }
 
-        val normalCommandCategory = source.commandCategory in 0..3
+        val normalCommandCategory = source.commandCategory?.let { it in 0..3 } == true
         if (options.commandCancels && normalCommandCategory) {
             if (source.motionFrame >= commandThreshold && source.animationType == 3 &&
                 source.state != 0x15 && source.state != 0x14 && source.state != 0x19
@@ -109,7 +109,7 @@ internal object CombatDecisionModel {
             0x51, 0x58, 0x1d, 0x92, 0x93, 0x94, 0x3b, 0x6f,
         )
         val blockedCategory = options.strictSteamExclusions &&
-            (source.commandCategory == null || source.commandCategory !in 0..3)
+            !normalCommandCategory
         val blockAll = blockedState || blockedAction || source.motionId == 0x65 ||
             blockedCategory
         if (blockAll) available.clear()
