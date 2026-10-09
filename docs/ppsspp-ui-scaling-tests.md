@@ -188,3 +188,42 @@ description text, selection rectangles, and Save menu. The goal is that
 the displayed text remains inside the corresponding window after size
 reduction. A successful rebuild or SHA-256 output check alone is not
 proof that the alignment is correct in PPSSPP.
+
+
+## Overscan and per-sprite menu pivot correction (October 9, 2026)
+
+The Build #318 screenshots still showed a large blue band covering menus,
+off-screen blue decorative columns moving into view, shifted submenus,
+MUNNY/TIME and help labels detached from their panels. Inspection of
+`camp.l2d` explains the failure: 63 child nodes of parent 0 can carry
+absolute PSP positions, while many of the 2,652 SP2 groups extend beyond
+the original 480×272 viewport. Scaling those groups around coordinate
+(0,0) moved out-of-view sprite data into view: for example, an original
+X=-277 vertex became X=-194 at 70%.
+
+The revised **Menus-only** transform has three changes:
+
+1. Preserve **all LY2 node X/Y positions** and SQ2 BaseX/BaseY and
+   OffsetX/OffsetY animation keys. Scene placement and transitions
+   retain their native coordinates.
+2. Identify complete SP2 Sprites via Group Value/Group IDX. If any
+   sprite group vertex extends beyond native screen coordinates
+   X=[-240,240] or Y=[-136,136], preserve all its groups. This
+   protects full-screen backdrops and overscan transition decorations
+   from moving into the visible area.
+3. For on-screen sprites, scale **all adjacent quads about one common
+   per-sprite bounding-box centre**, preserving the sprite's position and
+   the seams between multiple quads. Font size scaling continues.
+
+The non-menu Command Deck, gauges, portraits, combat HUD, Shotlock and
+subtitle paths remain unchanged. Independent SHA-256 reference prefixes
+were recomputed from the supplied game data for all eight original menu
+resources at 70%, 75%, 80%, 85%, 90% and 95%; other categories retain
+their existing hashes.
+
+**PPSSPP test:** Patch an original game ISO with only
+**Pause / main menus = 70%**. Compare main menu, Command Decks, abilities,
+D-Links, Save, and Help. In particular, verify whether the large upper
+banner and left-side vertical strips no longer obstruct content and
+whether bottom descriptions fit their panels. This is a byte-verified
+resource patch, not yet certified pixel-correct runtime behavior.
