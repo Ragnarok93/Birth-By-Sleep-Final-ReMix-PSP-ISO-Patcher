@@ -35,7 +35,8 @@ is activated.
 ## Strict limits and nonclaims
 
 - Directory traversal is capped at **8,192 entries** and 12 levels, with
-  duplicate-directory offsets suppressed.
+  duplicate-directory offsets suppressed. An individual directory above
+  **4 MiB** is recorded as truncated rather than fully staged.
 - Up to **512 relevant file headers** are sampled, at most 64 bytes each;
   no full archive is staged merely for a signature search.
 - At most **24 additional ELF modules**, each up to **12 MiB** and
