@@ -6,6 +6,7 @@ import com.ragnarok93.bbsremix.patch.PspCombatDeepStaticInspector
 import com.ragnarok93.bbsremix.patch.PspCombatEventEvidence
 import com.ragnarok93.bbsremix.patch.PspCombatStaticAnalysis
 import com.ragnarok93.bbsremix.patch.PspElfModuleMap
+import com.ragnarok93.bbsremix.patch.PspOverlayConflictAudit
 import com.ragnarok93.bbsremix.patch.sha256Hex
 import okio.Path
 
@@ -129,6 +130,7 @@ internal class IsoCombatResearchService(
         var discoveredElf = 0
         var encrypted = 0
         var skipped = 0
+        val overlapFindings = mutableListOf<PspOverlayConflictAudit.Finding>()
         for (entry in relevant) {
             cancellation.throwIfCancelled()
             if (!validExtent(entry, image)) {
@@ -183,7 +185,9 @@ internal class IsoCombatResearchService(
             lines += "MODULE ${entry.path}: ${entry.size} bytes sha256=${sha256Hex(module)} " +
                 "ELF sections=${sections.size} executable_instructions=${deep.executableInstructions} " +
                 "JAL=${deep.directCalls} JALR=${deep.jalrCalls}"
-            lines += PspElfModuleMap.inspect(module, entry.path).lines
+            val loadMap = PspElfModuleMap.inspect(module, entry.path)
+            lines += loadMap.lines
+            overlapFindings += PspOverlayConflictAudit.evaluate(entry.path, loadMap)
             lines += "  File-backed sections: " + if (sections.isEmpty()) "none decoded" else
                 sections.take(8).joinToString("; ") {
                     "${it.name}@0x${it.address.toString(16).uppercase()} " +
@@ -203,6 +207,7 @@ internal class IsoCombatResearchService(
                     }
             }
         }
+        lines += PspOverlayConflictAudit.summarize(overlapFindings, elfCount)
         lines += "ISO candidate file inventory: ${relevant.size} likely module/archive/script file(s), " +
             "sampled_headers=$probes; ELF_magic=$discoveredElf; encrypted_PSP=$encrypted; " +
             "additional_ELF_staged=$elfCount; skipped_ELF_by_budget=$skipped."
