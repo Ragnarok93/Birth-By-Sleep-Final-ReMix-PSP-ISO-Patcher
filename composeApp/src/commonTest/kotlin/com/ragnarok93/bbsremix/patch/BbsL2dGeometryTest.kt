@@ -161,7 +161,8 @@ class BbsL2dGeometryTest {
             assertEquals(234f.toBits(), scaled.bytes.readIntLe(0x174))
             assertEquals((-134f).toBits(), scaled.bytes.readIntLe(0x180))
             assertEquals(0, scaled.animationPositionKeysChanged)
-            assertTrue(scaled.groupFieldsChanged > 0)
+            if (percent < 100) assertTrue(scaled.groupFieldsChanged > 0)
+            else assertEquals(0, scaled.totalFieldsChanged)
             // Native menu placement, root node offsets, animation metadata
             // and original bytes are not disturbed.
             assertContentEquals(original.copyOfRange(0x24c, 0x250),
