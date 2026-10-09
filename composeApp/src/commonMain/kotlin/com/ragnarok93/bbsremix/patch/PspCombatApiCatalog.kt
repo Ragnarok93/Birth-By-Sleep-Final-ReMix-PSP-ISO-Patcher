@@ -21,6 +21,24 @@ internal object PspCombatApiCatalog {
     )
     internal val known = listOf(
         Registration(
+            "IsAttacking", 0x08B2A20C, 0x089DC664,
+            "resolves attack entity and queries native routine 0x088E6294; NOT hit-confirm",
+            listOf(
+                Opcode(0x089DC67C, 0x0E29EDDA),
+                Opcode(0x089DC684, 0x0E23A3A7),
+                Opcode(0x089DC698, 0x0E238A5),
+            ),
+        ),
+        Registration(
+            "GetMotionNowFrame", 0x08B2A024, 0x089DB50C,
+            "resolves motion context via 0x088E5EB8 and returns a float to Lua",
+            listOf(
+                Opcode(0x089DB52C, 0x0E23A3A7),
+                Opcode(0x089DB540, 0x0E2387AE),
+                Opcode(0x089DB54C, 0x0E29EE3B),
+            ),
+        ),
+        Registration(
             "GetPlayerState", 0x08B2D280, 0x089E924C, "reads player +0x220",
             listOf(Opcode(0x089E9280, 0x8C850220.toInt())),
         ),
