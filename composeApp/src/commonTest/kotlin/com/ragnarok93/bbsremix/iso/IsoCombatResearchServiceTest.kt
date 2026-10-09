@@ -32,7 +32,7 @@ class IsoCombatResearchServiceTest {
             assertContains(text, "DATA.DAT")
             assertContains(text, "BBSA game archive")
             assertContains(text, "index_sha256=")
-            assertContains(text, "DAT SPARSE PROBE PSP_GAME/USRDIR/BBS1.DAT")
+            assertContains(text, "DAT SPARSE PROBE BBS1.DAT")
             assertContains(text, "ARC candidate relative_sector=1")
             assertContains(text, "Zero sampled hits does NOT imply")
             assertContains(text, "PSAR container")
