@@ -37,10 +37,6 @@ internal object BbsUiLayoutCatalog {
             0x15B0250, 26640, "787aaebe9a5b085cd3e72338c3f9e40879a5e78e48466bc2837a998c9de52bd3"),
         Candidate(UiScaleElement.GAUGES, "BBS1.DAT", BBS1_SIZE, "gauge_01.l2d",
             0x159F060, 70128, "b72c694db963838a4b7b29b32e802bf7fdce26507b021ae6cfbfc424749d15b8"),
-        Candidate(UiScaleElement.MENUS, "BBS1.DAT", BBS1_SIZE, "pause.l2d",
-            0xC392830, 16272, "0e4d0eae7b98f54a0de5c2ee952dcbfc0d83f042721e970eb3da8b1074f808de"),
-        Candidate(UiScaleElement.MENUS, "BBS1.DAT", BBS1_SIZE, "camp.l2d",
-            0xC2F6A50, 518320, "20db310957d3296bbceb326d938e1feb750b38f8dcf1f498900a15f118411983"),
         // Verified additional geometry assets from the provided BBS archives.
         // Exact offsets and SHA-256 preimages prevent cross-region corruption.
         Candidate(UiScaleElement.COMBAT_HUD, "BBS0.DAT", 754655232L, "wind_00.l2d",
@@ -75,18 +71,6 @@ internal object BbsUiLayoutCatalog {
             14657824L, 10400, "6a9e0d40ae43d49098ac644340f84d2c324b5dc6a39c0b5225b4d4bf02f823cb"),
         Candidate(UiScaleElement.PORTRAITS, "BBS1.DAT", BBS1_SIZE, "cface_12.l2d",
             14647424L, 10400, "e58369a8d910e28addd3ca35d1a7e296803c6ef812999cbb4bfc35d320c31bf1"),
-        Candidate(UiScaleElement.MENUS, "BBS0.DAT", 754655232L, "pause.l2d",
-            156605248L, 16272, "0e4d0eae7b98f54a0de5c2ee952dcbfc0d83f042721e970eb3da8b1074f808de"),
-        Candidate(UiScaleElement.MENUS, "BBS0.DAT", 754655232L, "info_00.l2d",
-            156621520L, 8688, "91f7ac81a03c86992487f7f453c43b2d8f7b24ae4ec75e4912295bac95c0dd88"),
-        Candidate(UiScaleElement.MENUS, "BBS0.DAT", 754655232L, "t_menu.l2d",
-            164623168L, 31296, "01393d2f8b3e8597c843454c6cb2b972e0da265ba9464346bd9c21ad62bfc381"),
-        Candidate(UiScaleElement.MENUS, "BBS1.DAT", BBS1_SIZE, "c_help.l2d",
-            205017168L, 17312, "a03e840c74c7b8cf91375c6d0a228be8dfa0139782dcba2edbfba18c69f150a0"),
-        Candidate(UiScaleElement.MENUS, "BBS1.DAT", BBS1_SIZE, "c_icon_00.l2d",
-            204970528L, 34944, "b52113745660e74ca7926261f2dea7bf341228625727fe95ab5cab29b4a6c6e4"),
-        Candidate(UiScaleElement.MENUS, "BBS3.DAT", 206391296L, "t_menu.l2d",
-            128612640L, 31296, "4c644369254782fa1baa510f76b88b5f9e843d7783505232627f48021ca0dac8"),
         // Independent archive entries may load the same *identical* layout
         // bytes in a different world/scenario. All aliases inherit their
         // known source's scale profile but have their own physical ISO offset.
@@ -114,9 +98,6 @@ internal object BbsUiLayoutCatalog {
         Candidate(UiScaleElement.PORTRAITS, "BBS1.DAT", BBS1_SIZE, "cface_10.l2d",
             205005472L, 10400, "b64c91f1bacd33746dc2ad8be6f9ed979c4565114b51683a6daebdacc51158c3",
             digestOffset = 14676032L),
-        Candidate(UiScaleElement.MENUS, "BBS1.DAT", BBS1_SIZE, "c_icon_00.l2d",
-            205035568L, 34944, "b52113745660e74ca7926261f2dea7bf341228625727fe95ab5cab29b4a6c6e4",
-            digestOffset = 204970528L),
         Candidate(UiScaleElement.PORTRAITS, "BBS3.DAT", 206391296L, "cface_10.l2d",
             126664752L, 10400, "b64c91f1bacd33746dc2ad8be6f9ed979c4565114b51683a6daebdacc51158c3",
             digestArchive = "BBS1.DAT", digestOffset = 14676032L),
@@ -161,10 +142,7 @@ internal object BbsUiLayoutCatalog {
             throw IsoFormatException(candidate.layout + " SHA-256 mismatch; the game layout was not changed.")
         }
         val scaled = try {
-            BbsL2dGeometry.scale(
-                old, percent,
-                preserveMenuAnchors = candidate.element == UiScaleElement.MENUS,
-            )
+            BbsL2dGeometry.scale(old, percent)
         } catch (error: IllegalArgumentException) {
             throw IsoFormatException(
                 "${candidate.archive}/${candidate.layout} at archive offset " +
