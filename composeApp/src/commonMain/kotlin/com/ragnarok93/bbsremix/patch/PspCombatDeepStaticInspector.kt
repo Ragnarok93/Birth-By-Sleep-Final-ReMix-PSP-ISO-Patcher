@@ -42,6 +42,7 @@ internal object PspCombatDeepStaticInspector {
         val sampleVas: List<Long>,
     )
     data class PointerResult(val address: Long, val label: String, val count: Int, val examples: List<Long>)
+    data class AddressBuildResult(val address: Long, val label: String, val count: Int, val examples: List<Long>)
     data class Result(
         val recognizedElf: Boolean,
         val executableInstructions: Int,
@@ -50,6 +51,7 @@ internal object PspCombatDeepStaticInspector {
         val directCalls: Int,
         val offsetResults: List<OffsetResult>,
         val pointerResults: List<PointerResult>,
+        val addressBuildResults: List<AddressBuildResult>,
         val lines: List<String>,
     )
 
@@ -59,7 +61,7 @@ internal object PspCombatDeepStaticInspector {
         val report = mutableListOf("DEEP STATIC: $label (read-only, bounded ELF/MIPS analysis)")
         if (!elf) {
             report += "Not a supported little-endian ELF32/MIPS image; no MIPS inference."
-            return Result(false, 0, 0, 0, 0, emptyList(), emptyList(), report)
+            return Result(false, 0, 0, 0, 0, emptyList(), emptyList(), emptyList(), report)
         }
 
         val eType = source.readShortLe(16)
@@ -78,6 +80,8 @@ internal object PspCombatDeepStaticInspector {
         val loadCounts = IntArray(playerOffsets.size)
         val storeCounts = IntArray(playerOffsets.size)
         val samples = Array(playerOffsets.size) { mutableListOf<Long>() }
+        val builtSamples = pointers.associate { it.first to mutableListOf<Long>() }
+        val builtCounts = pointers.associate { it.first to 0 }.toMutableMap()
         for (section in code) {
             for (local in 0 until section.length - 3 step 4) {
                 val pc = section.address + local
@@ -85,6 +89,32 @@ internal object PspCombatDeepStaticInspector {
                 val op = word ushr 26
                 scanned++
                 if (op == 3) direct++
+                // A bounded approximation of a 32-bit MIPS address build:
+                // LUI rt,hi followed within 4 instructions by ADDIU/ORI
+                // rt,rt,lo. This is not full register dataflow analysis.
+                if (op == 0x0f) {
+                    val rt = (word ushr 16) and 31
+                    val hi = word and 0xffff
+                    for (distance in 1..4) {
+                        val nextLocal = local + distance * 4
+                        if (nextLocal + 4 > section.length) break
+                        val next = source.readIntLe(section.fileOffset + nextLocal)
+                        val operation = next ushr 26
+                        if (operation != 0x09 && operation != 0x0d) continue
+                        val base = (next ushr 21) and 31
+                        val dest = (next ushr 16) and 31
+                        if (base != rt || dest != rt) continue
+                        val lo = next and 0xffff
+                        val built = if (operation == 0x09) {
+                            ((hi shl 16) + lo.toShort().toInt()).toUInt().toLong()
+                        } else {
+                            ((hi shl 16) or lo).toUInt().toLong()
+                        }
+                        val examples = builtSamples[built] ?: continue
+                        builtCounts[built] = builtCounts.getValue(built) + 1
+                        if (examples.size < MAX_POINTER_SITES) examples += pc
+                    }
+                }
                 if (op == 0) {
                     val funct = word and 63
                     if (funct == 9) indirect++ // JALR
@@ -137,6 +167,15 @@ internal object PspCombatDeepStaticInspector {
         val pointerResults = pointers.map { (va, name) ->
             PointerResult(va, name, counts.getValue(va), candidates.getValue(va))
         }
+        val addressBuilds = pointers.map { (va, name) ->
+            AddressBuildResult(va, name, builtCounts.getValue(va), builtSamples.getValue(va))
+        }
+        report += "Probable LUI+ADDIU/ORI address materializations (four-instruction window; not proof of dataflow):"
+        addressBuilds.filter { it.count > 0 }.forEach { value ->
+            report += "  ${value.label} ${hex(value.address)}: candidates=${value.count}" +
+                " sample_lui_pc=${value.examples.joinToString(",") { hex(it) }}"
+        }
+        if (addressBuilds.all { it.count == 0 }) report += "  none in current target catalog."
         report += "File-backed data pointer census (numeric references, NOT code XREFs):"
         pointerResults.forEach { value ->
             report += "  ${value.label} ${hex(value.address)}: count=${value.count}" +
@@ -145,7 +184,7 @@ internal object PspCombatDeepStaticInspector {
         }
         report += "STATIC LIMITS: JALR targets unresolved, PRX relocations unapplied, " +
             "object provenance unknown, no safe hook/code cave established."
-        return Result(true, scanned, indirect, returns, direct, offsets, pointerResults, report)
+        return Result(true, scanned, indirect, returns, direct, offsets, pointerResults, addressBuilds, report)
     }
 
     private fun isMipsElf(source: ByteArray): Boolean =
