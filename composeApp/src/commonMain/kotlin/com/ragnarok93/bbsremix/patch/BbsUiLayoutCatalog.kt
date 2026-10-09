@@ -160,7 +160,14 @@ internal object BbsUiLayoutCatalog {
         if (sha256Hex(old) != candidate.originalSha256) {
             throw IsoFormatException(candidate.layout + " SHA-256 mismatch; the game layout was not changed.")
         }
-        val scaled = BbsL2dGeometry.scale(old, percent)
+        val scaled = try {
+            BbsL2dGeometry.scale(old, percent)
+        } catch (error: IllegalArgumentException) {
+            throw IsoFormatException(
+                "${candidate.archive}/${candidate.layout} at archive offset " +
+                    "${candidate.offsetInArchive}: ${error.message}",
+            )
+        }
         check(scaled.bytes.size == old.size)
         if (scaled.totalFieldsChanged == 0) {
             throw IsoFormatException(candidate.layout + " has no adjustable static geometry.")
