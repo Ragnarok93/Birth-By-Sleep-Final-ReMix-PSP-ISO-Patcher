@@ -30,6 +30,7 @@ is activated.
 | Generic script calls | `PspCombatScriptCallEvidence` | Verified native named-call helper call sites and MIPS delay-slot setup |
 | Whole disc | `IsoCombatResearchService` | Recursive ISO9660 directory/file inventory, extension counts, relevant file names/sizes, file-format header probes |
 | Additional game modules | `IsoCombatResearchService` | SHA-256, ELF sections, executable JAL/JALR totals, event-name candidates and sampled offset-opcode counts for bounded unencrypted ELF modules |
+| BBSA archive header | `IsoCombatResearchService` | Recognized `bbsa` game DAT archive, version (5/6), bounded index size and SHA-256; embedded asset index *not* decoded |
 | Unsupported/packed content | `IsoCombatResearchService` | Type classification of encrypted `~PSP`, PSAR/CPK/ZIP; raw/packed DAT/ARC/etc marked **not decoded** |
 
 ## Strict limits and nonclaims
@@ -39,6 +40,8 @@ is activated.
   **4 MiB** is recorded as truncated rather than fully staged.
 - Up to **512 relevant file headers** are sampled, at most 64 bytes each;
   no full archive is staged merely for a signature search.
+  An identified `bbsa` archive (versions 5/6) can additionally have its
+  index prefix hashed, bounded to **4 MiB**, with no internal extraction.
 - At most **24 additional ELF modules**, each up to **12 MiB** and
   **64 MiB total**, are staged for full static decoding.
 - No more than **48 candidate file records** are printed individually.
@@ -83,7 +86,7 @@ analyzed if only its outer header was visible.
 ## Verification
 
 Tests exercise a synthetic ISO with a main EBOOT, a second MIPS ELF,
-DAT content, encrypted PSP marker and PSAR marker. They verify read-only
+version-5 BBSA DAT content/index, encrypted PSP marker and PSAR marker. They verify read-only
 behavior, combined reports, directory traversal and file type
 classification. Synthetic ELF tests verify MIPS calls, data-pointer
 candidates, signed ADDIU/ORI address builds and malformed-source
