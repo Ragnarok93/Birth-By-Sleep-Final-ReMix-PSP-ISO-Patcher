@@ -15,14 +15,20 @@ class IsoBbsaDirectoryEvidenceTest {
         bytes.writeU32(4, 6)
         bytes.writeU16(0x0e, 3)
         bytes.writeU32(0x14, 0x40)
-        bytes.writeU16(0x08, 2) // BBSA partition directory count
-        bytes.writeU32(0x10, 0x80) // table offset
-        bytes.writeU32(0x80, 0x4D4D4947) // partition hash matches link
-        bytes.writeU16(0x84, 7)
-        bytes.writeU16(0x86, 0x38)
-        bytes.writeU32(0x88, 0xCAFE1234.toInt()) // unrelated partition
-        bytes.writeU16(0x8c, 3)
-        bytes.writeU16(0x8e, 0x48)
+        bytes.writeU16(0x08, 2) // BBSA partition descriptor count
+        bytes.writeU32(0x10, 0x80) // first 8-byte PARTITION FILE entry, not descriptor
+        bytes.writeU32(0x30, 0x4D4D4947) // descriptor 0: arc/gimmick
+        bytes.writeU16(0x34, 2) // two entries
+        bytes.writeU16(0x36, 0) // entry index 0
+        bytes.writeU32(0x38, 0xCAFE1234.toInt()) // descriptor 1: unrelated path
+        bytes.writeU16(0x3c, 1)
+        bytes.writeU16(0x3e, 2) // entry index 2
+        bytes.writeU32(0x80, 0x64B5573A) // CRC32("g01lua")
+        bytes.writeU32(0x84, (0x1AA shl 12) or 2)
+        bytes.writeU32(0x88, 0xBBAADDCC.toInt()) // other gimmick file hash
+        bytes.writeU32(0x8c, (0x1AB shl 12) or 1)
+        bytes.writeU32(0x90, 0x0FF00FF0) // other directory
+        bytes.writeU32(0x94, (0x11 shl 12) or 4)
         // Three BBSA directory records; two share the same directory hash
         // but represent different filename hashes. Hash agreement by itself
         // does not resolve the "g01lua" link's file identity.
@@ -58,8 +64,13 @@ class IsoBbsaDirectoryEvidenceTest {
         assertTrue(report.partitionValid)
         assertEquals(2, report.partitionCount)
         assertEquals(1, report.partitionMatches.single().matchingPartitions)
-        assertEquals(7, report.partitionMatches.single().examples.single().fileCount)
-        assertContains(report.lines.joinToString("\n"), "matching_BBSA_partitions=1")
+        assertEquals(2, report.partitionMatches.single().examples.single().fileCount)
+        assertEquals(1, report.partitionMatches.single().matchingFiles)
+        assertEquals(0x64B5573AL, report.partitionMatches.single().filenameHash)
+        assertEquals(0x1AAL, report.partitionMatches.single().candidateFiles.single().startSector)
+        assertContains(report.lines.joinToString("\n"), "matching_BBSA_partition_headers=1")
+        assertContains(report.lines.joinToString("\n"), "matching_files_within_partition=1")
+        assertContains(report.lines.joinToString("\n"), "arc/gimmick")
         assertTrue(source.contentEquals(original))
     }
 
@@ -82,8 +93,29 @@ class IsoBbsaDirectoryEvidenceTest {
         assertFalse(report.partitionValid)
         assertTrue(report.partitionMatches.isEmpty())
         assertEquals(2, report.matches.single().matchingRecords)
-        assertContains(report.lines.joinToString("\n"), "BBSA partition table UNVERIFIED")
-        assertContains(report.lines.joinToString("\n"), "no partition match/no-match conclusions")
+        assertContains(report.lines.joinToString("\n"), "BBSA partition headers UNVERIFIED")
+        assertContains(report.lines.joinToString("\n"), "No partition match/no-match claim")
+    }
+
+    @Test
+    fun path_identifiers_are_not_crc32_and_hashing_matches_openkh() {
+        assertEquals("arc/gimmick",
+            IsoBbsaDirectoryEvidence.knownArcDirectory(0x4D4D4947))
+        assertEquals("arc/boss",
+            IsoBbsaDirectoryEvidence.knownArcDirectory(0x53534F42))
+        assertEquals("unknown path ID",
+            IsoBbsaDirectoryEvidence.knownArcDirectory(0x12345678))
+        assertEquals(0x64B5573AL,
+            IsoBbsaDirectoryEvidence.fileNameHash("g01lua"))
+        assertEquals(0x00000000L,
+            IsoBbsaDirectoryEvidence.fileNameHash(""))
+        assertEquals(0xCBF43926L,
+            IsoBbsaDirectoryEvidence.fileNameHash("123456789"))
+        // CRC32(path) intentionally differs from the fixed GIMM directory ID.
+        assertFalse(
+            IsoBbsaDirectoryEvidence.fileNameHash("arc/gimmick") ==
+                0x4D4D4947L,
+        )
     }
 
     @Test
