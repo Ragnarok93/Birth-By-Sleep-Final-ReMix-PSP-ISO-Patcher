@@ -53,7 +53,7 @@ class IsoArcMetadataProbeTest {
         "g01lua".encodeToByteArray().copyInto(table, 48 + 16)
         // The link name is shorter than the existing name, so ensure
         // the trailing bytes cannot accidentally look like another name.
-        table.fill(0, 48 + 16 + 6, 48 + 32)
+        table.fill(0.toByte(), 48 + 16 + 6, 48 + 32)
         val report = IsoArcMetadataProbe.inspectTable(table, 8192)
         assertTrue(report.valid)
         assertEquals(0x5aL, report.entries.single { it.name == "g01lua" }.reference)
