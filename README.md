@@ -61,19 +61,28 @@ menus, and subtitles. Selecting a non-stock value now **generates real,
 same-size UI resource edits in the output ISO** through the existing
 `IsoBytePatch` pipeline, alongside any selected FPS/camera EBOOT edits.
 
-The catalog covers selected, source-fingerprinted `.l2d` files inside
-`BBS0.DAT`, `BBS1.DAT`, and `BBS3.DAT`, plus the 25 centered subtitle
+The catalog covers 111 source-fingerprinted `.l2d` files inside
+`BBS0.DAT`, `BBS1.DAT`, `BBS2.DAT`, and `BBS3.DAT`, plus the 25 centered subtitle
 layouts in `BBS0.DAT/CT00000.ctd`. Source sizes and exact per-resource
 SHA-256 fingerprints are checked before the output is created. The rebuilder
 verifies every preimage and then verifies the exact patched spans in the
 completed ISO; the original is never overwritten. No PNG files, PPSSPP HD
 texture IDs, or SP2 UVs are changed.
 
-**Experimental limitations:** the implemented edit currently changes static
-LY2 and SP2 geometry and CTD subtitle box/font geometry. Not all SQ2
-animation keys, game-side runtime transforms, hitboxes, and per-screen
-anchors have been mapped or visually verified. As a result, this is
-not a guarantee of complete pixel-accurate 70–100% scaling in PPSSPP.
+**Screen anchoring:** LY2 Layout X/Y represents absolute screen placement
+(relative to the native 480×272 PSP screen center), and root LY2 nodes
+(with Parent IDX < 0) represent top-level anchors. The patcher now keeps
+those positions unchanged while shrinking child-node offsets, SP2 sprite
+vertices, font sizes, and SQ2 animated translation offsets. This prevents
+the earlier inward drift of the Command Deck and menu caused by scaling
+coordinates such as (-240,-136) to (-168,-95) at 70%.
+Original-source hashes, output byte checks, and 70–95% reference profiles
+were updated for this anchor-preserving transform.
+
+**Experimental limitations:** not all SQ2 animation keys, game-side runtime
+transforms, text scissor rectangles, hitboxes, and dynamically positioned
+elements have been mapped or visually verified. The feature is not yet a
+guarantee of pixel-perfect 70–100% scaling in PPSSPP.
 Unrecognized, encrypted, missing or mismatched DAT resources fail closed.
 The standalone Verify Output action can detect structurally valid non-stock
 resources but cannot authenticate the exact scale value without the source ISO;

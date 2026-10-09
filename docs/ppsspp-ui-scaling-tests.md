@@ -6,8 +6,10 @@ on the app's **Setup → UI Scaling** panel. All start at **100% (stock)**.
 
 ## What the build changes
 
-- LY2 screen layout/node X/Y, SP2 on-screen sprite group vertices and
-  positive LY2 font-size bytes in selected game `.l2d` assets.
+- Preserves LY2 top-level Layout X/Y and parentless node positions
+  (native PSP screen anchors). Scales only child-node X/Y, SP2 sprite
+  group geometry, positive LY2 font sizes and SQ2 position animations
+  relative to those unchanged anchors.
 - Centered subtitle window/text geometry and font sizes inside the
   verified `BBS0.DAT/CT00000.ctd` resource.
 - Every replacement preserves the original asset size and texture UVs,
@@ -123,3 +125,34 @@ frame dump does not include the MIPS program counters of the calls that
 produced its draw data, nor can it prove whether the patch changed
 presentation. Compare a **stock 100% frame dump** with a **patched 70%
 frame dump** from the same location/scene to verify real rendered changes.
+
+
+## Root-anchor placement correction (October 9, 2026)
+
+The supplied game screenshots demonstrated that reducing UI size worked,
+but entire panels drifted inward. Inspecting original LY2 data showed
+absolute screen placement such as `(-240,-136)`, `(-239,40)`,
+`(187,103)`, and `(235,-130)`, measured from screen center.
+Applying `percent / 100` to those absolute positions shifts whole panels
+toward the center by up to **72 horizontal and 41 vertical PSP pixels**
+at 70%. This is not a scaling of UI size.
+
+The new transform keeps all LY2 Layout X/Y placements and all nodes with
+`Parent IDX < 0` at their exact original screen positions. It scales
+child-relative node coordinates, sprite vertices, font sizes, and SQ2
+translation keys without touching UVs, animation timing, or colors.
+The existing 16-byte L2D archive padding safety checks remain unchanged.
+
+Reference SHA-256 prefix profiles for **all 29 original L2D resources**
+were independently regenerated at 70%, 75%, 80%, 85%, 90% and 95%.
+All 70 scene-specific/alias entries retain original SHA-256 validation,
+and output bytes are independently checked after ISO rebuild. These are
+offline integrity checks; final visual placement must still be evaluated
+in PPSSPP.
+
+**Next comparison:** With identical in-game save and PPSSPP settings,
+compare Command Deck 70% and 100%, then Menu 70% and 100%. Check left
+screen margin and right-screen gauges, alignment between menu background,
+selection bars and text, and animation transitions. If a specific widget
+still drifts, record its screen position and category before adding a
+targeted secondary anchor adjustment.
