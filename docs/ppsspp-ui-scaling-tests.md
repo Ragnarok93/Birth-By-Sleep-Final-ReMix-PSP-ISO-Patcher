@@ -156,3 +156,35 @@ screen margin and right-screen gauges, alignment between menu background,
 selection bars and text, and animation transitions. If a specific widget
 still drifts, record its screen position and category before adding a
 targeted secondary anchor adjustment.
+
+
+## Menu SQ2 BaseX/BaseY placement fix (October 9, 2026)
+
+The latest in-game screenshots show menu frames properly located, but
+**MUNNY/TIME**, HP/FP details, command-list labels, contextual help and
+submenu headers detached from their associated frames. The previous fix
+kept LY2 root anchors unchanged, but the SQ2 scaler still multiplied
+**all** BaseX/BaseY keyframe positions by the UI percentage.
+
+The actual `camp.l2d` file has 2,175 BaseX and 1,892 BaseY keys, including
+placement values such as X=200, X=234 and X=-197. At 70%, multiplying
+X=200 by 0.7 moves its widget 60 native PSP pixels left. This matches
+the magnitude of displacement observed for menu labels. These BaseX/Y
+values can be **absolute placements**; they must not all be treated as
+internal distances.
+
+For **Pause / main menus only**, the revised transform preserves SQ2
+BaseX and BaseY keyframe floats exactly while continuing to scale child
+node offsets, SP2 sprite vertices, font sizes, and the locally animated
+OffsetX/OffsetY keys. The previous battle Command Deck and gauges
+animations are unchanged by this specific menu correction. All eight
+original-menu assets' 70–95% resource digests have been recalculated from
+the matching supplied game bytes, including BBS0/1/3 resources; 100%
+remains byte-identical.
+
+**Validation targets:** compare the same save at Menus 100% and 70%,
+especially the MUNNY/TIME values, stats panel, Command Decks submenu,
+description text, selection rectangles, and Save menu. The goal is that
+the displayed text remains inside the corresponding window after size
+reduction. A successful rebuild or SHA-256 output check alone is not
+proof that the alignment is correct in PPSSPP.

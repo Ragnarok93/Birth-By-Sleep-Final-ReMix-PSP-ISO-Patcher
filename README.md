@@ -73,9 +73,12 @@ texture IDs, or SP2 UVs are changed.
 (relative to the native 480×272 PSP screen center), and root LY2 nodes
 (with Parent IDX < 0) represent top-level anchors. The patcher now keeps
 those positions unchanged while shrinking child-node offsets, SP2 sprite
-vertices, font sizes, and SQ2 animated translation offsets. This prevents
-the earlier inward drift of the Command Deck and menu caused by scaling
-coordinates such as (-240,-136) to (-168,-95) at 70%.
+vertices, font sizes, and local SQ2 animated translation offsets. For menu
+resources, SQ2 BaseX/BaseY values also remain unscaled: these are often
+independent screen placements for money/time counters, stats, menu options
+and help text, not sprite sizes. This prevents detaching text from its menu
+frame when reducing UI size. Combat/other UI retains its prior SQ2
+animation behavior pending separate visual verification.
 Original-source hashes, output byte checks, and 70–95% reference profiles
 were updated for this anchor-preserving transform.
 
