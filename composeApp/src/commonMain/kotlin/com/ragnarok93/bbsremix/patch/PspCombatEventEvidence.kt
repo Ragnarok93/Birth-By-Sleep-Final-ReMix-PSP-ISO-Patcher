@@ -24,11 +24,13 @@ internal object PspCombatEventEvidence {
             val found = mutableListOf<Long>()
             for (section in readOnly) {
                 if (section.length < needle.size + 1) continue
-                // Verify the full terminated name, excluding longer names
-                // such as OnHitAttackBg from the OnHitAttack count.
+                // Check exact NUL termination. Names in EBOOT are immediately
+                // preceded by non-text bytes from script metadata, not
+                // necessarily by another NUL. Exclude ASCII continuations
+                // to avoid counting longer names as event prefixes.
                 for (offset in 0..section.length - needle.size - 1) {
                     val absolute = section.fileOffset + offset
-                    if (offset > 0 && source[absolute - 1] != 0.toByte()) continue
+                    if (offset > 0 && source[absolute - 1].toInt() in 0x21..0x7e) continue
                     if (source[absolute + needle.size] != 0.toByte()) continue
                     if (needle.indices.all { source[absolute + it] == needle[it] }) {
                         found += section.address + offset
