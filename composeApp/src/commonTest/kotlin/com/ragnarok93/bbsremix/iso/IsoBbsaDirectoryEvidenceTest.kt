@@ -23,7 +23,7 @@ class IsoBbsaDirectoryEvidenceTest {
         bytes.writeU32(0x38, 0xCAFE1234.toInt()) // descriptor 1: unrelated path
         bytes.writeU16(0x3c, 1)
         bytes.writeU16(0x3e, 2) // entry index 2
-        bytes.writeU32(0x80, 0x64B5573A) // CRC32("g01lua")
+        bytes.writeU32(0x80, 0xF5BE1086) // CRC32("G01LUA")
         bytes.writeU32(0x84, (0x1AA shl 12) or 2)
         bytes.writeU32(0x88, 0xBBAADDCC.toInt()) // other gimmick file hash
         bytes.writeU32(0x8c, (0x1AB shl 12) or 1)
@@ -73,7 +73,7 @@ class IsoBbsaDirectoryEvidenceTest {
         assertEquals(1, report.partitionMatches.single().matchingPartitions)
         assertEquals(2, report.partitionMatches.single().examples.single().fileCount)
         assertEquals(1, report.partitionMatches.single().matchingFiles)
-        assertEquals(0x64B5573AL, report.partitionMatches.single().filenameHash)
+        assertEquals(0xF5BE1086L, report.partitionMatches.single().filenameHash)
         assertEquals(0x1AAL, report.partitionMatches.single().candidateFiles.single().startSector)
         assertContains(report.lines.joinToString("\n"), "matching_BBSA_partition_headers=1")
         assertContains(report.lines.joinToString("\n"), "matching_files_within_partition=1")
@@ -109,15 +109,19 @@ class IsoBbsaDirectoryEvidenceTest {
     }
 
     @Test
-    fun path_identifiers_are_not_crc32_and_hashing_matches_openkh() {
+    fun path_identifiers_are_not_crc32_and_filename_hashing_uppercases_like_openkh() {
         assertEquals("arc/gimmick",
             IsoBbsaDirectoryEvidence.knownArcDirectory(0x4D4D4947))
         assertEquals("arc/boss",
             IsoBbsaDirectoryEvidence.knownArcDirectory(0x53534F42))
         assertEquals("unknown path ID",
             IsoBbsaDirectoryEvidence.knownArcDirectory(0x12345678))
-        assertEquals(0x64B5573AL,
+        assertEquals(0xF5BE1086L,
             IsoBbsaDirectoryEvidence.fileNameHash("g01lua"))
+        // OpenKh.Bbs/Bbsa.cs calls GetHash(name.ToUpper()) at lookup.
+        assertEquals(0xF5BE1086L,
+            IsoBbsaDirectoryEvidence.fileNameHash("G01LUA"))
+        assertFalse(IsoBbsaDirectoryEvidence.fileNameHash("g01lua") == 0x64B5573AL)
         assertEquals(0x00000000L,
             IsoBbsaDirectoryEvidence.fileNameHash(""))
         assertEquals(0xCBF43926L,
@@ -132,10 +136,10 @@ class IsoBbsaDirectoryEvidenceTest {
     @Test
     fun same_filename_in_another_index_namespace_is_not_called_a_resolved_link() {
         val source = index()
-        source.writeU32(0x58, 0x64B5573A) // third 12-byte record filename
+        source.writeU32(0x58, 0xF5BE1086) // third 12-byte record filename
         source.writeU32(0x60, 0xC0000000.toInt()) // lua-category path hint
         source.writeU32(0x80, 0xBBAADDCC.toInt()) // remove gimmick filename match
-        source.writeU32(0x90, 0x64B5573A) // move filename to other partition
+        source.writeU32(0x90, 0xF5BE1086) // move filename to other partition
         val report = IsoBbsaDirectoryEvidence.inspect(source, listOf(external))
         assertTrue(report.validIndex)
         assertTrue(report.partitionValid)
