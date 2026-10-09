@@ -175,13 +175,10 @@ class AndroidFileGateway(
         destination: PlatformOutputSelection,
         cancellation: CancellationToken,
         progress: ProgressReporter,
+        kind: OutputContentKind,
     ) {
         val uri = destination.token as? Uri ?: throw FileGatewayException("The Android output selection is invalid.")
-        val total = fileSystem.metadata(temporary).size
-            ?: throw FileGatewayException("Unable to determine the completed ISO's length.")
-        if (total <= 0L || total % 2048L != 0L) {
-            throw FileGatewayException("The completed ISO has an invalid length; refusing to export.")
-        }
+        val total = validatedOutputLength(fileSystem.metadata(temporary).size, kind)
 
         // SAF "w" has provider-dependent truncation behavior. Always request
         // truncation and independently read back the finalized document.
@@ -202,11 +199,11 @@ class AndroidFileGateway(
                         expectedHash.update(buffer, 0, read)
                         completed += read
                         progress.report(PatchProgress(
-                            PatchPhase.COMMITTING_OUTPUT, completed, total, "Writing output ISO",
+                            PatchPhase.COMMITTING_OUTPUT, completed, total, "Writing output ${kind.label}",
                         ))
                     }
                     if (completed != total) {
-                        throw FileGatewayException("ISO source was truncated during export.")
+                        throw FileGatewayException("${kind.label} source was truncated during export.")
                     }
                     output.flush()
                 }
@@ -218,7 +215,7 @@ class AndroidFileGateway(
             val actualHash = MessageDigest.getInstance("SHA-256")
             var verifiedBytes = 0L
             val returned = resolver.openInputStream(uri)
-                ?: throw FileGatewayException("The exported ISO could not be reopened for verification.")
+                ?: throw FileGatewayException("The exported ${kind.label} could not be reopened for verification.")
             returned.use { input ->
                 val buffer = ByteArray(COPY_BUFFER_SIZE)
                 while (true) {
@@ -227,13 +224,13 @@ class AndroidFileGateway(
                     if (count < 0) break
                     if (count == 0) continue
                     if (verifiedBytes > total - count) {
-                        throw FileGatewayException("The exported ISO contains unexpected trailing data.")
+                        throw FileGatewayException("The exported ${kind.label} contains unexpected trailing data.")
                     }
                     actualHash.update(buffer, 0, count)
                     verifiedBytes += count
                     progress.report(PatchProgress(
                         PatchPhase.COMMITTING_OUTPUT, verifiedBytes, total,
-                        "Verifying committed ISO against the original output",
+                        "Verifying committed ${kind.label} against the original output",
                     ))
                 }
             }
@@ -241,7 +238,7 @@ class AndroidFileGateway(
                 !MessageDigest.isEqual(expectedHash.digest(), actualHash.digest())
             ) {
                 throw FileGatewayException(
-                    "Exported ISO verification failed: size or SHA-256 differs from the patched ISO. " +
+                    "Exported ${kind.label} verification failed: size or SHA-256 differs from the source file. " +
                         "The destination may be incomplete or corrupted.",
                 )
             }
@@ -249,7 +246,7 @@ class AndroidFileGateway(
             throw error
         } catch (error: Throwable) {
             if (error is com.ragnarok93.bbsremix.patch.PatchCancelledException) throw error
-            throw FileGatewayException("The output ISO was not safely committed: ${error.message}")
+            throw FileGatewayException("The output ${kind.label} was not safely committed: ${error.message}")
         }
     }
 

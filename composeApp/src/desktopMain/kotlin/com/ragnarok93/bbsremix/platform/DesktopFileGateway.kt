@@ -101,14 +101,16 @@ class DesktopFileGateway(
         destination: PlatformOutputSelection,
         cancellation: CancellationToken,
         progress: ProgressReporter,
+        kind: OutputContentKind,
     ) {
         val destinationPath = destination.token as? Path ?: throw FileGatewayException("The desktop output selection is invalid.")
+        validatedOutputLength(fileSystem.metadata(temporary).size, kind)
         if (fileSystem.exists(destinationPath)) {
             throw FileGatewayException("The selected output already exists; choose a new output path.")
         }
         cancellation.throwIfCancelled()
         fileSystem.atomicMove(temporary, destinationPath)
-        progress.report(PatchProgress(PatchPhase.COMMITTING_OUTPUT, 1L, 1L, "Output ISO committed"))
+        progress.report(PatchProgress(PatchPhase.COMMITTING_OUTPUT, 1L, 1L, "Output ${kind.label} committed"))
     }
 
     override suspend fun deleteTemp(path: Path) {

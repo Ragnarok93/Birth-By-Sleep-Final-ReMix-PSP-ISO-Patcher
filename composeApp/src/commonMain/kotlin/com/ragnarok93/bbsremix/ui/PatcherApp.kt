@@ -65,6 +65,7 @@ import com.ragnarok93.bbsremix.patch.UiScaleSettings
 import com.ragnarok93.bbsremix.patch.PatchProgress
 import com.ragnarok93.bbsremix.patch.ProgressReporter
 import com.ragnarok93.bbsremix.platform.FileGateway
+import com.ragnarok93.bbsremix.platform.OutputContentKind
 import com.ragnarok93.bbsremix.platform.PlatformFileSelection
 import com.ragnarok93.bbsremix.platform.PlatformOutputSelection
 import com.ragnarok93.bbsremix.platform.PlatformDirectorySelection
@@ -288,7 +289,7 @@ fun PatcherApp(
                         patchingService.patchTo(sourcePath, temporary, options, token, ProgressReporter(::report))
                     }
                     withContext(Dispatchers.Default) {
-                        fileGateway.commitOutput(temporary, outputSelection, token, ProgressReporter(::report))
+                        fileGateway.commitOutput(temporary, outputSelection, token, ProgressReporter(::report), OutputContentKind.ISO)
                     }
                     outputCommitted = true
                     status = PatcherStatus.Complete(result, outputSelection.location)
@@ -375,7 +376,7 @@ fun PatcherApp(
                         )
                     }
                     withContext(Dispatchers.Default) {
-                        fileGateway.commitOutput(temporary, outputSelection, token, ProgressReporter(::report))
+                        fileGateway.commitOutput(temporary, outputSelection, token, ProgressReporter(::report), OutputContentKind.ISO)
                     }
                     status = PatcherStatus.DiagnosticComplete(result, outputSelection.location)
                     appendLog(
@@ -507,7 +508,7 @@ fun PatcherApp(
                     }
                     bbs0Status = "Saving ZIP to selected destination."
                     withContext(Dispatchers.IO) {
-                        fileGateway.commitOutput(temporary, target, token)
+                        fileGateway.commitOutput(temporary, target, token, kind = OutputContentKind.ZIP)
                     }
                     bbs0Status = "Exported ${result.layoutsExported} UI layouts and ${result.standaloneCtdExported} standalone CTDs; indexed ${result.layoutsFound} ARC layouts and ${result.standaloneCtdLocated} CTDs. ZIP: ${target.displayName}."
                     appendLog("BBS0 UI research ZIP exported to ${target.location}; ${result.layoutsFound} candidate layouts indexed.")
@@ -560,8 +561,13 @@ fun PatcherApp(
                 val temporary = fileGateway.createTempPath("bbs-log", ".log")
                 try {
                     val content = logEntries.joinToString(separator = "\n", postfix = "\n")
-                    FileSystem.SYSTEM.sink(temporary, mustCreate = true).buffer().use { it.writeUtf8(content) }
-                    fileGateway.commitOutput(temporary, destination, token, ProgressReporter(::report))
+                    withContext(Dispatchers.IO) {
+                        FileSystem.SYSTEM.sink(temporary, mustCreate = true).buffer().use { it.writeUtf8(content) }
+                        fileGateway.commitOutput(
+                            temporary, destination, token,
+                            ProgressReporter(::report), OutputContentKind.LOG,
+                        )
+                    }
                     appendLog("Log exported to ${destination.location}.")
                 } finally {
                     fileGateway.deleteTemp(temporary)

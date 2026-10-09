@@ -8,6 +8,22 @@ import com.ragnarok93.bbsremix.texture.TextureInstallProgress
 import com.ragnarok93.bbsremix.texture.TextureInstallResult
 import okio.Path
 
+/** Selected CreateDocument outputs are not always PSP ISOs. */
+enum class OutputContentKind(val label: String) {
+    ISO("ISO"), LOG("log"), ZIP("ZIP")
+}
+
+/** Validate output length before writing to destination.
+ * ISO sector alignment is mandatory; ordinary logs/ZIPs are not sector files.
+ */
+internal fun validatedOutputLength(size: Long?, kind: OutputContentKind): Long {
+    val total = size ?: throw FileGatewayException("Unable to determine the completed ${kind.label}'s length.")
+    if (total <= 0L || (kind == OutputContentKind.ISO && total % 2048L != 0L)) {
+        throw FileGatewayException("The completed ${kind.label} has an invalid length; refusing to export.")
+    }
+    return total
+}
+
 class PlatformFileSelection internal constructor(
     val displayName: String,
     val location: String,
@@ -60,6 +76,7 @@ interface FileGateway {
         destination: PlatformOutputSelection,
         cancellation: CancellationToken,
         progress: ProgressReporter = NoProgress,
+        kind: OutputContentKind = OutputContentKind.ISO,
     )
 
     /**
