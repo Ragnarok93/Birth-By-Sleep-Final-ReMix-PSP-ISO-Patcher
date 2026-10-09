@@ -43,6 +43,9 @@ class CombatPortInspectorTest {
         assertContains(result.summary, "overlay_collision=true")
         assertContains(result.summary, "LOAD[0]")
         assertContains(result.summary, "0x08816904")
+        assertContains(result.summary, "ABI HAZARD")
+        assertContains(result.summary, "restores saved register s0")
+        assertContains(result.summary, "ELF section map: unavailable or invalid")
         assertContains(result.summary, "Status: UNVALIDATED")
     }
 
