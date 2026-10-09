@@ -15,12 +15,12 @@ on the app's **Setup → UI Scaling** panel. All start at **100% (stock)**.
 - Only changed categories are patched. The original ISO is never overwritten.
 - FPS, right-stick, and camera options remain independently selectable.
 
-**Scope:** 109 source-authenticated L2D assets across BBS0/BBS1/BBS2/BBS3,
+**Scope:** 111 source-authenticated L2D assets across BBS0/BBS1/BBS2/BBS3,
 plus CT00000 (25 subtitle layout rows). The editor now also transforms
 SQ2 animated BaseX/Y and OffsetX/Y positions; it intentionally leaves
 SQ2 ScaleX/Y animation factors unchanged so already-scaled SP2 geometry
 cannot be double-shrunk. 41 original/identical-copy assets have
-independently calculated per-percent output digests, and 68 extended
+independently calculated per-percent output digests, and 70 extended
 per-scene layouts have exact source SHA-256 plus patch-time output-byte
 verification. Dynamic HUD rendering and input hit areas
 are not yet adjusted or verified. Consequently the build is intended
@@ -97,3 +97,29 @@ Export the app Logs for the failed operation. Capture the first
 PPSSPP loader error from the PPSSPP log when possible. Structural ISO
 checks cannot guarantee that the PSP executable and modded UI code
 will initialize without a game-specific runtime fault.
+
+## Frame-dump-driven resource correction (October 9, 2026)
+
+The first supplied PPSSPP version-6 dump, `ULJM05775_0001.ppdmp`,
+contains 8,931 GPU recorder events and 179 decodable 2D/through-mode
+render primitives. Comparing the drawn sprite UV rectangles against all
+270 catalogued BBS1/BBS2/BBS3 L2D resources identified **bc01_00.l2d** as
+the dominant lower-left Command Deck layout:
+
+- BBS1 offset `659696`, length `222544`, SHA-256
+  `bfee4970d4a0c8388f619b90f6e0fdada53cfb237ccff6899892a47ec9dd1601`
+- BBS1 offset `22768224`, length `222560`, SHA-256
+  `9a16df7996b6a98f1f97487138d90bfe4462a26f5b784f56ad72d4ede47baf0c`
+
+Each contains 45 distinct UV rectangles matching the frame dump.
+This mapping is a strong indication, not proof that both variants are
+loaded by the same scene. The rendered left-side Command Deck features
+approximately 84 draw calls with those UV patterns; the existing
+`gauge_01.l2d` is independently mapped to the right-side HUD.
+
+Both bc01_00 variants now belong to the **Command Deck** patch option.
+Their stock resource hashes, bounds and structure are verified. A single
+frame dump does not include the MIPS program counters of the calls that
+produced its draw data, nor can it prove whether the patch changed
+presentation. Compare a **stock 100% frame dump** with a **patched 70%
+frame dump** from the same location/scene to verify real rendered changes.

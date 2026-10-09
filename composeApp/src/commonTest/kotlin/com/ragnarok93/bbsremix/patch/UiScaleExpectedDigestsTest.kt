@@ -11,10 +11,10 @@ class UiScaleExpectedDigestsTest {
     @Test
     fun every_selected_resource_has_six_independent_reference_profiles() {
         val layouts = BbsUiLayoutCatalog.suppliedCandidates
-        assertEquals(109, layouts.size)
+        assertEquals(111, layouts.size)
         assertEquals(30, UiScaleExpectedDigests.profileCount)
         val extended = BbsUiExtendedCatalog.candidates.toSet()
-        assertEquals(68, extended.size)
+        assertEquals(70, extended.size)
         for (candidate in layouts) {
             val hasIndependentReference = UiScaleExpectedDigests.contains(
                 candidate.digestArchive, candidate.digestOffset,

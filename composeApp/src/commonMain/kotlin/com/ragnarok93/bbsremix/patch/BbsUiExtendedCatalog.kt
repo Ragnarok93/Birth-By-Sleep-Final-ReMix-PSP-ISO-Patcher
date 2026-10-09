@@ -1,7 +1,8 @@
 package com.ragnarok93.bbsremix.patch
 
 /**
- * Extended per-scene L2D coverage from the user's matching BBS1–3 data files.\n * Includes two bc01_00 Command Deck files identified by the PPSSPP GE dump.
+ * Extended per-scene L2D coverage from the user's matching BBS1–3 data files.
+ * Includes two bc01_00 Command Deck files identified by the PPSSPP GE dump.
  * Only bounded, individually SHA-256 fingerprinted original resources are
  * admitted. The extra rows have no independent post-scale digest: patch-time
  * verification compares every generated output byte to its known plan.
