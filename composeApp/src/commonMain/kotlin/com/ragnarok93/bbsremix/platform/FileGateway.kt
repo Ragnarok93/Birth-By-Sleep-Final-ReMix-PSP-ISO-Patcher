@@ -43,6 +43,9 @@ interface FileGateway {
         progress: (TextureInstallProgress) -> Unit,
     ): TextureInstallResult
 
+    /** Ensure that temporary workspace can hold the complete rebuilt ISO. */
+    suspend fun requireTemporarySpace(requiredBytes: Long) { }
+
     suspend fun createTempPath(prefix: String, suffix: String): Path
 
     suspend fun stageSource(

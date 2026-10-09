@@ -6,6 +6,7 @@ import android.content.Intent
 import android.database.Cursor
 import android.net.Uri
 import android.provider.OpenableColumns
+import android.os.StatFs
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
 import com.ragnarok93.bbsremix.patch.CancellationToken
@@ -106,6 +107,22 @@ class AndroidFileGateway(
         progress: (TextureInstallProgress) -> Unit,
     ): TextureInstallResult = withContext(Dispatchers.IO) {
         installTexturePackOnDocumentTree(resolver, destination, plan, cancellation, progress)
+    }
+
+    override suspend fun requireTemporarySpace(requiredBytes: Long) {
+        val margin = 64L * 1024L * 1024L
+        val available = StatFs(activity.cacheDir.absolutePath).availableBytes
+        if (requiredBytes <= 0L || requiredBytes > Long.MAX_VALUE - margin ||
+            available < requiredBytes + margin
+        ) {
+            throw FileGatewayException(
+                "Not enough free internal storage to rebuild the ISO safely. " +
+                    "Need at least " + (requiredBytes / (1024L * 1024L) + 64L) +
+                    " MiB of additional workspace; available " +
+                    (available / (1024L * 1024L)) + " MiB. " +
+                    "Free space, then select a new output.",
+            )
+        }
     }
 
     override suspend fun createTempPath(prefix: String, suffix: String): Path {

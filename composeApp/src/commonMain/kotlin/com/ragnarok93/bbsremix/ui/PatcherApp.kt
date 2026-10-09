@@ -279,9 +279,11 @@ fun PatcherApp(
                 return
             }
             start("Patch ISO") { token ->
+                val stagedSize = FileSystem.SYSTEM.metadata(sourcePath).size ?: 0L
                 val temporary = fileGateway.createTempPath("bbs-output", ".iso")
                 var outputCommitted = false
                 try {
+                    fileGateway.requireTemporarySpace(stagedSize)
                     val result = withContext(Dispatchers.Default) {
                         patchingService.patchTo(sourcePath, temporary, options, token, ProgressReporter(::report))
                     }
@@ -349,6 +351,7 @@ fun PatcherApp(
 
                 val temporary = fileGateway.createTempPath("bbs-diagnostic-rebuild", ".iso")
                 try {
+                    fileGateway.requireTemporarySpace(FileSystem.SYSTEM.metadata(sourcePath).size ?: 0L)
                     val result = withContext(Dispatchers.Default) {
                         patchingService.rebuildUnmodifiedTo(
                             sourcePath,
