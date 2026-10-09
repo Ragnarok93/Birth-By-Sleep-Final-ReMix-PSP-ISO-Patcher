@@ -12,6 +12,8 @@ import com.ragnarok93.bbsremix.patch.NeverCancelled
 internal object IsoBbsaDirectoryEvidence {
     private const val HEADER_BYTES = 0x30
     private const val DIRECTORY_RECORD_BYTES = 12
+    private const val PARTITION_RECORD_BYTES = 8
+    private const val MAX_PARTITION_RECORDS = 256
     private const val MAX_DIRECTORY_RECORDS = 32768
     private const val MAX_REPORTED_MATCHES = 8
     private const val MAX_LINKS = 64
@@ -31,6 +33,19 @@ internal object IsoBbsaDirectoryEvidence {
         val sectorCount: Int,
     )
 
+    data class PartitionRecord(
+        val indexByteOffset: Int,
+        val directoryHash: Long,
+        val fileCount: Int,
+        val entryOffset: Int,
+    )
+
+    data class PartitionMatch(
+        val external: ExternalReference,
+        val matchingPartitions: Int,
+        val examples: List<PartitionRecord>,
+    )
+
     data class Match(
         val external: ExternalReference,
         val matchingRecords: Int,
@@ -43,6 +58,9 @@ internal object IsoBbsaDirectoryEvidence {
         val directoryTableOffset: Long,
         val matches: List<Match>,
         val lines: List<String>,
+        val partitionValid: Boolean = false,
+        val partitionCount: Int = 0,
+        val partitionMatches: List<PartitionMatch> = emptyList(),
     )
 
     fun inspect(
@@ -95,6 +113,38 @@ internal object IsoBbsaDirectoryEvidence {
         val matches = selected.mapIndexed { i, reference ->
             Match(reference, matchCounts[i], matchLists[i])
         }
+
+        // BBSA has a second, independent namespace: partition directory
+        // records (8 bytes each), distinct from its 12-byte file records.
+        // This is a bounded hash-field comparison, not arbitrary byte search.
+        val partitionCount = u16(indexPrefix, 0x08)
+        val partitionOffset = u32(indexPrefix, 0x10)
+        val partitionBytes = partitionCount.toLong() * PARTITION_RECORD_BYTES
+        val partitionValid = partitionCount in 1..MAX_PARTITION_RECORDS &&
+            partitionOffset >= HEADER_BYTES &&
+            partitionOffset <= indexPrefix.size.toLong() &&
+            partitionBytes <= indexPrefix.size.toLong() - partitionOffset
+        val partitionMatches = if (partitionValid) {
+            val partitionLists = selected.map { mutableListOf<PartitionRecord>() }
+            val partitionCounts = IntArray(selected.size)
+            for (i in 0 until partitionCount) {
+                if (i % 64 == 0) cancellation.throwIfCancelled()
+                val at = partitionOffset.toInt() + i * PARTITION_RECORD_BYTES
+                val dirHash = u32(indexPrefix, at)
+                val files = u16(indexPrefix, at + 4)
+                val fileTableOffset = u16(indexPrefix, at + 6)
+                for (j in selected.indices) {
+                    if (selected[j].directoryHash != dirHash) continue
+                    partitionCounts[j]++
+                    if (partitionLists[j].size < MAX_REPORTED_MATCHES) {
+                        partitionLists[j] += PartitionRecord(at, dirHash, files, fileTableOffset)
+                    }
+                }
+            }
+            selected.mapIndexed { i, ref ->
+                PartitionMatch(ref, partitionCounts[i], partitionLists[i])
+            }
+        } else emptyList()
         lines += "  Link candidates=${references.size}; checked=${selected.size}; " +
             "only BBSA index DIRECTORY fields were matched (not raw-byte occurrences)."
         for (match in matches) {
@@ -109,10 +159,28 @@ internal object IsoBbsaDirectoryEvidence {
                     if (record.sectorCount == 0xfff) " (streaming sentinel)" else ""
             }
         }
+        if (partitionValid) {
+            lines += "  BBSA partition table: count=$partitionCount " +
+                "byte_offset=$partitionOffset; exact partition directory-hash comparison:"
+            for (match in partitionMatches) {
+                lines += "  ${match.external.name} hash=${hex(match.external.directoryHash)}: " +
+                    "matching_BBSA_partitions=${match.matchingPartitions}."
+                match.examples.forEach { record ->
+                    lines += "    partition index_byte_offset=${record.indexByteOffset} " +
+                        "directory_hash=${hex(record.directoryHash)} " +
+                        "files=${record.fileCount} raw_file_table_offset=${record.entryOffset}"
+                }
+            }
+        } else {
+            lines += "  BBSA partition table UNVERIFIED: declared=$partitionCount " +
+                "offset=$partitionOffset out of bounded index range; " +
+                "no partition match/no-match conclusions."
+        }
         lines += "LIMIT: directory-hash agreement alone does NOT resolve the named ARC link. " +
             "The index may include multiple filenames for one directory, and " +
             "the referenced file/partition and actual script data remain unknown."
-        return Report(true, directoryCount, offset, matches, lines)
+        return Report(true, directoryCount, offset, matches, lines,
+            partitionValid, partitionCount, partitionMatches)
     }
 
     private fun invalid(lines: List<String>, reason: String): Report =
