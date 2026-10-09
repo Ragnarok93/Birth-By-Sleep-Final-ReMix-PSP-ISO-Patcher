@@ -126,7 +126,7 @@ internal object BbsUiLayoutCatalog {
         Candidate(UiScaleElement.PORTRAITS, "BBS3.DAT", 206391296L, "cface_12.l2d",
             146206768L, 10400, "e58369a8d910e28addd3ca35d1a7e296803c6ef812999cbb4bfc35d320c31bf1",
             digestArchive = "BBS1.DAT", digestOffset = 14647424L),
-    )
+    ) + BbsUiExtendedCatalog.candidates
 
     /**
      * Construct one exact-source-verified, size-preserving experimental patch.

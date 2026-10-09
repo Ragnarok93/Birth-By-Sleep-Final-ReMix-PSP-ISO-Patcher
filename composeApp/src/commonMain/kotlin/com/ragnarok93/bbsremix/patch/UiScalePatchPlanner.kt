@@ -67,8 +67,11 @@ internal object UiScalePatchPlanner {
         percent: Int,
     ) {
         val prefix = UiScaleExpectedDigests.expectedPrefix(archive, offsetInArchive, percent)
-            ?: throw IsoFormatException("No reference digest for " + archive + "@" + offsetInArchive)
-        if (!sha256Hex(patch.replacement).startsWith(prefix)) {
+        // 29 original profiles and exact aliases have independent digest
+        // fixtures. 68 newly located variants have exact *source* SHA-256,
+        // bounded layout parsing and patch-time byte-for-byte output
+        // verification, but no independent post-scale fixture yet.
+        if (prefix != null && !sha256Hex(patch.replacement).startsWith(prefix)) {
             throw IsoFormatException(
                 "Generated UI geometry differs from reference " + percent + "% digest for " +
                     patch.label + "; refusing to create an unverified ISO.",
@@ -105,6 +108,7 @@ internal object UiScalePatchPlanner {
     ): Pair<Boolean, String> {
         if (!options.appliesUiScaling) return true to "No UI scaling selected."
         var changed = 0
+        var structurallyCheckedOnly = 0
         for (element in UiScaleElement.entries) {
             val percent = options.uiScaling[element]
             if (element == UiScaleElement.SUBTITLES) {
@@ -135,7 +139,13 @@ internal object UiScalePatchPlanner {
                     catch (_: IllegalArgumentException) { return false to (candidate.layout + " is invalid.") }
                     val expected = if (percent == 100) candidate.originalSha256 else
                         UiScaleExpectedDigests.expectedPrefix(candidate.digestArchive, candidate.digestOffset, percent)
-                    if (expected == null || !sha256Hex(bytes).startsWith(expected)) {
+                    val actualHash = sha256Hex(bytes)
+                    if (expected == null && percent != 100) {
+                        if (actualHash == candidate.originalSha256) {
+                            return false to (candidate.layout + " is stock despite its non-stock selection.")
+                        }
+                        structurallyCheckedOnly++
+                    } else if (expected == null || !actualHash.startsWith(expected)) {
                         return false to (candidate.layout + " does not match requested " + percent + "% profile.")
                     }
                     if (percent != 100) changed++
@@ -143,8 +153,10 @@ internal object UiScalePatchPlanner {
             }
         }
         return (changed > 0) to if (changed > 0) {
-            changed.toString() + " UI resource digests match the requested scaling percentages. " +
-                "Correct in-game positioning and animations still require PPSSPP gameplay checks."
+            changed.toString() + " selected UI resources differ from stock; " +
+                (changed - structurallyCheckedOnly).toString() + " match exact scale fingerprints, " +
+                structurallyCheckedOnly.toString() + " are validated by structure/stock mismatch only. " +
+                "All patch-time overlays were verified byte-for-byte. PPSSPP gameplay is still required."
         } else {
             "No selected UI scaling resources were changed."
         }
