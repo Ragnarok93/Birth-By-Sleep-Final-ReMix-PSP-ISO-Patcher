@@ -252,6 +252,40 @@ class BbsL2dGeometryTest {
     }
 
     @Test
+    fun menu_multi_quad_sprite_keeps_shared_edges_and_relative_spacing() {
+        val original = fixture().apply {
+            // Rehouse UVs/sprite descriptor, then add a second adjoining quad
+            // to the same SP2 Sprite. Both must use ONE common sprite pivot.
+            copyInto(this, 0x1a0, 0xe0, 0xf8)
+            copyInto(this, 0x1c0, 0xf8, 0xfc)
+            writeIntLe(0xa4, 0x110) // parts at SP2 + 0x110 = 0x1a0
+            writeIntLe(0xb4, 0x130) // sprite at 0x1c0
+            writeIntLe(0xa8, 2) // two groups
+            writeShortLe(0x1c0, 2)
+            writeShortLe(0x1c2, 0)
+            writeShortLe(0xd0, -200)
+            writeShortLe(0xd4, -100)
+            writeShortLe(0xdc, -100)
+            writeShortLe(0xe0, 100)
+            writeShortLe(0xd2, -80)
+            writeShortLe(0xd6, 60)
+            writeShortLe(0xde, -80)
+            writeShortLe(0xe2, 60)
+        }
+        val scaled = BbsL2dGeometry.scale(
+            original, 70, preserveMenuAnchors = true,
+        )
+        val leftEnd = scaled.bytes.readShortLe(0xd4).toShort().toInt()
+        val rightStart = scaled.bytes.readShortLe(0xdc).toShort().toInt()
+        assertEquals(leftEnd, rightStart)
+        assertEquals(-85, leftEnd)
+        assertEquals(-155, scaled.bytes.readShortLe(0xd0).toShort().toInt())
+        assertEquals(55, scaled.bytes.readShortLe(0xe0).toShort().toInt())
+        assertContentEquals(original.copyOfRange(0x1a0, 0x1b8),
+            scaled.bytes.copyOfRange(0x1a0, 0x1b8))
+    }
+
+    @Test
     fun menu_local_sprite_pivots_are_distinct_from_screen_origin() {
         val original = fixture()
         val scaled = BbsL2dGeometry.scale(
