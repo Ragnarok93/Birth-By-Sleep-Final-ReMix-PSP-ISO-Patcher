@@ -11,10 +11,10 @@ class UiScaleExpectedDigestsTest {
     @Test
     fun every_selected_resource_has_six_independent_reference_profiles() {
         val layouts = BbsUiLayoutCatalog.suppliedCandidates
-        assertEquals(111, layouts.size)
-        assertEquals(30, UiScaleExpectedDigests.profileCount)
+        assertEquals(101, layouts.size)
+        assertEquals(22, UiScaleExpectedDigests.profileCount)
         val extended = BbsUiExtendedCatalog.candidates.toSet()
-        assertEquals(70, extended.size)
+        assertEquals(69, extended.size)
         for (candidate in layouts) {
             val hasIndependentReference = UiScaleExpectedDigests.contains(
                 candidate.digestArchive, candidate.digestOffset,
@@ -48,5 +48,18 @@ class UiScaleExpectedDigestsTest {
         assertNull(UiScaleExpectedDigests.expectedPrefix("BBS0.DAT", 754538496L, 65))
         assertNull(UiScaleExpectedDigests.expectedPrefix("BBS0.DAT", 754538496L, 101))
         assertNull(UiScaleExpectedDigests.expectedPrefix("unknown.dat", 0, 85))
+        // Retired menu resources must never have selectable output profiles.
+        listOf(
+            "BBS1.DAT" to 205072432L,
+            "BBS1.DAT" to 204434000L,
+            "BBS1.DAT" to 205017168L,
+            "BBS1.DAT" to 204970528L,
+            "BBS0.DAT" to 156605248L,
+            "BBS0.DAT" to 156621520L,
+            "BBS0.DAT" to 164623168L,
+            "BBS3.DAT" to 128612640L,
+        ).forEach { (archive, offset) ->
+            assertNull(UiScaleExpectedDigests.expectedPrefix(archive, offset, 70))
+        }
     }
 }
