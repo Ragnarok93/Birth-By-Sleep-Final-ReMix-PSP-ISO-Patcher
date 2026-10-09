@@ -1,5 +1,6 @@
 package com.ragnarok93.bbsremix.iso
 
+import com.ragnarok93.bbsremix.patch.CombatPortInspector
 import com.ragnarok93.bbsremix.patch.CancellationToken
 import com.ragnarok93.bbsremix.patch.EbootInspection
 import com.ragnarok93.bbsremix.patch.EbootPatchEngine
@@ -87,6 +88,25 @@ class IsoPatchingService(
             ?.let { entry -> runCatching { reader.readEntry(source, entry) }.getOrNull() }
         progress.report(PatchProgress(PatchPhase.STAGING_EBOOT, image.eboot.size, image.eboot.size, "EBOOT preflight complete"))
         return IsoPreflight(image, eboot, coverArt)
+    }
+
+    /**
+     * Read-only combat investigation. Uses the already selected ISO's embedded
+     * EBOOT and exports only bounded instruction windows and ELF metadata.
+     * No combat features, Stage 4/5 segments or filesystem writes occur.
+     * Deliberately does not call PatchOptions.validate(): a user can analyze
+     * unsupported combat behavior without asking the patcher to apply it.
+     */
+    fun inspectCombatPort(
+        source: Path,
+        cancellation: CancellationToken = NeverCancelled,
+    ): List<String> {
+        cancellation.throwIfCancelled()
+        val image = reader.inspect(source)
+        cancellation.throwIfCancelled()
+        val eboot = reader.readEntry(source, image.eboot)
+        cancellation.throwIfCancelled()
+        return CombatPortInspector.inspect(eboot).lines
     }
 
     fun verifyOutput(
