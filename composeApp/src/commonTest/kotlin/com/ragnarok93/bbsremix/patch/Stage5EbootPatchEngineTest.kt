@@ -321,6 +321,16 @@ class Stage5EbootPatchEngineTest {
         val result = engine.verifyPatched(image, options)
         assertTrue(result.verified, result.problems.joinToString())
         assertEquals(RuntimeValidation.PENDING, result.runtimeValidation)
+
+        val unsafeHeader = image.copyOf().apply {
+            writeShortLe(E_PHNUM_OFFSET, 3)
+            writeIntLe(0x74, 1) // obsolete third PT_LOAD
+        }
+        val unsafeResult = engine.verifyPatched(unsafeHeader, options)
+        assertTrue(!unsafeResult.verified)
+        assertTrue(unsafeResult.problems.any { it.contains("third program header") })
+        assertTrue(unsafeResult.problems.any { it.contains("obsolete Stage 4/5") })
+
         assertTrue(
             image.copyOfRange(
                 Stage5Payloads.S2_FILE_OFFSET,
