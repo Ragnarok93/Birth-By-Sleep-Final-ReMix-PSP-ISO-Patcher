@@ -26,7 +26,7 @@ internal object PspCombatApiCatalog {
             listOf(
                 Opcode(0x089DC67C, 0x0E29EDDA),
                 Opcode(0x089DC684, 0x0E23A3A7),
-                Opcode(0x089DC698, 0x0E238A5),
+                Opcode(0x089DC698, 0x0E2398A5),
             ),
         ),
         Registration(
@@ -34,7 +34,7 @@ internal object PspCombatApiCatalog {
             "resolves motion context via 0x088E5EB8 and returns a float to Lua",
             listOf(
                 Opcode(0x089DB52C, 0x0E23A3A7),
-                Opcode(0x089DB540, 0x0E2387AE),
+                Opcode(0x089DB540, 0x0E2397AE),
                 Opcode(0x089DB54C, 0x0E29EE3B),
             ),
         ),
