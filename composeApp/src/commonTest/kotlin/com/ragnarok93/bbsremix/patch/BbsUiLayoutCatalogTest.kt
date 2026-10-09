@@ -9,7 +9,7 @@ class BbsUiLayoutCatalogTest {
     @Test
     fun supported_layouts_have_unique_nonoverlapping_source_ranges() {
         val items = BbsUiLayoutCatalog.suppliedCandidates
-        assertEquals(111, items.size) // 29 originals + 12 duplicates + 70 scene variants
+        assertEquals(101, items.size) // 21 originals + 11 duplicates + 69 scene variants
         assertTrue(items.size >= 25, "Expected the verified multi-category research catalog.")
         assertEquals(items.size, items.map { it.archive to it.offsetInArchive }.distinct().size)
         val expectedArchiveSizes = mapOf(
@@ -35,5 +35,9 @@ class BbsUiLayoutCatalogTest {
             assertTrue(items.any { it.element == element }, "Missing " + element.title)
         }
         assertFalse(items.any { it.element == UiScaleElement.SUBTITLES })
+        assertFalse(items.any {
+            it.layout in setOf("camp.l2d", "pause.l2d", "t_menu.l2d",
+                "info_00.l2d", "c_help.l2d", "c_icon_00.l2d")
+        }, "No discontinued pause/main-menu layout may be patched.")
     }
 }
