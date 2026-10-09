@@ -37,6 +37,15 @@ class BbsL2dGeometryTest {
         writeShortLe(0xe4, 178)
         writeShortLe(0xe6, 226)
         signature(0x110, "SQ2@")
+        writeIntLe(0x130, 1)     // one SQ2 animation
+        writeIntLe(0x134, 0x40)  // animation at 0x150
+        writeIntLe(0x138, 2)     // two SQ2 keys
+        writeIntLe(0x13c, 0x60)  // keys at 0x170
+        writeShortLe(0x156, 0)   // first key index
+        this[0x159] = 1          // BaseX: one key
+        this[0x15a] = 1          // BaseY: one key
+        writeIntLe(0x174, 80f.toBits())
+        writeIntLe(0x180, (-50f).toBits())
         signature(0x200, "LY2@")
         writeIntLe(0x210, 1)      // layout count
         writeIntLe(0x214, 0x40)   // layout at 0x240
@@ -76,7 +85,11 @@ class BbsL2dGeometryTest {
         assertEquals(51, result.bytes.readShortLe(0x266).toShort().toInt())
         assertEquals(-17, result.bytes.readShortLe(0x268).toShort().toInt())
         assertContentEquals(source.copyOfRange(0xe0, 0xf8), result.bytes.copyOfRange(0xe0, 0xf8))
-        assertContentEquals(source.copyOfRange(0x110, 0x200), result.bytes.copyOfRange(0x110, 0x200))
+        assertContentEquals(source.copyOfRange(0x110, 0x150), result.bytes.copyOfRange(0x110, 0x150))
+        assertContentEquals(source.copyOfRange(0x150, 0x170), result.bytes.copyOfRange(0x150, 0x170))
+        assertEquals(68f.toBits(), result.bytes.readIntLe(0x174))
+        assertEquals((-42.5f).toBits(), result.bytes.readIntLe(0x180))
+        assertEquals(2, result.animationPositionKeysChanged)
         assertEquals(2, result.layoutFieldsChanged)
         assertEquals(2, result.nodeFieldsChanged)
         assertEquals(4, result.groupFieldsChanged)
@@ -85,6 +98,22 @@ class BbsL2dGeometryTest {
         assertEquals(2, result.bytes[0x279].toInt() and 0xff)
         assertEquals(1, result.bytes[0x27a].toInt() and 0xff)
         assertContentEquals(source, fixture()) // source untouched
+    }
+
+    @Test
+    fun sq2_animated_translation_is_scaled_once_and_time_and_sprite_scale_are_not_modified() {
+        val original = fixture()
+        val result = BbsL2dGeometry.scale(original, 70)
+        assertEquals(56f.toBits(), result.bytes.readIntLe(0x174))
+        assertEquals((-35f).toBits(), result.bytes.readIntLe(0x180))
+        assertEquals(2, result.animationPositionKeysChanged)
+        assertContentEquals(original.copyOfRange(0x150, 0x170),
+            result.bytes.copyOfRange(0x150, 0x170))
+        assertContentEquals(original.copyOfRange(0x170, 0x174),
+            result.bytes.copyOfRange(0x170, 0x174))
+        assertContentEquals(original.copyOfRange(0x17c, 0x180),
+            result.bytes.copyOfRange(0x17c, 0x180))
+        assertContentEquals(original, fixture())
     }
 
     @Test
