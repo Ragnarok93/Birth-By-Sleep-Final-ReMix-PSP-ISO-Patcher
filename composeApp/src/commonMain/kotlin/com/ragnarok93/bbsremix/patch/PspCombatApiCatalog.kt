@@ -33,6 +33,20 @@ internal object PspCombatApiCatalog {
             listOf(Opcode(0x089E7928, 0x94840000.toInt())),
         ),
         Registration(
+            "GetCommandState", 0x08B2D270, 0x089E91E4, "reads signed command-state halfword player +0x22E",
+            listOf(Opcode(0x089E9218, 0x8485022E.toInt())),
+        ),
+        Registration(
+            "GetCommandSubcate", 0x08B2D268, 0x089E7970,
+            "looks up subcategory byte at 0x08B1AE44 + (kind * 16) + 3",
+            listOf(
+                Opcode(0x089E79EC, 0x3C0608B2.toInt()),
+                Opcode(0x089E79F0, 0x00042100.toInt()),
+                Opcode(0x089E79F4, 0x24C6AE44.toInt()),
+                Opcode(0x089E7A00, 0x90850003.toInt()),
+            ),
+        ),
+        Registration(
             "GetCommandCategory", 0x08B2D278, 0x089E7A38, "looks up unsigned category byte at table 0x08B1AE44 + (kind * 16) + 1",
             listOf(Opcode(0x089E7AB4, 0x3C0608B2.toInt()), Opcode(0x089E7AB8, 0x00042100.toInt()), Opcode(0x089E7ABC, 0x24C6AE44.toInt()), Opcode(0x089E7AC8, 0x90850001.toInt())),
         ),
