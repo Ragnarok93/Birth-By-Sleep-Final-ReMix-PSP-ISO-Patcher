@@ -159,6 +159,39 @@ Both new probes are **read-only**, bounded and regression-tested;
 they do not locate a verified combat-state bit or register a safe
 resident hook.
 
+## Validated ARC directory results from latest exported log
+
+The uploaded `ULJM05775_10192026.log` reports that the two
+ARC header candidates previously found by sparse sampling are
+**structurally valid ARC v1 directories**, not merely four-byte magic
+matches. Both native injection candidates still overlap the executable
+PT_LOAD declarations of **8/10 separately stored modules**.
+
+- `BBS1.DAT`, relative byte offset **156,127,232**: all 6 records
+  valid. Local entries: `g01sb_000.pam`, `g01sb_000.seb`,
+  `g01sb_000.ead`, `g01sb00.pmo`, `g01sb00.epd`.
+  An external link record is named `g01lua`.
+- `BBS2.DAT`, relative byte offset **2,048**: all 4 records
+  valid. Local entries: `n01bd00.pmo`, `n01bd00.txa`,
+  `n01bd_000.ead`, `n01bd_000.pam`.
+- The name `g01lua` **suggests** a potential script-related
+  reference but does not prove that a Lua script exists at that
+  location, nor identify its destination. The validated ARC record
+  contains a raw 32-bit external-reference identifier, not a
+  recovered script payload.
+
+The inspector now logs these **raw external-reference IDs** and
+**archive-relative offset/size pairs** for the first 12 fully
+validated directory entries. These are useful leads for a later
+cross-archive name-hash/index investigation, while avoiding byte
+extraction or pretending the linked resource has been resolved.
+Malformed ARC tables do not release individual record metadata as
+verified evidence.
+
+Do not restore Stage 4/5 gameplay injection at
+`0x08B70000` or `0x08B71280`; static segment collision is now
+source-backed by the full ISO inventory.
+
 ## Verification
 
 Tests exercise a synthetic ISO with a main EBOOT, a second MIPS ELF,
