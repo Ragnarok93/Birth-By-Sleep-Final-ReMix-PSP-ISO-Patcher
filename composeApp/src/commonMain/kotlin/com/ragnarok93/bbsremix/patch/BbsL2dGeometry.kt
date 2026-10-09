@@ -27,11 +27,24 @@ internal object BbsL2dGeometry {
         require(UiScaleSettings.isSelectable(percent)) {
             "L2D scale must be 70–100% in 5% increments."
         }
-        val output = source.copyOf()
-        requireSignature(output, 0, "L2D@")
-        require(output.size >= HEADER_SIZE && output.readIntLe(0x2c) == output.size) {
-            "Unexpected L2D header size."
+        require(source.size >= HEADER_SIZE) { "L2D header is truncated." }
+        requireSignature(source, 0, "L2D@")
+        val declaredSize = source.readIntLe(0x2c)
+        require(declaredSize in HEADER_SIZE..source.size) {
+            "Unexpected L2D header size: declared $declaredSize, allocated ${source.size}."
         }
+        // Some genuine ARC entries include one extra, zero-filled 16-byte
+        // trailer after the L2D's own length (e.g. bc01_00.l2d in BBS1).
+        // Reject non-zero bytes and anything longer than the known single
+        // alignment block, rather than trusting allocation padding as data.
+        val tailSize = source.size - declaredSize
+        require(tailSize == 0 || (tailSize == 0x10 &&
+            (declaredSize and 0x0f) == 0 &&
+            (declaredSize until source.size).all { source[it] == 0.toByte() })
+        ) { "Unsupported L2D trailing bytes: $tailSize bytes." }
+        // Every relative pointer, group, keyframe, etc. must stay within the
+        // declared L2D size, not merely inside its containing ARC allocation.
+        val output = source.copyOf(declaredSize)
 
         val ly2 = output.readIntLe(0x28)
         requireRange(output, ly2, 1, 0x40, "LY2 header")
@@ -172,10 +185,13 @@ internal object BbsL2dGeometry {
                 }
             }
         }
-        if (percent == UiScaleSettings.STOCK_PERCENT) {
-            check(output.contentEquals(source)) { "100% L2D scaling changed the stock input." }
+        val resultBytes = if (tailSize == 0) output else source.copyOf().also {
+            output.copyInto(it, destinationOffset = 0)
         }
-        return Result(output, layouts, nodes, groups, fonts, animatedPositions)
+        if (percent == UiScaleSettings.STOCK_PERCENT) {
+            check(resultBytes.contentEquals(source)) { "100% L2D scaling changed the stock input." }
+        }
+        return Result(resultBytes, layouts, nodes, groups, fonts, animatedPositions)
     }
 
     private fun requireSignature(bytes: ByteArray, offset: Int, magic: String) {
