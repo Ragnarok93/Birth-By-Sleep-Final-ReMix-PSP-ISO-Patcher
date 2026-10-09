@@ -289,12 +289,12 @@ class BbsL2dGeometryTest {
     }
 
     @Test
-    fun menu_overscan_sprites_must_not_be_pulled_onto_screen() {
+    fun sprites_entirely_outside_local_bounds_remain_unchanged() {
         val original = fixture().apply {
             writeShortLe(0xd0, -277)
             writeShortLe(0xd2, -172)
-            writeShortLe(0xd4, 281)
-            writeShortLe(0xd6, -133)
+            writeShortLe(0xd4, -250)
+            writeShortLe(0xd6, -150)
         }
         for (percent in 70..100 step 5) {
             val scaled = BbsL2dGeometry.scale(
@@ -307,6 +307,29 @@ class BbsL2dGeometryTest {
             assertEquals(0, scaled.groupFieldsChanged)
             if (percent < 100) assertEquals(1, scaled.fontSizeFieldsChanged)
         }
+    }
+
+    @Test
+    fun full_width_menu_panels_are_not_exempt_for_touching_screen_edges() {
+        // Formerly any vertex beyond the native resolution exempted entire
+        // menu panels from scaling, leaving many elements at stock size.
+        val original = fixture().apply {
+            writeShortLe(0xd0, -277)
+            writeShortLe(0xd2, -172)
+            writeShortLe(0xd4, 281)
+            writeShortLe(0xd6, -133)
+        }
+        val scaled = BbsL2dGeometry.scale(
+            original, 70, preserveMenuAnchors = true,
+        )
+        assertEquals(-194, scaled.bytes.readShortLe(0xd0).toShort().toInt())
+        assertEquals(197, scaled.bytes.readShortLe(0xd4).toShort().toInt())
+        assertEquals(-160, scaled.bytes.readShortLe(0xd2).toShort().toInt())
+        assertEquals(-133, scaled.bytes.readShortLe(0xd6).toShort().toInt())
+        assertEquals(3, scaled.groupFieldsChanged)
+        assertContentEquals(original, BbsL2dGeometry.scale(
+            original, 100, preserveMenuAnchors = true,
+        ).bytes)
     }
 
     @Test
