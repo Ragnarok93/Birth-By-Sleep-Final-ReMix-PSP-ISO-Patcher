@@ -31,6 +31,7 @@ is activated.
 | Whole disc | `IsoCombatResearchService` | Recursive ISO9660 directory/file inventory, extension counts, relevant file names/sizes, file-format header probes |
 | Additional game modules | `IsoCombatResearchService` | SHA-256, ELF sections, executable JAL/JALR totals, event-name candidates and sampled offset-opcode counts for bounded unencrypted ELF modules |
 | BBSA archive header | `IsoCombatResearchService` | Recognized `bbsa` game DAT archive, version (5/6), bounded index size and SHA-256; embedded asset index *not* decoded |
+| BBSA directory cross-references | `IsoBbsaDirectoryEvidence` | Bounded BBSA directory records and exact hash-field correlation against validated ARC external links; candidate name hashes/packed sector metadata, no extraction |
 | BBS0–BBS4 DAT reconnaissance | `IsoArchiveSectorResearch` | SHA-256 and first 16 bytes of initial sector; bounded, evenly distributed 2 KiB-sector probes; ARC-like header candidates, without decoding assets or pretending a zero-sample result is exhaustive |
 | Auxiliary ELF load map | `PspElfModuleMap` | PT_LOAD file/virtual ranges, memory and file sizes, segment flags, entry point, executable-section addresses and bounds checks; no runtime overlay reservation claim |
 | Unsupported/packed content | `IsoCombatResearchService` | Type classification of encrypted `~PSP`, PSAR/CPK/ZIP; raw/packed DAT/ARC/etc marked **not decoded** |
@@ -191,6 +192,43 @@ verified evidence.
 Do not restore Stage 4/5 gameplay injection at
 `0x08B70000` or `0x08B71280`; static segment collision is now
 source-backed by the full ISO inventory.
+
+## October 9 later log: external ARC link correlation
+
+The user-supplied `ULJM05775_10092026 (1).log` confirms the
+expanded read-only inspector successfully completed on the same EBOOT
+(SHA-256 `8c8947e83b829199f82370c4c638856718886d9a0a525892fed22ce6a8b26ca7`)
+and lists the following fully validated ARC directory metadata:
+
+| Archive | ARC relative byte offset | Record | Evidence |
+| --- | ---: | --- | --- |
+| `BBS1.DAT` | 156,127,232 | `g01lua` | External directory hash **`0x4D4D4947`**, zero-length linked record |
+| `BBS1.DAT` | 156,127,232 | `g01sb00.pmo` | Local payload at ARC-relative **928**, length **36,464** |
+| `BBS2.DAT` | 2,048 | `n01bd00.pmo` | Local payload at ARC-relative **144**, length **115,008** |
+| `BBS2.DAT` | 2,048 | `n01bd00.txa` | Local payload at ARC-relative **115,152**, length **51,040** |
+
+The external `g01lua` label is a potential script-resource clue,
+**not proof that a Lua script has been located or executed**.
+The external directory hash is **not** a file offset or executable
+address. The structural parser now enforces a zero-length field on
+linked ARC records, in accordance with the [OpenKh ARC format notes](https://openkh.dev/bbs/file/type/arc.html).
+
+The new `IsoBbsaDirectoryEvidence` parser uses the documented [BBSA
+header and index directory structure](https://openkh.dev/bbs/file/type/bbsa.html).
+For authenticated ARC external-link records, it looks up the raw
+directory hash in BBSA's **directory hash field**, not arbitrary 4-byte
+occurrences. It bounds the directory-table count and offsets before
+reading, caps the number of sample records, and reports potential
+matches as file-name hashes plus packed start-sector/sector-count
+metadata. It does **not** attempt to decrypt or extract archive payloads,
+infer the source partition, or claim a unique target when multiple
+records share the same directory hash.
+
+If a BBSA index is malformed, truncated, or absent, the parser reports
+**UNVERIFIED**, never a misleading `0 matches`. A valid index with
+zero matching directory records is specifically a zero-match result
+for **that indexed table only**; it does not rule out other resource
+storage or external references.
 
 ## Verification
 
