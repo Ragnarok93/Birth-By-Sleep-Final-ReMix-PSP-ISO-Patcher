@@ -109,6 +109,7 @@ internal object IsoBbsaIndexedPayloadProbe {
                 val fmt: String
                 var prefix: String? = null
                 var digest: String? = null
+                var arcLines: List<String> = emptyList()
                 if (location == null) {
                     fmt = "UNVERIFIED logical->DAT mapping (malformed/crosses archive boundary)"
                 } else {
@@ -131,6 +132,12 @@ internal object IsoBbsaIndexedPayloadProbe {
                             (it.toInt() and 255).toString(16).uppercase().padStart(2, '0')
                         }
                         digest = sha256Hex(bytes)
+                        if (fmt == "ARC header (not decoded)") {
+                            arcLines = IsoBbsaIndexedArcEvidence.inspect(
+                                source, entry, location.archiveRelativeByteOffset,
+                                candidate.sectorCount, bytes, reader, cancellation,
+                            ).lines
+                        }
                     }
                 }
                 val probe = Probe(name, match.external.directoryHash,
@@ -148,13 +155,15 @@ internal object IsoBbsaIndexedPayloadProbe {
                     "sample_bytes=${if (probe.sampledSha256 == null) 0 else MAX_SAMPLE_BYTES} " +
                     "sample_sha256=${probe.sampledSha256 ?: "UNVERIFIED"} " +
                     "prefix_hex=${probe.first32Hex ?: "UNVERIFIED"}"
+                lines += arcLines
             }
         }
         if (probes.isEmpty()) lines += "  No exact partition+filename index records to probe."
         if (probes.size == MAX_MATCHES) lines += "  Probe limit reached ($MAX_MATCHES)."
         lines += "  LIMIT: Index mapping and file signature cannot prove the payload was " +
             "successfully decoded, or that it implements any combat callback. " +
-            "At most one 2 KiB sector is read per match; no assets are extracted."
+            "At most one 2 KiB ARC header sector plus 12 local 16-byte " +
+            "member signature previews are read per match; no assets are extracted."
         return Report(probes, lines)
     }
 
