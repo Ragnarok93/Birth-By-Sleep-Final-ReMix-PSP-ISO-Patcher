@@ -80,9 +80,12 @@ because even child nodes can be positioned in screen coordinates. Menus
 instead scale visible SP2 sprites around their local **alignment edges**
 (left/top for positive local coordinates, right/bottom for negative
 coordinates, and origin when a sprite spans zero). This keeps command-bar
-backgrounds attached to text positioned by the runtime. Full-screen
-and offscreen window/decorative sprites stay unmodified so overscan
-panels cannot slide over menu content. Font sizes remain scalable.
+backgrounds attached to text positioned by the runtime. Menu sprites whose local bounds overlap the native
+viewport are eligible for the same scaling, even when some vertices lie
+outside it; preserving every such sprite left large panels at stock size.
+Only sprites entirely outside the local viewport are conservatively held
+fixed to avoid drawing offscreen transitions into view. Font sizes remain
+scalable.
 This policy is experimental pending PPSSPP on-screen checks.
 Original-source hashes, output byte checks, and 70–95% reference profiles
 were updated for this anchor-preserving transform.

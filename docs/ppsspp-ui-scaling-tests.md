@@ -264,3 +264,33 @@ bars, list tabs, right-hand command entries, and MUNNY/TIME values for
 background/label alignment. Hide PPSSPP's on-screen buttons temporarily
 when comparing bottom help text: the emulator's controller overlay can
 cover in-game descriptions independent of this patcher.
+
+## Partial-viewport menu sprite correction — supersedes overscan policy
+
+The earlier "one vertex outside the PSP viewport" rule was too broad.
+SP2 sprite bounds are **local** to the parent LY2/SQ2 transforms, not
+necessarily screen coordinates. In the supplied BBS1 `camp.l2d` resource,
+the rule exempted roughly **1,622 groups** from resizing, including many
+on-screen menu panels whose sprite geometry extends beyond the nominal
+viewport. Those panels remained at 100% while menus were requested at 70%.
+
+The new menu-only rule preserves the same LY2 and SQ2 positions and
+uses the same per-sprite local alignment edge, but permits scaling a
+sprite when its bounding rectangle *intersects* the nominal native
+coordinate window X=[-240,240], Y=[-136,136]. Sprites entirely outside
+that window are conservatively held at stock geometry. This is still a
+heuristic; because coordinates are local to animation transforms,
+a pair of PPSSPP menu frame dumps is needed to confirm exact runtime
+placement and clipping behavior.
+
+The change is limited to `Menus`; category-specific scaling for
+Combat HUD, Gauges, Command Deck, Portraits, Shotlock and Subtitles
+remains unchanged. All eight source-matched menu layouts have refreshed
+70–95% SHA-256 prefixes, and regression tests distinguish partly visible
+panels from wholly off-window sprites.
+
+**Comparison request if misalignment remains:** Two PPSSPP GPU frame dumps
+from the *same menu screen*—stock 100% and patched 70%, preferably with
+PPSSPP touch controls hidden—allow comparison of the actual GE draw
+positions, clipping and texture rectangles. ISO output verification
+alone cannot guarantee pixel-correct composition.
