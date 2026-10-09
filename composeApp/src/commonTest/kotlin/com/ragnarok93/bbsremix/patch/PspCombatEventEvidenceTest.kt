@@ -30,6 +30,55 @@ class PspCombatEventEvidenceTest {
     }
 
     @Test
+    fun aligned_self_pointer_constants_are_structural_not_executed_callbacks() {
+        val source = ByteArray(256)
+        val base = 0x08B20000
+        val names = listOf(
+            "OnHitAttack" to 0,
+            "OnHitBody" to 32,
+            "OnHitAttackBg" to 64,
+        )
+        for ((name, delta) in names) {
+            val encoded = name.encodeToByteArray()
+            encoded.copyInto(source, 16 + delta)
+            source[16 + delta + encoded.size] = 0
+            val alignedEnd = (encoded.size + 1 + 3) and 3.inv()
+            source.writeIntLe(16 + delta + alignedEnd, base + delta)
+        }
+        val rodata = PspCombatStaticAnalysis.Section(
+            ".rodata", base.toLong(), 16, 120, false,
+        )
+        val before = source.copyOf()
+        val constants = PspCombatEventEvidence.alignedStringPointers(source, listOf(rodata))
+        assertEquals(3, constants.size)
+        assertEquals(
+            listOf("OnHitAttack", "OnHitBody", "OnHitAttackBg"),
+            constants.map { it.name },
+        )
+        assertEquals(listOf(12L, 44L, 80L), constants.map { it.pointerVa - base })
+        assertTrue(source.contentEquals(before))
+
+        val broken = source.copyOf()
+        broken.writeIntLe(16 + 44, base)
+        assertEquals(
+            2,
+            PspCombatEventEvidence.alignedStringPointers(broken, listOf(rodata)).size,
+        )
+        assertTrue(
+            PspCombatEventEvidence.alignedStringPointers(
+                source,
+                listOf(rodata.copy(name = ".text", executable = true)),
+            ).isEmpty(),
+        )
+        assertTrue(
+            PspCombatEventEvidence.alignedStringPointers(
+                source,
+                listOf(rodata.copy(length = 9)),
+            ).isEmpty(),
+        )
+    }
+
+    @Test
     fun truncated_unmapped_and_executable_sections_must_fail_closed() {
         val data = "OnHitAttack\u0000".encodeToByteArray()
         val invalid = listOf(
