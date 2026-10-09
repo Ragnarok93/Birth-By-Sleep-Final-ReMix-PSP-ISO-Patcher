@@ -161,7 +161,10 @@ internal object BbsUiLayoutCatalog {
             throw IsoFormatException(candidate.layout + " SHA-256 mismatch; the game layout was not changed.")
         }
         val scaled = try {
-            BbsL2dGeometry.scale(old, percent)
+            BbsL2dGeometry.scale(
+                old, percent,
+                preserveAnimationBase = candidate.element == UiScaleElement.MENUS,
+            )
         } catch (error: IllegalArgumentException) {
             throw IsoFormatException(
                 "${candidate.archive}/${candidate.layout} at archive offset " +
