@@ -55,51 +55,27 @@ The UI exposes only integer camera levels `1–5`, with **level 1 as the default
 
 ## UI scaling (experimental ISO resource patches)
 
-The Setup page has independent 70–100% controls in 5% steps (stock 100%)
-for combat HUD, Command Deck, HP/Focus/D-Link gauges, portraits, Shotlock,
-menus, and subtitles. Selecting a non-stock value now **generates real,
-same-size UI resource edits in the output ISO** through the existing
-`IsoBytePatch` pipeline, alongside any selected FPS/camera EBOOT edits.
+The Setup page provides six independent scaling controls at 70–100% in
+5% increments, with 100% as the default: **Combat HUD, Command Deck,
+HP / Focus / D-Link gauges, Character portraits, Shotlock interface, and
+Subtitles.** Scaling alters source-authenticated UI geometry within the ISO;
+it does not resize textures or affect PPSSPP HD texture replacements.
 
-The catalog covers 111 source-fingerprinted `.l2d` files inside
-`BBS0.DAT`, `BBS1.DAT`, `BBS2.DAT`, and `BBS3.DAT`, plus the 25 centered subtitle
-layouts in `BBS0.DAT/CT00000.ctd`. Source sizes and exact per-resource
-SHA-256 fingerprints are checked before the output is created. The rebuilder
-verifies every preimage and then verifies the exact patched spans in the
-completed ISO; the original is never overwritten. No PNG files, PPSSPP HD
-texture IDs, or SP2 UVs are changed.
+**Pause / Main Menu scaling has been permanently removed.** Menu navigation,
+pause screens, submenu text, panels, icons and menu resources are left at their
+original in-game geometry regardless of the other UI scaling selections.
+The unsupported menu-specific SP2/LY2/SQ2 geometry editor, option value,
+menu asset catalog entries, and per-percent menu fingerprints were deleted.
 
-**Screen anchoring:** LY2 Layout X/Y represents absolute screen placement
-(relative to the native 480×272 PSP screen center), and root LY2 nodes
-(with Parent IDX < 0) represent top-level anchors. The patcher now keeps
-those positions unchanged while shrinking child-node offsets, SP2 sprite
-vertices, font sizes, and local SQ2 animated translation offsets for
-**non-menu** elements. For **Pause / main menus**, the editor now preserves
-**all LY2 node X/Y placements and SQ2 Base/Offset animation positions**,
-because even child nodes can be positioned in screen coordinates. Menus
-instead scale visible SP2 sprites around their local **alignment edges**
-(left/top for positive local coordinates, right/bottom for negative
-coordinates, and origin when a sprite spans zero). This keeps command-bar
-backgrounds attached to text positioned by the runtime. Menu sprites whose local bounds overlap the native
-viewport are eligible for the same scaling, even when some vertices lie
-outside it; preserving every such sprite left large panels at stock size.
-Only sprites entirely outside the local viewport are conservatively held
-fixed to avoid drawing offscreen transitions into view. Font sizes remain
-scalable.
-This policy is experimental pending PPSSPP on-screen checks.
-Original-source hashes, output byte checks, and 70–95% reference profiles
-were updated for this anchor-preserving transform.
-
-**Experimental limitations:** not all SQ2 animation keys, game-side runtime
-transforms, text scissor rectangles, hitboxes, and dynamically positioned
-elements have been mapped or visually verified. The feature is not yet a
-guarantee of pixel-perfect 70–100% scaling in PPSSPP.
-Unrecognized, encrypted, missing or mismatched DAT resources fail closed.
-The standalone Verify Output action can detect structurally valid non-stock
-resources but cannot authenticate the exact scale value without the source ISO;
-patch-time verification *does* compare the exact generated replacements.
-Testing with stock and HD textures is still required before treating the
-feature as production-stable.
+The remaining experimental catalog includes **101** fingerprinted L2D
+resources across BBS0–3 and the 25 centered subtitle rows of
+`BBS0.DAT/CT00000.ctd`. The original ISO is never overwritten.
+Every patch requires exact source hashes and is byte-verified after the
+ISO rebuild. The non-menu L2D scaler retains native screen anchors while
+adjusting sprite geometry, child offsets, positive font sizes and selected
+SQ2 position keys. The remaining scaling controls still require PPSSPP
+visual validation; resource integrity alone cannot guarantee presentation
+alignment.
 
 ## Texture packs
 
