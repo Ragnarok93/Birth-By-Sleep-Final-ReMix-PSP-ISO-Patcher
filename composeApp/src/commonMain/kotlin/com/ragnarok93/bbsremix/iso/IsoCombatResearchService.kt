@@ -145,6 +145,13 @@ internal class IsoCombatResearchService(
                 source, entry.dataOffset, minOf(entry.size, MAX_ARCHIVE_HEADER.toLong()).toInt(),
             )
             val kind = classify(header)
+            if (extensionOf(entry.name) == "DAT") {
+                // Examine a bounded, reproducible sample of sectors, even
+                // when the archive header is unrecognized (BBS1..BBS4).
+                lines += IsoArchiveSectorResearch.inspect(
+                    source, entry, reader, cancellation,
+                ).lines
+            }
             if (kind == "encrypted PSP ~PSP") encrypted++
             if (kind == "BBSA game archive") {
                 lines += inspectBbsaIndex(source, entry, header, cancellation)
