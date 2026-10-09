@@ -17,6 +17,7 @@ internal object IsoBbsaDirectoryEvidence {
     private const val MAX_DIRECTORY_RECORDS = 32768
     private const val MAX_REPORTED_MATCHES = 8
     private const val MAX_LINKS = 64
+    private const val MAX_TOTAL_PARTITION_FILE_RECORDS = 100000
 
     data class ExternalReference(
         val archive: String,
@@ -56,6 +57,22 @@ internal object IsoBbsaDirectoryEvidence {
         val candidateFiles: List<PartitionFileCandidate> = emptyList(),
     )
 
+    data class GlobalPartitionFileCandidate(
+        val partitionId: Long,
+        val indexByteOffset: Int,
+        val startSector: Long,
+        val sectorCount: Int,
+    )
+
+    data class GlobalNameMatch(
+        val external: ExternalReference,
+        val filenameCrc32: Long,
+        val directoryFileMatches: Int,
+        val directoryExamples: List<DirectoryRecord>,
+        val partitionFileMatches: Int?,
+        val partitionExamples: List<GlobalPartitionFileCandidate>,
+    )
+
     data class Match(
         val external: ExternalReference,
         val matchingRecords: Int,
@@ -71,6 +88,7 @@ internal object IsoBbsaDirectoryEvidence {
         val partitionValid: Boolean = false,
         val partitionCount: Int = 0,
         val partitionMatches: List<PartitionMatch> = emptyList(),
+        val globalNameMatches: List<GlobalNameMatch> = emptyList(),
     )
 
     fun inspect(
@@ -104,6 +122,9 @@ internal object IsoBbsaDirectoryEvidence {
         val selected = references.take(MAX_LINKS)
         val matchLists = selected.map { mutableListOf<DirectoryRecord>() }
         val matchCounts = IntArray(selected.size)
+        val wantedHashes = selected.map { fileNameHash(it.name) }
+        val globalDirectoryCounts = IntArray(selected.size)
+        val globalDirectoryExamples = selected.map { mutableListOf<DirectoryRecord>() }
         for (i in 0 until directoryCount) {
             if (i % 512 == 0) cancellation.throwIfCancelled()
             val at = offset.toInt() + i * DIRECTORY_RECORD_BYTES
@@ -111,12 +132,23 @@ internal object IsoBbsaDirectoryEvidence {
             val packed = u32(indexPrefix, at + 4)
             val dirHash = u32(indexPrefix, at + 8)
             for (j in selected.indices) {
-                if (selected[j].directoryHash != dirHash) continue
-                matchCounts[j]++
-                if (matchLists[j].size < MAX_REPORTED_MATCHES) {
-                    matchLists[j] += DirectoryRecord(
-                        at, fileHash, dirHash, packed ushr 12, (packed and 0xfff).toInt(),
-                    )
+                if (fileHash == wantedHashes[j]) {
+                    globalDirectoryCounts[j]++
+                    if (globalDirectoryExamples[j].size < MAX_REPORTED_MATCHES) {
+                        globalDirectoryExamples[j] += DirectoryRecord(
+                            at, fileHash, dirHash, packed ushr 12,
+                            (packed and 0xfff).toInt(),
+                        )
+                    }
+                }
+                if (selected[j].directoryHash == dirHash) {
+                    matchCounts[j]++
+                    if (matchLists[j].size < MAX_REPORTED_MATCHES) {
+                        matchLists[j] += DirectoryRecord(
+                            at, fileHash, dirHash, packed ushr 12,
+                            (packed and 0xfff).toInt(),
+                        )
+                    }
                 }
             }
         }
@@ -175,6 +207,12 @@ internal object IsoBbsaDirectoryEvidence {
                 )
             }
         }
+        // Bound the total number of partition *file records* scanned,
+        // including overlapping partition slices in malformed indexes.
+        if (partitionValid && partitions.sumOf {
+            it.record.fileCount.toLong()
+        } > MAX_TOTAL_PARTITION_FILE_RECORDS) partitionValid = false
+
         val partitionMatches = if (partitionValid) selected.map { reference ->
             val matching = partitions.filter {
                 it.record.directoryHash == reference.directoryHash
@@ -200,6 +238,63 @@ internal object IsoBbsaDirectoryEvidence {
                 wantedFileHash, totalFiles, fileExamples,
             )
         } else emptyList()
+        // Independent filename-only search across ALL file-hash fields,
+        // including the paths not matching the ARC's directory pointer.
+        // This is not a resource resolver; collisions and duplicate names
+        // across different directories are possible.
+        val allPartitionNameCounts = IntArray(selected.size)
+        val allPartitionExamples = selected.map {
+            mutableListOf<GlobalPartitionFileCandidate>()
+        }
+        if (partitionValid) {
+            for (part in partitions) {
+                for (at in part.fileStart until part.fileEnd step 8) {
+                    val hash = u32(indexPrefix, at)
+                    for (j in selected.indices) {
+                        if (hash != wantedHashes[j]) continue
+                        allPartitionNameCounts[j]++
+                        if (allPartitionExamples[j].size < MAX_REPORTED_MATCHES) {
+                            val packed = u32(indexPrefix, at + 4)
+                            allPartitionExamples[j] += GlobalPartitionFileCandidate(
+                                part.record.directoryHash, at, packed ushr 12,
+                                (packed and 0xfff).toInt(),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        val globalNameMatches = selected.mapIndexed { i, ref ->
+            GlobalNameMatch(ref, wantedHashes[i],
+                globalDirectoryCounts[i], globalDirectoryExamples[i],
+                if (partitionValid) allPartitionNameCounts[i] else null,
+                if (partitionValid) allPartitionExamples[i] else emptyList(),
+            )
+        }
+        lines += "  GLOBAL BBSA filename-hash census (index-only; " +
+            "not tied to ARC link target directory):"
+        for (found in globalNameMatches) {
+            lines += "    ${found.external.name} CRC32=${hex(found.filenameCrc32)}: " +
+                "12byte_file_name_hash_matches=${found.directoryFileMatches}/$directoryCount; " +
+                "partition_file_name_hash_matches=" +
+                (found.partitionFileMatches?.toString() ?: "UNVERIFIED") + "."
+            found.directoryExamples.forEach { item ->
+                lines += "      12byte_index_entry_at=${item.indexByteOffset} " +
+                    "path_id=${hex(item.directoryHash)} " +
+                    "category_hint=${categoryHint(item.directoryHash)} " +
+                    "sector=${item.startSector} sectors=${item.sectorCount}"
+            }
+            found.partitionExamples.forEach { item ->
+                lines += "      partition_index_entry_at=${item.indexByteOffset} " +
+                    "path_id=${hex(item.partitionId)} " +
+                    "known_path=${knownArcDirectory(item.partitionId)} " +
+                    "sector=${item.startSector} sectors=${item.sectorCount}"
+            }
+        }
+        lines += "  LIMIT: filename CRC32 matches are candidate index entries only; " +
+            "hash collisions, aliases, format variants, and unindexed resources " +
+            "are not excluded by this census."
+
         if (partitionValid) {
             lines += "  BBSA partition headers: count=$partitionCount fixed_offset=48 " +
                 "partition_file_entries_base=$partitionFileEntriesBase " +
@@ -232,7 +327,18 @@ internal object IsoBbsaDirectoryEvidence {
             "The index may include multiple filenames for one directory, and " +
             "the referenced file/partition and actual script data remain unknown."
         return Report(true, directoryCount, offset, matches, lines,
-            partitionValid, partitionCount, partitionMatches)
+            partitionValid, partitionCount, partitionMatches, globalNameMatches)
+    }
+
+    /** High-byte hints follow OpenKh's PathCategories, not a runtime proof. */
+    internal fun categoryHint(hash: Long): String = when ((hash ushr 24).toInt()) {
+        0xC0 -> "lua"
+        0x00 -> "arc category / path-specific"
+        0x80 -> "sound/bgm"
+        0x90, 0x91, 0x92, 0x93, 0x94, 0x95 -> "sound/se"
+        0xD0, 0xD1, 0xD2, 0xD3, 0xD4, 0xD5, 0xD6,
+        0xD7, 0xD8, 0xD9, 0xDA, 0xDB -> "message"
+        else -> "unidentified"
     }
 
     /** Known path IDs from OpenKh.Bbs/Bbsa.cs, not CRC32 values. */
