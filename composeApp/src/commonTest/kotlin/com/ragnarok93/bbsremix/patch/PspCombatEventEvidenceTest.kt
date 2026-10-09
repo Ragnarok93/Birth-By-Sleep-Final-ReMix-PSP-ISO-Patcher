@@ -24,7 +24,7 @@ class PspCombatEventEvidenceTest {
         val events = PspCombatEventEvidence.scan(source, listOf(rodata, data))
             .associate { it.name to it.occurrences }
         assertEquals(listOf(0x08B20001L), events.getValue("OnHitAttack"))
-        assertEquals(listOf(0x08B2000FL), events.getValue("OnHitBody"))
+        assertEquals(listOf(0x08B2000EL), events.getValue("OnHitBody"))
         assertEquals(1, events.getValue("OnHitAttackBg").size)
         assertTrue(source.contentEquals(before))
     }
