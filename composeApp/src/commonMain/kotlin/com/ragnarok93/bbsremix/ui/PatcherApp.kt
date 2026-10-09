@@ -334,12 +334,12 @@ fun PatcherApp(
                 appendLog("Combat inspection requires a selected original ISO.")
                 return
             }
-            start("Inspect Combat Hooks") { token ->
+            start("Analyze Combat & ISO") { token ->
                 val lines = withContext(Dispatchers.Default) {
                     patchingService.inspectCombatPort(sourcePath, token)
                 }
                 lines.forEach(::appendLog)
-                appendLog("Combat port inspection recorded in Logs; export the log to share the MIPS hook report.")
+                appendLog("Read-only ISO and combat research recorded in Logs; export the log to share file inventory, ELF maps and MIPS evidence.")
             }
         }
 
@@ -1441,9 +1441,9 @@ private fun OptionsCard(
                         )
                     }
                     Text(
-                        "Combat development: inspect this ISO's ELF and input-hook instructions " +
-                            "without writing or enabling experimental Stage 4/5 gameplay code. " +
-                            "Open Logs after inspection to export the report.",
+                        "Combat research: inventory the selected ISO, inspect MIPS ELF modules, " +
+                            "trace native instructions and string references. Read-only; combat mods " +
+                            "remain disabled. Export findings from Logs.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -1451,7 +1451,7 @@ private fun OptionsCard(
                         onClick = onInspectCombat,
                         enabled = !busy && canInspectCombat,
                     ) {
-                        Text("Inspect combat hooks (read-only)")
+                        Text("Analyze combat & ISO")
                     }
                 }
             }
