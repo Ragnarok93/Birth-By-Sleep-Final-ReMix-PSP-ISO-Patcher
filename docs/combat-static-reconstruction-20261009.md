@@ -72,6 +72,57 @@ This is **not an activated PSP mod**. There is currently no safe native
 runtime snapshot producer, decision dispatcher, memory writer, or
 resident code/data area proven across dynamic overlay lifetime.
 
+## Second static pass: native script registrations and invincibility
+
+The supported executable contains an in-file script-name/function-pointer
+registration table, allowing selected gameplay APIs to be identified with
+**three independent checks**: exact function name bytes, the paired function
+address, and distinctive native MIPS opcodes. The Kotlin
+`PspCombatApiCatalog` inspector now performs all checks without writing to
+the executable. It rejects truncated files, missing names, changed pointer
+entries and changed instructions. The full source SHA-256 still gates any
+claim of matching the supported revision.
+
+| Registered name | Native wrapper | Observed native access |
+| --- | --- | --- |
+| `GetPlayerState` | `0x089E924C` | `lw +0x220` on resolved player |
+| `GetSubState` | `0x089E92B4` | `lh +0x22C` on resolved player |
+| `GetCommandKind` | `0x089E78F4` | `lhu +0x268` on resolved player |
+| `GetCommandCategory` | `0x089E7A38` | `lhu +0x268`, lookup from `0x08B1AE44 + kind*16 + 1` |
+| `SetTrgFlagCancel` | `0x089E7604` | sets/clears bit `0x1000` at player `+0x238` |
+| `IsTrgFlagCancel` | `0x089E8BC0` | tests bit `0x1000` at player `+0x238` |
+| `EnableInvincible` | `0x089D6850` | sets/clears bit `0x8000` at resolved entity `+0x190` |
+| `IsInvincible` | `0x089D6DF4` | tests bit `0x8000` at entity `+0x190` |
+| `SetPlayerFlagInvincible` | `0x089EA344` | sets/clears bit `0x1` at resolved player `+0x234` |
+
+**New conclusion:** invulnerability has at least two distinct native
+mechanisms. The script `EnableInvincible` operates on an entity-level flag
+(`+0x190 / 0x8000`), while `SetPlayerFlagInvincible` operates on a
+player-level flag (`+0x234 / 0x1`). Their lifetime, state restoration and
+precedence cannot be inferred from names or their setters alone. Repeatedly
+writing either bit each frame would not be an acceptable port until the
+game's owning state machine is understood. Steam's hard-coded `0x241320`
+byte has no justified equivalence in this PSP executable.
+
+**New command-category proof:** the actual PSP wrapper computes its category
+from the current command kind as a 16-byte indexed definition table and
+reads byte `+1`. This supports the existing PSP-only category exclusion
+model. The wrapper does not perform an explicit bounds check around the
+table index; code that evaluates an arbitrary kind must validate it before
+using the table. It would be unsafe to copy an unvalidated Steam command ID
+directly as a PSP definition index.
+
+**Player status clarification:** native small setter/getter functions at
+`0x08B07094` and `0x08B070B8` manipulate/test bit `0x10000000`
+at `player+0x23C`. That establishes a flag's presence, but **does not
+identify the Steam 0/1/2 hit-confirm semantics** in the lower bits of this
+word. A hit-aware cancel needs further call-path and value-flow attribution.
+
+All of the functions above are part of the *unmodified MainApp text
+section*, not the dynamic overlay. That makes them valid static
+investigation targets; it does **not** make every call context safe or
+supply free resident storage for a new dispatcher.
+
 ## Why blindly enabling Stage 4/5 remains incorrect
 
 - `0x08B70000` and `0x08B71280` are in the MainApp dynamic overlay
