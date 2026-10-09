@@ -25,7 +25,18 @@ internal object BbsL2dGeometry {
                 fontSizeFieldsChanged + animationPositionKeysChanged
     }
 
-    fun scale(source: ByteArray, percent: Int): Result {
+    /**
+     * For camp/menu L2Ds, SQ2 BaseX/BaseY are often absolute placements of
+     * independent widgets (e.g. money, timer, stats, help). Scaling those
+     * positions moves text away from its frame. Preserve those placements
+     * when [preserveAnimationBase] is true; still resize sprites, fonts,
+     * child nodes and local SQ2 OffsetX/OffsetY motions.
+     */
+    fun scale(
+        source: ByteArray,
+        percent: Int,
+        preserveAnimationBase: Boolean = false,
+    ): Result {
         require(UiScaleSettings.isSelectable(percent)) {
             "L2D scale must be 70–100% in 5% increments."
         }
@@ -159,9 +170,12 @@ internal object BbsL2dGeometry {
             // at animation +8. See OpenKh's documented SQ2 format and the
             // supplied character/deck layout data.
             //
-            // Scale *positional* floats, not SQ2 scale factors: the sprite
-            // vertices are already scaled, so changing ScaleX/Y again would
-            // double-shrink elements below the selected 70% floor.
+            // BaseX/BaseY can describe the absolute placement of independent
+            // menu widgets relative to the 480x272 viewport. Scaling them
+            // moves labels and counters away from their fixed window frames.
+            // In menu mode only, preserve those bases. OffsetX/OffsetY
+            // remain local transition/animation displacements and shrink.
+            // Never scale SQ2 ScaleX/Y: SP2 sprite geometry already shrinks.
             // Do not reinterpret color/status values as IEEE floats.
             for (animation in 0 until animationCount) {
                 val anim = animationOffset + animation * 0x18
@@ -173,7 +187,9 @@ internal object BbsL2dGeometry {
                         // Some shipping files have unused animations with
                         // nOfsKeyData outside the declared key count. Skip
                         // those rather than reading into unrelated tables.
-                        if (keyIndex < keyCount && kind in 1..4) {
+                        val scaleThisKind =
+                            kind in 3..4 || (!preserveAnimationBase && kind in 1..2)
+                        if (keyIndex < keyCount && scaleThisKind) {
                             val position = keyOffset + keyIndex * 0x0c + 4
                             if (visitedAnimatedKeys.add(position)) {
                                 val original = Float.fromBits(output.readIntLe(position))
