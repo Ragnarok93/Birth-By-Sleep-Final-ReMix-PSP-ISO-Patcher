@@ -115,6 +115,50 @@ header would be a structural lead, not proof of valid combat asset content.
 The auxiliary ELF program-header mapping should similarly be interpreted
 as **static** layout evidence, not a runtime address map.
 
+## October 9 — new DAT/overlay evidence from the next user export
+
+The user-provided `ULJM05775_10092026.log` (07:45:55 inspector run)
+reports another clean, read-only inspection of the exact supported EBOOT
+(SHA-256 `8c8947e83b829199f82370c4c638856718886d9a0a525892fed22ce6a8b26ca7`).
+The full ISO has 29 files, 7 directories and 10 auxiliary MIPS ELF modules.
+
+**New sampled DAT evidence**:
+
+| Archive | 48 sampled sectors | ARC-v1 header candidates |
+| --- | --- | --- |
+| `BBS0.DAT` | BBSA v6 outer header | zero ARC hits in sample; 256,000-byte BBSA index previously fingerprinted |
+| `BBS1.DAT` | candidate ARC at relative sector 76,234 | byte offset **156,127,232**, declared **6** records |
+| `BBS2.DAT` | candidate ARC at relative sector 1 | byte offset **2,048**, declared **4** records |
+| `BBS3.DAT`, `BBS4.DAT` | no sampled ARC hits | no inference about unsampled sectors |
+
+The BBS1–BBS4 file beginnings contain ASCII `bbs1.dat\0`,
+`bbs2.dat\0`, etc. This is **not an ARC header at file offset 0**.
+The `IsoArcMetadataProbe` now checks entire bounded v1 directory tables
+at the two sampled candidate offsets, validates 16-byte printable
+record names and payload bounds, distinguishes hashed external links
+from in-archive payloads, and logs at most 12 names. A table is
+marked `VALID` only if every record passes these structural tests.
+A matching four-byte `ARC\0` signature alone remains insufficient.
+
+**New module placement proof**:
+
+All ten auxiliary ELF files have proprietary ELF type `65448`
+(`0xFFA8`) with one PT_LOAD segment apiece. Eight load their code
+starting at `0x08B6EE80`, with declared executable memory spans
+containing **both** historical combat injection sites
+`0x08B70000` and `0x08B71280`. The two modules
+`CAMP_MAIN.ELF` and `CHARA_REPORT.ELF` instead start at
+`0x08B799D0` and do not overlap those earlier addresses.
+These ranges are *per-module declared load maps*, not a claim
+that all modules coexist in RAM. Nevertheless, they invalidate the
+notion that historical Stage4/5 addresses are permanently free.
+`PspOverlayConflictAudit` now reports exact executable PT_LOAD
+intersections from the selected ISO, automatically.
+
+Both new probes are **read-only**, bounded and regression-tested;
+they do not locate a verified combat-state bit or register a safe
+resident hook.
+
 ## Verification
 
 Tests exercise a synthetic ISO with a main EBOOT, a second MIPS ELF,
