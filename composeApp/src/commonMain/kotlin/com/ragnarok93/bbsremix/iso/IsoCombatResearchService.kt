@@ -5,6 +5,7 @@ import com.ragnarok93.bbsremix.patch.NeverCancelled
 import com.ragnarok93.bbsremix.patch.PspCombatDeepStaticInspector
 import com.ragnarok93.bbsremix.patch.PspCombatEventEvidence
 import com.ragnarok93.bbsremix.patch.PspCombatStaticAnalysis
+import com.ragnarok93.bbsremix.patch.PspElfModuleMap
 import com.ragnarok93.bbsremix.patch.sha256Hex
 import okio.Path
 
@@ -182,6 +183,12 @@ internal class IsoCombatResearchService(
             lines += "MODULE ${entry.path}: ${entry.size} bytes sha256=${sha256Hex(module)} " +
                 "ELF sections=${sections.size} executable_instructions=${deep.executableInstructions} " +
                 "JAL=${deep.directCalls} JALR=${deep.jalrCalls}"
+            lines += PspElfModuleMap.inspect(module, entry.path).lines
+            lines += "  File-backed sections: " + if (sections.isEmpty()) "none decoded" else
+                sections.take(8).joinToString("; ") {
+                    "${it.name}@0x${it.address.toString(16).uppercase()} " +
+                        "bytes=${it.length} exec=${it.executable}"
+                }
             for (event in events.take(MAX_MODULE_LINES)) {
                 lines += "  event-name constant ${event.name}: count=${event.occurrences.size}; " +
                     "handler invocation NOT proven."
