@@ -123,6 +123,8 @@ internal object IsoArcMetadataProbe {
                 observations += if (entry.isExternalLink) {
                     "  external_ref ${entry.name}: raw_id=0x" +
                         entry.reference.toString(16).uppercase().padStart(8, '0') +
+                        " known_arc_path=" +
+                        IsoBbsaDirectoryEvidence.knownArcDirectory(entry.reference) +
                         (if (entry.name.contains("lua", ignoreCase = true)) {
                             " (script-name candidate ONLY; destination unresolved)"
                         } else "")
