@@ -92,8 +92,10 @@ internal object PspCombatDeepStaticInspector {
                 }
                 // This is an opcode/offset census across ALL object types;
                 // only object-provenance tracing can attribute a player field.
-                val read = op in setOf(0x20, 0x21, 0x23, 0x24, 0x25, 0x31) // LB, LH, LW, LBU, LHU, LWC1
-                val write = op in setOf(0x28, 0x29, 0x2b, 0x39) // SB, SH, SW, SWC1
+                val read = op == 0x20 || op == 0x21 || op == 0x23 ||
+                    op == 0x24 || op == 0x25 || op == 0x31 // LB, LH, LW, LBU, LHU, LWC1
+                val write = op == 0x28 || op == 0x29 || op == 0x2b ||
+                    op == 0x39 // SB, SH, SW, SWC1
                 if (!read && !write) continue
                 val immediate = word and 0xffff
                 for ((index, pair) in playerOffsets.withIndex()) {
