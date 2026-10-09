@@ -252,16 +252,16 @@ result, **not proof** the `g01lua` resource is missing or that its
 contents are known. It could be referenced through a different
 index namespace or a different archive; no script payload has been read.
 
-The inspector now independently checks the **BBSA partition-directory
-hash field**. Per the documented BBSA header, the partition-directory
-table starts at 32-bit offset `0x10`, has `u16` count at `0x08`
-and eight-byte records consisting of a directory-name hash, a file
-count and a file-entry-table offset. This separate scan reports exact
-partition-field hash matches, with bounds and a maximum of 256
-partition records. If the partition table fails validation, the
-result is explicitly **UNVERIFIED**, not zero matches. Hash agreement
-here still does not identify the linked script, partition payload or
-runtime invocation. The external reference format is described in the [OpenKh ARC format](https://openkh.dev/bbs/file/type/arc.html), and the BBSA partition layout in the [OpenKh BBSA format](https://openkh.dev/bbs/file/type/bbsa.html).
+The inspector's newer corrected implementation checks the **BBSA
+partition-descriptor path-ID field at fixed index offset `0x30`**
+(`u16` descriptor count at `0x08`). The 32-bit header field at
+`0x10` instead points to the separate partition-file-entry array.
+Each partition descriptor has an 8-byte layout: path ID, file count,
+and entry-array index. The corrected parser bounds all referenced
+array ranges before checking path IDs and hashes of named files.
+Any malformed descriptor/entry table is reported as **UNVERIFIED**,
+never as a zero-match result. Hash agreement here still does not
+establish the runtime behavior or contents of the linked resource. The external reference format is described in the [OpenKh ARC format](https://openkh.dev/bbs/file/type/arc.html), and the BBSA partition layout in the [OpenKh BBSA format](https://openkh.dev/bbs/file/type/bbsa.html).
 
 The log also independently confirms both old Stage4/5 injection
 addresses overlap executable segments in **eight of ten** auxiliary
