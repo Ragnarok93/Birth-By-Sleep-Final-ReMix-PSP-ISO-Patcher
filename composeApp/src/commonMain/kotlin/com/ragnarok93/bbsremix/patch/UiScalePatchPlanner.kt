@@ -36,7 +36,7 @@ internal object UiScalePatchPlanner {
                     BbsUiLayoutCatalog.planCandidate(
                         iso, image, reader, candidate, percent,
                     )?.let { patch ->
-                        requireExpectedDigest(patch, candidate.archive, candidate.offsetInArchive, percent)
+                        requireExpectedDigest(patch, candidate.digestArchive, candidate.digestOffset, percent)
                         patches += patch
                     }
                 }
@@ -134,7 +134,7 @@ internal object UiScalePatchPlanner {
                     try { BbsL2dGeometry.scale(bytes, 100) }
                     catch (_: IllegalArgumentException) { return false to (candidate.layout + " is invalid.") }
                     val expected = if (percent == 100) candidate.originalSha256 else
-                        UiScaleExpectedDigests.expectedPrefix(candidate.archive, candidate.offsetInArchive, percent)
+                        UiScaleExpectedDigests.expectedPrefix(candidate.digestArchive, candidate.digestOffset, percent)
                     if (expected == null || !sha256Hex(bytes).startsWith(expected)) {
                         return false to (candidate.layout + " does not match requested " + percent + "% profile.")
                     }
