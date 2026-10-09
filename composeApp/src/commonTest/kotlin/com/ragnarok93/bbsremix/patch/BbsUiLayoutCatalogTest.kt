@@ -15,6 +15,7 @@ class BbsUiLayoutCatalogTest {
         val expectedArchiveSizes = mapOf(
             "BBS0.DAT" to 754655232L,
             "BBS1.DAT" to 206092288L,
+            "BBS2.DAT" to 206399488L,
             "BBS3.DAT" to 206391296L,
         )
         items.forEach { item ->
