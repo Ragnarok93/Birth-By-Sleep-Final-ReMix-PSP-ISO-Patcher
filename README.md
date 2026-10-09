@@ -77,10 +77,13 @@ vertices, font sizes, and local SQ2 animated translation offsets for
 **non-menu** elements. For **Pause / main menus**, the editor now preserves
 **all LY2 node X/Y placements and SQ2 Base/Offset animation positions**,
 because even child nodes can be positioned in screen coordinates. Menus
-instead scale visible SP2 sprites around each sprite's own bounding-box
-centre; full-screen and offscreen window/decorative sprites stay unmodified
-so overscan panels cannot slide over menu content. Font sizes remain
-scalable. This policy is experimental pending PPSSPP on-screen checks.
+instead scale visible SP2 sprites around their local **alignment edges**
+(left/top for positive local coordinates, right/bottom for negative
+coordinates, and origin when a sprite spans zero). This keeps command-bar
+backgrounds attached to text positioned by the runtime. Full-screen
+and offscreen window/decorative sprites stay unmodified so overscan
+panels cannot slide over menu content. Font sizes remain scalable.
+This policy is experimental pending PPSSPP on-screen checks.
 Original-source hashes, output byte checks, and 70–95% reference profiles
 were updated for this anchor-preserving transform.
 

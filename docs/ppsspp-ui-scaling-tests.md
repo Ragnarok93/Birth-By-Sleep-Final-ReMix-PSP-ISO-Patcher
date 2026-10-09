@@ -227,3 +227,40 @@ D-Links, Save, and Help. In particular, verify whether the large upper
 banner and left-side vertical strips no longer obstruct content and
 whether bottom descriptions fit their panels. This is a byte-verified
 resource patch, not yet certified pixel-correct runtime behavior.
+
+
+## Menu bar/text alignment correction — local alignment-edge pivots
+
+Build #324 removed the giant overlays and largely restored menu hierarchy.
+The next PPSSPP screenshots still show a smaller but systematic bar/text
+alignment error: command and submenu bars are inset from their menu labels,
+and compact labels are not always centered vertically in their highlight.
+
+The source `camp.l2d` contains many sprites with local bounds such as
+`(0,0)–(220,115)`, `(-1,-1)–(82,13)`, and `(16,-1)–(114,13)`.
+The previous geometric centre pivot shifts the left side of a 220-wide
+menu panel **33 PSP pixels to the right at 70%**, while its text remains
+at an unchanged LY2/SQ2 placement. That produces exactly this class
+of inset mismatch. Per-sprite *centre* pivots are not appropriate for
+menus whose geometry uses the top-left edge as its origin.
+
+The new menu-only policy applies a shared **edge-aligned** pivot to
+all groups belonging to a sprite:
+- Positive local X/Y spans: preserve the leading minX/minY edge.
+- Negative spans: preserve the trailing maxX/maxY edge.
+- Spans straddling the local origin: preserve origin 0.
+- Treat borders of up to 4 pixels on either side of zero as part of
+  the edge; they should not shift the alignment point.
+- Continue protecting any sprite with offscreen bounds from scaling,
+  keeping zero-padding, layout/node placements and SQ2 animations unchanged.
+
+This affects **Menus only**. Combat HUD, Deck, Gauges, Shotlock,
+Portraits and Subtitles retain their previous behavior.
+All eight menu reference profile fingerprints were rederived from the
+matching supplied game files for 70–95% at 5% increments.
+
+**PPSSPP check:** At Menu 70%, examine left-hand Command Deck selection
+bars, list tabs, right-hand command entries, and MUNNY/TIME values for
+background/label alignment. Hide PPSSPP's on-screen buttons temporarily
+when comparing bottom help text: the emulator's controller overlay can
+cover in-game descriptions independent of this patcher.
