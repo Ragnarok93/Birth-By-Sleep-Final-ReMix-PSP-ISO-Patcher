@@ -61,6 +61,13 @@ class IsoBbsaDirectoryEvidenceTest {
         assertContains(report.lines.joinToString("\n"), "g01lua dir_hash=0x4D4D4947")
         assertContains(report.lines.joinToString("\n"), "streaming sentinel")
         assertContains(report.lines.joinToString("\n"), "does NOT resolve")
+        assertEquals(0, report.globalNameMatches.single().directoryFileMatches)
+        assertEquals(1, report.globalNameMatches.single().partitionFileMatches)
+        assertEquals("arc/gimmick",
+            IsoBbsaDirectoryEvidence.knownArcDirectory(
+                report.globalNameMatches.single().partitionExamples.single().partitionId,
+            ))
+        assertContains(report.lines.joinToString("\n"), "GLOBAL BBSA filename-hash census")
         assertTrue(report.partitionValid)
         assertEquals(2, report.partitionCount)
         assertEquals(1, report.partitionMatches.single().matchingPartitions)
@@ -82,6 +89,9 @@ class IsoBbsaDirectoryEvidenceTest {
         assertTrue(report.validIndex)
         assertEquals(0, report.matches.single().matchingRecords)
         assertEquals(0, report.partitionMatches.single().matchingPartitions)
+        // Same filename hash still occurs in another partition. A missing
+        // directory ID match is not evidence that a filename is absent.
+        assertEquals(1, report.globalNameMatches.single().partitionFileMatches)
         assertContains(report.lines.joinToString("\n"), "matching_BBSA_directory_entries=0")
     }
 
@@ -92,6 +102,7 @@ class IsoBbsaDirectoryEvidenceTest {
         assertTrue(report.validIndex)
         assertFalse(report.partitionValid)
         assertTrue(report.partitionMatches.isEmpty())
+        assertEquals(null, report.globalNameMatches.single().partitionFileMatches)
         assertEquals(2, report.matches.single().matchingRecords)
         assertContains(report.lines.joinToString("\n"), "BBSA partition headers UNVERIFIED")
         assertContains(report.lines.joinToString("\n"), "No partition match/no-match claim")
@@ -116,6 +127,28 @@ class IsoBbsaDirectoryEvidenceTest {
             IsoBbsaDirectoryEvidence.fileNameHash("arc/gimmick") ==
                 0x4D4D4947L,
         )
+    }
+
+    @Test
+    fun same_filename_in_another_index_namespace_is_not_called_a_resolved_link() {
+        val source = index()
+        source.writeU32(0x58, 0x64B5573A) // third 12-byte record filename
+        source.writeU32(0x60, 0xC0000000.toInt()) // lua-category path hint
+        source.writeU32(0x80, 0xBBAADDCC.toInt()) // remove gimmick filename match
+        source.writeU32(0x90, 0x64B5573A) // move filename to other partition
+        val report = IsoBbsaDirectoryEvidence.inspect(source, listOf(external))
+        assertTrue(report.validIndex)
+        assertTrue(report.partitionValid)
+        val local = report.partitionMatches.single()
+        assertEquals(1, local.matchingPartitions)
+        assertEquals(0, local.matchingFiles)
+        val global = report.globalNameMatches.single()
+        assertEquals(1, global.directoryFileMatches)
+        assertEquals(1, global.partitionFileMatches)
+        assertEquals(0xC0000000L, global.directoryExamples.single().directoryHash)
+        assertEquals(0xCAFE1234L, global.partitionExamples.single().partitionId)
+        assertContains(report.lines.joinToString("\n"), "category_hint=lua")
+        assertContains(report.lines.joinToString("\n"), "filename CRC32 matches are candidate")
     }
 
     @Test
