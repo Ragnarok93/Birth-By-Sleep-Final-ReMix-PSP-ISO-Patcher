@@ -36,7 +36,7 @@ internal object IsoArchiveSectorResearch {
     internal fun sampledSectors(size: Long): List<Long> {
         if (size < HEADER_BYTES) return emptyList()
         val available = (size - HEADER_BYTES) / SECTOR + 1
-        val offsets = sortedSetOf<Long>()
+        val offsets = mutableSetOf<Long>()
         for (i in 0 until PREFIX_SECTORS) {
             if (i < available) offsets += i.toLong()
         }
@@ -50,7 +50,7 @@ internal object IsoArchiveSectorResearch {
                 offsets += (available - 1L) * (i + 1L) / (INTERIOR_PROBES + 1L)
             }
         } else offsets += 0
-        return offsets.filter { it in 0 until available }
+        return offsets.filter { it in 0 until available }.sorted()
     }
 
     fun inspect(
