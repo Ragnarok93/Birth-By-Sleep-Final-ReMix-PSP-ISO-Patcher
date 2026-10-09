@@ -131,6 +131,8 @@ internal class IsoCombatResearchService(
         var encrypted = 0
         var skipped = 0
         val overlapFindings = mutableListOf<PspOverlayConflictAudit.Finding>()
+        val linkCandidates = mutableListOf<IsoBbsaDirectoryEvidence.ExternalReference>()
+        var bbsaIndexEntry: IsoDirectoryEntry? = null
         for (entry in relevant) {
             cancellation.throwIfCancelled()
             if (!validExtent(entry, image)) {
@@ -151,13 +153,18 @@ internal class IsoCombatResearchService(
             if (extensionOf(entry.name) == "DAT") {
                 // Examine a bounded, reproducible sample of sectors, even
                 // when the archive header is unrecognized (BBS1..BBS4).
-                lines += IsoArchiveSectorResearch.inspect(
+                val datReport = IsoArchiveSectorResearch.inspect(
                     source, entry, reader, cancellation,
-                ).lines
+                )
+                lines += datReport.lines
+                linkCandidates += datReport.externalReferences
             }
             if (kind == "encrypted PSP ~PSP") encrypted++
             if (kind == "BBSA game archive") {
                 lines += inspectBbsaIndex(source, entry, header, cancellation)
+                if (normalize(entry.path) == "PSP_GAME/USRDIR/BBS0.DAT") {
+                    bbsaIndexEntry = entry
+                }
             }
             val isMainEboot = normalize(entry.path) == "PSP_GAME/SYSDIR/EBOOT.BIN"
             val candidate = kind == "MIPS ELF32"
@@ -206,6 +213,26 @@ internal class IsoCombatResearchService(
                         "+0x${it.offset.toString(16)} read=${it.loads} write=${it.stores}"
                     }
             }
+        }
+        if (linkCandidates.isNotEmpty()) {
+            val entry = bbsaIndexEntry
+            if (entry != null) {
+                val prefixSize = reader.readAt(source, entry.dataOffset, 0x30)
+                val indexSize = u16(prefixSize, 0x1a).toLong() * 2048L
+                if (indexSize in 2048L..MAX_BBSA_INDEX_BYTES.toLong() &&
+                    indexSize <= entry.size
+                ) {
+                    cancellation.throwIfCancelled()
+                    val index = reader.readAt(source, entry.dataOffset, indexSize.toInt())
+                    lines += IsoBbsaDirectoryEvidence.inspect(index, linkCandidates, cancellation).lines
+                } else {
+                    lines += "BBSA link correlation skipped: malformed/unbounded BBS0 index prefix."
+                }
+            } else {
+                lines += "BBSA link correlation skipped: canonical BBS0.DAT index not available."
+            }
+        } else {
+            lines += "BBSA link correlation: no structurally validated ARC external links in sampled sectors."
         }
         lines += PspOverlayConflictAudit.summarize(overlapFindings, elfCount)
         lines += "ISO candidate file inventory: ${relevant.size} likely module/archive/script file(s), " +
