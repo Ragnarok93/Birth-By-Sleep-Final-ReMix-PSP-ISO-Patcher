@@ -73,6 +73,10 @@ class IsoArcMetadataProbeTest {
         val invalidName = source.copyOf()
         invalidName[16 + 16] = '/'.code.toByte()
         assertFalse(IsoArcMetadataProbe.inspectTable(invalidName, 8192).valid)
+        val invalidLink = source.copyOf()
+        invalidLink[48 + 8] = 1 // external directory reference must have length=0
+        assertFalse(IsoArcMetadataProbe.inspectTable(invalidLink, 8192).valid)
+        assertTrue(IsoArcMetadataProbe.inspectTable(invalidLink, 8192).entries.isEmpty())
 
         assertFalse(IsoArcMetadataProbe.inspectTable(source.copyOf(32), 8192).valid)
         assertFalse(IsoArcMetadataProbe.inspectTable(source, 64).valid)
