@@ -68,10 +68,23 @@ class PspCombatStaticAnalysisTest {
         val report = PspCombatStaticAnalysis.inspect(elf).joinToString("\n")
         assertContains(report, "1 executable section(s)")
         assertContains(report, "8 executable instructions")
-        assertContains(report, "controller poll callee 0x08B16D38: 1 sample call site(s) at 0x08816000")
+        assertContains(report, "controller poll callee 0x08B16D38: 1 direct JAL call(s); sample site(s): 0x08816000")
         assertContains(report, "candidate player-state address 0x08B6A490: section=.data; executable=false")
         assertContains(report, "indirect JALR and runtime overlays not resolved")
         assertTrue(elf.contentEquals(baseline), "Combat analysis must not mutate the EBOOT")
+    }
+
+    @Test
+    fun indirect_script_entries_are_not_mistaken_for_unused_code() {
+        val elf = sectionedElf()
+        // Inject one genuine direct call to the guarded PSP player resolver.
+        elf.writeIntLe(0x208, jal(0x089E74A8))
+        // A lookalike in .data must not increase the call count.
+        elf.writeIntLe(0x244, jal(0x089E74A8))
+        val summary = PspCombatStaticAnalysis.inspect(elf).joinToString("\\n")
+        assertContains(summary, "guarded player resolver 0x089E74A8: 1 direct JAL call(s)")
+        assertContains(summary, "native cancel flag setter 0x08B07020: 0 direct JAL call(s)")
+        assertContains(summary, "zero direct JAL calls does not mean a native helper is unused")
     }
 
     @Test
@@ -91,7 +104,7 @@ class PspCombatStaticAnalysisTest {
         val source = sectionedElf()
         source.writeIntLe(0x200, 0)
         val report = PspCombatStaticAnalysis.inspect(source).joinToString("\n")
-        assertContains(report, "controller poll callee 0x08B16D38: 0 sample call site(s)")
+        assertContains(report, "controller poll callee 0x08B16D38: 0 direct JAL call(s)")
         assertContains(report, "8 executable instructions")
     }
 }
