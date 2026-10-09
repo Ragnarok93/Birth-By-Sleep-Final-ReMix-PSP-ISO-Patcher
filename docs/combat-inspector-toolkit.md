@@ -235,6 +235,39 @@ zero matching directory records is specifically a zero-match result
 for **that indexed table only**; it does not rule out other resource
 storage or external references.
 
+## October 9, 16:40 — first full index-correlation result
+
+The latest uploaded `ULJM05775_10092026.log` completed the
+read-only analyzer at 16:40:15 on the supported EBOOT
+(SHA-256 `8c8947e83b829199f82370c4c638856718886d9a0a525892fed22ce6a8b26ca7`).
+It found **one authenticated ARC external link** (`g01lua`,
+directory hash `0x4D4D4947`), but found **zero matching directory-hash
+entries among BBS0's 15,093 file-directory records**.
+The BBSA header reports version 6 and file-directory table starting at
+byte **22,388** in the 256,000-byte index prefix.
+
+**Meaning:** the link does not match the *file directory-hash field*
+examined in that BBS0 index. This is an exact field-level negative
+result, **not proof** the `g01lua` resource is missing or that its
+contents are known. It could be referenced through a different
+index namespace or a different archive; no script payload has been read.
+
+The inspector now independently checks the **BBSA partition-directory
+hash field**. Per the documented BBSA header, the partition-directory
+table starts at 32-bit offset `0x10`, has `u16` count at `0x08`
+and eight-byte records consisting of a directory-name hash, a file
+count and a file-entry-table offset. This separate scan reports exact
+partition-field hash matches, with bounds and a maximum of 256
+partition records. If the partition table fails validation, the
+result is explicitly **UNVERIFIED**, not zero matches. Hash agreement
+here still does not identify the linked script, partition payload or
+runtime invocation. The external reference format is described in the [OpenKh ARC format](https://openkh.dev/bbs/file/type/arc.html), and the BBSA partition layout in the [OpenKh BBSA format](https://openkh.dev/bbs/file/type/bbsa.html).
+
+The log also independently confirms both old Stage4/5 injection
+addresses overlap executable segments in **eight of ten** auxiliary
+ELF modules. Continue treating `0x08B70000` and `0x08B71280`
+as unsafe permanent storage.
+
 ## Verification
 
 Tests exercise a synthetic ISO with a main EBOOT, a second MIPS ELF,
