@@ -30,6 +30,7 @@ internal object IsoArchiveSectorResearch {
         val arcLikeCount: Int,
         val otherSignatures: Map<String, Int>,
         val lines: List<String>,
+        val externalReferences: List<IsoBbsaDirectoryEvidence.ExternalReference> = emptyList(),
     )
 
     /** No allocation proportional to archive size. All offsets are in-file. */
@@ -65,6 +66,7 @@ internal object IsoArchiveSectorResearch {
         val other = mutableMapOf<String, Int>()
         val arc = mutableListOf<ArcCandidate>()
         val validatedArc = mutableListOf<String>()
+        val externalReferences = mutableListOf<IsoBbsaDirectoryEvidence.ExternalReference>()
         var arcLike = 0
         var firstSha = "unavailable"
         var firstHex = "unavailable"
@@ -100,6 +102,13 @@ internal object IsoArchiveSectorResearch {
                         )
                         validatedArc += "    Sector $index: " +
                             table.observations.joinToString(" | ")
+                        if (table.valid) {
+                            for (linked in table.entries.filter { it.isExternalLink }) {
+                                externalReferences += IsoBbsaDirectoryEvidence.ExternalReference(
+                                    entry.path, index * SECTOR, linked.name, linked.reference,
+                                )
+                            }
+                        }
                     }
                 }
             } else {
@@ -133,7 +142,8 @@ internal object IsoArchiveSectorResearch {
                 .entries.joinToString(", ") { "${it.key}=${it.value}" }
         }
         lines += "    Zero sampled hits does NOT imply no ARC/data records elsewhere."
-        return Report(total, samples.size, firstSha, firstHex, arc, arcLike, other, lines)
+        return Report(total, samples.size, firstSha, firstHex, arc, arcLike, other, lines,
+            externalReferences)
     }
 
     private fun u16(bytes: ByteArray, offset: Int): Int =
