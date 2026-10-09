@@ -27,6 +27,8 @@ class BbsL2dGeometryTest {
         writeIntLe(0xac, 0x40)    // group at 0xd0
         writeIntLe(0xb0, 1)       // sprite count
         writeIntLe(0xb4, 0x68)    // sprite at 0xf8
+        writeShortLe(0xf8, 1)    // the sprite owns one group
+        writeShortLe(0xfa, 0)    // first group index
         writeShortLe(0xd0, -200)
         writeShortLe(0xd2, -80)
         writeShortLe(0xd4, 100)
@@ -147,7 +149,7 @@ class BbsL2dGeometryTest {
     }
 
     @Test
-    fun menu_base_keys_remain_anchored_while_sprite_geometry_still_shrinks() {
+    fun menu_base_keys_remain_anchored_while_sprite_geometry_scales_around_its_centre() {
         val original = fixture().apply {
             // Real camp menus use wide-ranging BaseX/BaseY positions for
             // independently positioned labels and counters.
@@ -156,12 +158,21 @@ class BbsL2dGeometryTest {
         }
         for (percent in 70..100 step 5) {
             val scaled = BbsL2dGeometry.scale(
-                original, percent, preserveAnimationBase = true,
+                original, percent, preserveMenuAnchors = true,
             )
             assertEquals(234f.toBits(), scaled.bytes.readIntLe(0x174))
             assertEquals((-134f).toBits(), scaled.bytes.readIntLe(0x180))
             assertEquals(0, scaled.animationPositionKeysChanged)
-            if (percent < 100) assertTrue(scaled.groupFieldsChanged > 0)
+            if (percent < 100) {
+                assertTrue(scaled.groupFieldsChanged > 0)
+                // The sprite's centre (-50,-10) remains stationary.
+                assertEquals(-100,
+                    scaled.bytes.readShortLe(0xd0).toShort().toInt() +
+                    scaled.bytes.readShortLe(0xd4).toShort().toInt())
+                assertEquals(-20,
+                    scaled.bytes.readShortLe(0xd2).toShort().toInt() +
+                    scaled.bytes.readShortLe(0xd6).toShort().toInt())
+            }
             else assertEquals(0, scaled.totalFieldsChanged)
             // Native menu placement, root node offsets, animation metadata
             // and original bytes are not disturbed.
@@ -171,12 +182,12 @@ class BbsL2dGeometryTest {
                 scaled.bytes.copyOfRange(0x150, 0x170))
         }
         assertContentEquals(original, BbsL2dGeometry.scale(
-            original, 100, preserveAnimationBase = true,
+            original, 100, preserveMenuAnchors = true,
         ).bytes)
     }
 
     @Test
-    fun menu_animation_offsets_shrink_without_displacing_base_keys() {
+    fun menu_animation_base_and_offsets_remain_at_stock_screen_positions() {
         val source = fixture().apply {
             // Two base keys + two local offset keys within SQ2's key table.
             writeIntLe(0x138, 4)
@@ -186,17 +197,72 @@ class BbsL2dGeometryTest {
             writeIntLe(0x198, (-20f).toBits())
         }
         val scaled = BbsL2dGeometry.scale(
-            source, 70, preserveAnimationBase = true,
+            source, 70, preserveMenuAnchors = true,
         )
         assertEquals(80f.toBits(), scaled.bytes.readIntLe(0x174))
         assertEquals((-50f).toBits(), scaled.bytes.readIntLe(0x180))
-        assertEquals(28f.toBits(), scaled.bytes.readIntLe(0x18c))
-        assertEquals((-14f).toBits(), scaled.bytes.readIntLe(0x198))
-        assertEquals(2, scaled.animationPositionKeysChanged)
+        assertEquals(40f.toBits(), scaled.bytes.readIntLe(0x18c))
+        assertEquals((-20f).toBits(), scaled.bytes.readIntLe(0x198))
+        assertEquals(0, scaled.animationPositionKeysChanged)
         assertContentEquals(source.copyOfRange(0x150, 0x170),
             scaled.bytes.copyOfRange(0x150, 0x170))
         assertContentEquals(source.copyOfRange(0xe0, 0xf8),
             scaled.bytes.copyOfRange(0xe0, 0xf8))
+    }
+
+    @Test
+    fun menu_child_screen_positions_remain_fixed_even_with_a_parent_node() {
+        val original = fixture().apply {
+            writeIntLe(0x22c, 0xa0)
+            copyInto(this, destinationOffset = 0x2a0, startIndex = 0x270, endIndex = 0x280)
+            writeIntLe(0x220, 2)
+            writeShortLe(0x284, 0)
+            writeShortLe(0x286, -230)
+            writeShortLe(0x288, -76)
+        }
+        val scaled = BbsL2dGeometry.scale(original, 70, preserveMenuAnchors = true)
+        assertEquals(-230, scaled.bytes.readShortLe(0x286).toShort().toInt())
+        assertEquals(-76, scaled.bytes.readShortLe(0x288).toShort().toInt())
+        assertEquals(0, scaled.nodeFieldsChanged)
+        // Menu background and text remain at their original screen positions,
+        // but their visible sprite geometry and font size are reduced.
+        assertTrue(scaled.groupFieldsChanged > 0)
+        assertEquals(13, scaled.bytes[0x2a8].toInt() and 0xff)
+    }
+
+    @Test
+    fun menu_overscan_sprites_must_not_be_pulled_onto_screen() {
+        val original = fixture().apply {
+            writeShortLe(0xd0, -277)
+            writeShortLe(0xd2, -172)
+            writeShortLe(0xd4, 281)
+            writeShortLe(0xd6, -133)
+        }
+        for (percent in 70..100 step 5) {
+            val scaled = BbsL2dGeometry.scale(
+                original, percent, preserveMenuAnchors = true,
+            )
+            assertContentEquals(
+                original.copyOfRange(0xd0, 0xdc),
+                scaled.bytes.copyOfRange(0xd0, 0xdc),
+            )
+            assertEquals(0, scaled.groupFieldsChanged)
+            if (percent < 100) assertEquals(1, scaled.fontSizeFieldsChanged)
+        }
+    }
+
+    @Test
+    fun menu_local_sprite_pivots_are_distinct_from_screen_origin() {
+        val original = fixture()
+        val scaled = BbsL2dGeometry.scale(
+            original, 70, preserveMenuAnchors = true,
+        )
+        assertEquals(-155, scaled.bytes.readShortLe(0xd0).toShort().toInt())
+        assertEquals(-59, scaled.bytes.readShortLe(0xd2).toShort().toInt())
+        assertEquals(55, scaled.bytes.readShortLe(0xd4).toShort().toInt())
+        assertEquals(39, scaled.bytes.readShortLe(0xd6).toShort().toInt())
+        assertContentEquals(original.copyOfRange(0xe0, 0x100),
+            scaled.bytes.copyOfRange(0xe0, 0x100))
     }
 
     @Test
