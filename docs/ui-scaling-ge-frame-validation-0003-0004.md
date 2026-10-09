@@ -1,5 +1,10 @@
 # PPSSPP GE menu scaling frame comparison (October 9, 2026)
 
+> **Historical research only.** Pause / Main Menu Scaling and all
+> menu-specific patch algorithms were removed on October 9, 2026.
+> The comparison below documents the retired experiment and must not
+> be interpreted as an active menu scaling implementation.
+
 Source captures: `ULJM05775_0003.ppdmp` and `ULJM05775_0004.ppdmp` (ULJM05775; PPSSPP GE recorder v6). These capture GPU geometry, not source-level MIPS callsites.
 
 | Capture | Entries | Captured pushbuffer | Primitives | Decoded 2D draw calls |
