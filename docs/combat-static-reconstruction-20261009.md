@@ -245,6 +245,42 @@ types**. The number of offset matches does not authenticate a player
 structure, a collision receiver, or Steam's `hitLandedType` values.
 Only traced object provenance and field ownership would suffice.
 
+### October 9 additional exported log: stable baseline, script-call helper
+
+The subsequently uploaded `ULJM05775_10092026 (5).log` reports the same
+supported EBOOT hash, **8/8 native opcodes**, **13/13 script API registrations**,
+**6/6 aligned event-string self pointers**, 805,656 executable instructions
+examined for direct JAL calls, and **50 direct callers** of the guarded player
+resolver. The active source still has two ELF program headers and the
+historic overlay collision remains. This log records a **read-only**
+inspection and no gameplay event or crash trace.
+
+We extended the **direct static binary examination** (not the emitted log)
+to identify the generic named-script-call path. Executable MIPS instructions
+pass adjacent `EntityManager`, `CallFunction` and
+`CallFunctionNoArg` **string constants** as arguments to the same native
+helper at `0x089E6334`:
+
+| Executable call site | Name-address argument | Other named constant |
+| --- | --- | --- |
+| `0x089F1F18` | `CallFunction` at `0x08B2DE04` | `EntityManager` at `0x08B2DDDC` |
+| `0x089F5830` | `CallFunctionNoArg` at `0x08B2DE48` | `EntityManager` at `0x08B2DDDC` |
+| `0x089F58B0` | `CallFunction` at `0x08B2DE04` | `EntityManager` at `0x08B2DDDC` |
+
+Each `JAL` encodes the same destination, and its **delay-slot**
+`addiu` supplies the named-function address. All three names include an
+aligned trailing pointer referencing the original name. The helper's
+prologue and a subsequent MIPS call are independently fingerprinted. The
+read-only `PspCombatScriptCallEvidence` catalog checks each piece and
+reports mismatches instead of turning any combat patch on.
+
+**Interpretation boundary:** this demonstrates a native path for invoking
+**named functions**, consistent with a VM/script dispatch layer.
+It does **not** prove that `OnHitAttack`, `OnHitBody` or any other
+particular event is routed through this helper, nor establish which object
+receives a hit. The self-pointer after an event name is still a data
+constant, not the event handler address.
+
 ### Unresolved static tasks
 
 1. Attribute the event name descriptors to the script dispatcher and their
