@@ -140,6 +140,74 @@ section*, not the dynamic overlay. That makes them valid static
 investigation targets; it does **not** make every call context safe or
 supply free resident storage for a new dispatcher.
 
+## Third static pass: combat event names, attack queries and call graph
+
+A full `JAL` instruction scan over the exact supported ELF's executable
+sections (including `.text` and `.sceStub.text`, excluding data and
+`.rodata`) establishes the following **direct-call counts**:
+
+| Native routine | Address | Direct MIPS `JAL` references |
+| --- | --- | ---: |
+| Validated script-player resolver | `0x089E74A8` | **50** |
+| Cancel bit `player+0x238 / 0x1000` setter | `0x08B07020` | **0** |
+| Cancel bit getter | `0x08B07084` | **0** |
+| Status bit `player+0x23C / 0x10000000` setter/getter | `0x08B07094` / `0x08B070B8` | **0** each |
+| Registered `IsAttacking` script wrapper | `0x089DC664` | **0** |
+| Registered `GetMotionNowFrame` script wrapper | `0x089DB50C` | **0** |
+
+The zero values are **not evidence that functions are unused**: script
+engine function-pointer tables, indirect `JALR`, dynamically loaded
+overlay modules and other runtime dispatch are intentionally not counted.
+The inspector now reports full counts separately from its first 12 sample
+addresses, avoiding capped samples being mistaken for total call counts.
+
+Two script APIs were matched to their exact name/pointer registrations and
+machine-code call chains:
+
+- **`IsAttacking`** is a registered native wrapper at `0x089DC664`. It
+  obtains an entity and calls `0x088E6294`; that native routine traverses
+  entity/list state and recursively calls itself. It represents active
+  attack-related state, **not a reliable successful-hit event**.
+- **`GetMotionNowFrame`** is a registered native wrapper at `0x089DB50C`.
+  Its helper `0x088E5EB8` checks the motion context at entity `+0x4C`;
+  `0x0881797C` reads motion float `+0x24` and also uses `+0x38`
+  and `+0x34` to account for animation loop/wrap behavior. This confirms
+  the historical `player+0x4C` motion pointer and `motion+0x24` frame
+  offset, but raw `+0x24` does **not** always equal the value returned
+  by `GetMotionNowFrame`.
+
+A separate bounded string scan of `.rodata` finds NUL-terminated native
+script/event names:
+
+| Callback name | Count | Referenced VA(s) |
+| --- | ---: | --- |
+| `OnHitAttack` | 3 | `0x08B2DE9C`, `0x08B2FE34`, `0x08B31C04` |
+| `OnHitBody` | 2 | `0x08B2DF70`, `0x08B31C88` |
+| `OnHitAttackBg` | 1 | `0x08B2DEAC` |
+
+This is **event-name presence** only, not proof of callback invocation,
+who owns the hit, which actor is the target, or which memory field changes.
+The names may belong to different script namespaces/classes. They are
+promising candidates for a correct hit-event path instead of interpreting
+the arbitrary low bits of `player+0x23C`.
+
+### Unresolved static tasks
+
+1. Attribute the event name descriptors to the script dispatcher and their
+   receiver types; map how hit callbacks are scheduled.
+2. Identify attack-collision target ownership and success/failure state in
+   the actual native code. `IsAttacking` alone is insufficient.
+3. Map native i-frame flag lifetime through its setter and clearing call
+   paths. In particular `EnableInvincible` (`+0x190/0x8000`) and
+   `SetPlayerFlagInvincible` (`+0x234/0x1`) are distinct.
+4. Find a loader-managed, overlay-safe integration mechanism. The main ELF
+   `.bss` extends through `0x09F40E10` and `0x08B70000` remains
+   inside a transient overlay region. No executable code cave has been
+   authenticated and no historical Stage4/5 injection has been restored.
+5. Validate these semantics with automated emulation if a bootable game ISO
+   and emulator test harness become available; no manual debugger traces
+   are needed for the static work.
+
 ## Why blindly enabling Stage 4/5 remains incorrect
 
 - `0x08B70000` and `0x08B71280` are in the MainApp dynamic overlay
