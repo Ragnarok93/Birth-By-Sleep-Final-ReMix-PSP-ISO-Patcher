@@ -440,6 +440,48 @@ The provided (4) log **predates** this targeted payload-probe
 addition; a subsequent inspector export is required to establish
 the mapped physical DAT address and inspect its source header.
 
+## October 9, 18:57 — G01LUA is a nine-entry ARC in BBS1.DAT
+
+The user-exported `ULJM05775_10092026 (5).log` confirms a successful,
+bounded physical-resource lookup and first-sector fingerprint:
+
+| Source field | Verified value |
+| --- | --- |
+| Indexed name / directory | `G01LUA` / `arc/gimmick` |
+| Filename hash / directory ID | `0xF5BE1086` / `0x4D4D4947` |
+| Index record / global logical sector | BBS0 byte `12452` / sector `439523` |
+| Allocation | Two 2,048-byte sectors |
+| Resolved physical source | **`BBS1.DAT`, sector `71165`**, byte offset **`145745920`** |
+| Header | `ARC\\0`, version **1**, declared **9 entries** |
+| First sector SHA-256 | `b2d7eacb2c497bec99d5961b6afa68b5a0c558e01ac8e9450311ba3a2aad2fa0` |
+| First 32 bytes | `415243000100090000000000000000000000000030010000FE01000000000000` |
+
+The first ARC directory record starts with directory hash zero,
+an in-container offset `0x130` (304), and length `0x1FE` (510).
+Its **name is not yet known** because the prior build recorded only
+the first 32 bytes of the ARC file.
+
+**Important correction to earlier hypotheses:** `G01LUA` is an
+ARC **container**, not a raw Lua bytecode file. The container may
+include local `.lub` or script data, and/or links to other resources,
+but the log alone does **not** tell us any of those nine entry names,
+the members' format, callback meaning or execution behavior.
+
+The inspector now also performs **indexed ARC member reconnaissance**
+using `IsoArcMetadataProbe.inspectTable` on the already sampled first
+2 KiB. It validates the **entire 9-entry directory** against the
+**2-sector allocation** (not the full BBS1 file size), records linked
+directory IDs and member names/offsets/sizes, and reads **at most
+12 members × 16 bytes** to classify local header signatures. Out-of-
+bounds or malformed ARC directories are reported as **UNVERIFIED**,
+without probing member data. It never stages the full archive, exports
+assets, decompresses game data or patches the ISO.
+
+A subsequent user export is required to see the **real nine ARC member
+names** and determine whether any local payload has the Lua bytecode
+signature `1B 4C 75 61`. Even a confirmed Lua member would not yet
+prove its runtime execution or its use as a combat callback.
+
 ## Verification
 
 Tests exercise a synthetic ISO with a main EBOOT, a second MIPS ELF,
