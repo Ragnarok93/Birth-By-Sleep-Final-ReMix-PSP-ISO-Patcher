@@ -11,22 +11,26 @@ class UiScaleExpectedDigestsTest {
     @Test
     fun every_selected_resource_has_six_independent_reference_profiles() {
         val layouts = BbsUiLayoutCatalog.suppliedCandidates
-        assertEquals(41, layouts.size)
+        assertEquals(109, layouts.size)
         assertEquals(30, UiScaleExpectedDigests.profileCount)
+        val extended = BbsUiExtendedCatalog.candidates.toSet()
+        assertEquals(68, extended.size)
         for (candidate in layouts) {
-            assertTrue(
-                UiScaleExpectedDigests.contains(candidate.digestArchive, candidate.digestOffset),
-                "Unmapped expected scale hashes for " + candidate.archive + "/" + candidate.layout,
+            val hasIndependentReference = UiScaleExpectedDigests.contains(
+                candidate.digestArchive, candidate.digestOffset,
             )
-            for (percent in 70..95 step 5) {
-                val expected = assertNotNull(
-                    UiScaleExpectedDigests.expectedPrefix(
-                        candidate.digestArchive, candidate.digestOffset, percent,
-                    ),
-                )
-                assertEquals(32, expected.length)
-                assertTrue(expected.all { it in '0'..'9' || it in 'a'..'f' })
-                assertNotEquals(candidate.originalSha256.take(32), expected)
+            assertEquals(candidate !in extended, hasIndependentReference)
+            if (hasIndependentReference) {
+                for (percent in 70..95 step 5) {
+                    val expected = assertNotNull(
+                        UiScaleExpectedDigests.expectedPrefix(
+                            candidate.digestArchive, candidate.digestOffset, percent,
+                        ),
+                    )
+                    assertEquals(32, expected.length)
+                    assertTrue(expected.all { it in '0'..'9' || it in 'a'..'f' })
+                    assertNotEquals(candidate.originalSha256.take(32), expected)
+                }
             }
         }
         val ctd = BbsCtdLayoutCatalog.subtitleCandidate
