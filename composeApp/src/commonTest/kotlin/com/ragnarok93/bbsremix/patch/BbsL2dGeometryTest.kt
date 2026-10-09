@@ -165,12 +165,18 @@ class BbsL2dGeometryTest {
             assertEquals(0, scaled.animationPositionKeysChanged)
             if (percent < 100) {
                 assertTrue(scaled.groupFieldsChanged > 0)
-                // The sprite's centre (-50,-10) remains stationary.
-                assertEquals(-100,
-                    scaled.bytes.readShortLe(0xd0).toShort().toInt() +
+                // The sprite spans the local origin and therefore scales
+                // about (0,0), without shifting its screen/animation anchor.
+                fun scaledInt(old: Int): Int =
+                    if (old < 0) -((-old * percent + 50) / 100)
+                    else (old * percent + 50) / 100
+                assertEquals(scaledInt(-200),
+                    scaled.bytes.readShortLe(0xd0).toShort().toInt())
+                assertEquals(scaledInt(100),
                     scaled.bytes.readShortLe(0xd4).toShort().toInt())
-                assertEquals(-20,
-                    scaled.bytes.readShortLe(0xd2).toShort().toInt() +
+                assertEquals(scaledInt(-80),
+                    scaled.bytes.readShortLe(0xd2).toShort().toInt())
+                assertEquals(scaledInt(60),
                     scaled.bytes.readShortLe(0xd6).toShort().toInt())
             }
             else assertEquals(0, scaled.totalFieldsChanged)
@@ -231,6 +237,58 @@ class BbsL2dGeometryTest {
     }
 
     @Test
+    fun menu_command_bars_keep_their_original_left_edge_and_top_edge() {
+        // In real camp.l2d, many multi-quad command/menu bars begin at
+        // local X=0 or X=-1, but prior centre pivots moved their left
+        // border 15-34 PSP pixels away from fixed-position menu text.
+        val source = fixture().apply {
+            writeShortLe(0xd0, 0)
+            writeShortLe(0xd2, 0)
+            writeShortLe(0xd4, 220)
+            writeShortLe(0xd6, 115)
+        }
+        val scaled = BbsL2dGeometry.scale(
+            source, 70, preserveMenuAnchors = true,
+        )
+        assertEquals(0, scaled.bytes.readShortLe(0xd0).toShort().toInt())
+        assertEquals(0, scaled.bytes.readShortLe(0xd2).toShort().toInt())
+        assertEquals(154, scaled.bytes.readShortLe(0xd4).toShort().toInt())
+        assertEquals(81, scaled.bytes.readShortLe(0xd6).toShort().toInt())
+        assertEquals(2, scaled.groupFieldsChanged) // two unchanged origins
+
+        val bordered = fixture().apply {
+            writeShortLe(0xd0, -1)
+            writeShortLe(0xd2, -1)
+            writeShortLe(0xd4, 100)
+            writeShortLe(0xd6, 13)
+        }
+        val edged = BbsL2dGeometry.scale(
+            bordered, 70, preserveMenuAnchors = true,
+        )
+        assertEquals(-1, edged.bytes.readShortLe(0xd0).toShort().toInt())
+        assertEquals(-1, edged.bytes.readShortLe(0xd2).toShort().toInt())
+        assertEquals(70, edged.bytes.readShortLe(0xd4).toShort().toInt())
+        assertEquals(9, edged.bytes.readShortLe(0xd6).toShort().toInt())
+    }
+
+    @Test
+    fun menu_right_aligned_sprites_preserve_their_right_alignment_edge() {
+        val source = fixture().apply {
+            writeShortLe(0xd0, -120)
+            writeShortLe(0xd4, 0)
+            writeShortLe(0xd2, -40)
+            writeShortLe(0xd6, 0)
+        }
+        val scaled = BbsL2dGeometry.scale(
+            source, 70, preserveMenuAnchors = true,
+        )
+        assertEquals(-84, scaled.bytes.readShortLe(0xd0).toShort().toInt())
+        assertEquals(0, scaled.bytes.readShortLe(0xd4).toShort().toInt())
+        assertEquals(-28, scaled.bytes.readShortLe(0xd2).toShort().toInt())
+        assertEquals(0, scaled.bytes.readShortLe(0xd6).toShort().toInt())
+    }
+
+    @Test
     fun menu_overscan_sprites_must_not_be_pulled_onto_screen() {
         val original = fixture().apply {
             writeShortLe(0xd0, -277)
@@ -278,23 +336,23 @@ class BbsL2dGeometryTest {
         val leftEnd = scaled.bytes.readShortLe(0xd4).toShort().toInt()
         val rightStart = scaled.bytes.readShortLe(0xdc).toShort().toInt()
         assertEquals(leftEnd, rightStart)
-        assertEquals(-85, leftEnd)
-        assertEquals(-155, scaled.bytes.readShortLe(0xd0).toShort().toInt())
-        assertEquals(55, scaled.bytes.readShortLe(0xe0).toShort().toInt())
+        assertEquals(-70, leftEnd)
+        assertEquals(-140, scaled.bytes.readShortLe(0xd0).toShort().toInt())
+        assertEquals(70, scaled.bytes.readShortLe(0xe0).toShort().toInt())
         assertContentEquals(original.copyOfRange(0x1a0, 0x1b8),
             scaled.bytes.copyOfRange(0x1a0, 0x1b8))
     }
 
     @Test
-    fun menu_local_sprite_pivots_are_distinct_from_screen_origin() {
+    fun menu_local_sprite_origin_is_retained_when_geometry_straddles_it() {
         val original = fixture()
         val scaled = BbsL2dGeometry.scale(
             original, 70, preserveMenuAnchors = true,
         )
-        assertEquals(-155, scaled.bytes.readShortLe(0xd0).toShort().toInt())
-        assertEquals(-59, scaled.bytes.readShortLe(0xd2).toShort().toInt())
-        assertEquals(55, scaled.bytes.readShortLe(0xd4).toShort().toInt())
-        assertEquals(39, scaled.bytes.readShortLe(0xd6).toShort().toInt())
+        assertEquals(-140, scaled.bytes.readShortLe(0xd0).toShort().toInt())
+        assertEquals(-56, scaled.bytes.readShortLe(0xd2).toShort().toInt())
+        assertEquals(70, scaled.bytes.readShortLe(0xd4).toShort().toInt())
+        assertEquals(42, scaled.bytes.readShortLe(0xd6).toShort().toInt())
         assertContentEquals(original.copyOfRange(0xe0, 0x100),
             scaled.bytes.copyOfRange(0xe0, 0x100))
     }
