@@ -121,7 +121,7 @@ internal object BbsUiLayoutCatalog {
             126664752L, 10400, "b64c91f1bacd33746dc2ad8be6f9ed979c4565114b51683a6daebdacc51158c3",
             digestArchive = "BBS1.DAT", digestOffset = 14676032L),
         Candidate(UiScaleElement.PORTRAITS, "BBS3.DAT", 206391296L, "cface_11.l2d",
-            133998640L, 10400, "6a9e0d40ae43d49098ac644340f84d2c324b5dc6a39c0b5225d4bf02f823cb",
+            133998640L, 10400, "6a9e0d40ae43d49098ac644340f84d2c324b5dc6a39c0b5225b4d4bf02f823cb",
             digestArchive = "BBS1.DAT", digestOffset = 14657824L),
         Candidate(UiScaleElement.PORTRAITS, "BBS3.DAT", 206391296L, "cface_12.l2d",
             146206768L, 10400, "e58369a8d910e28addd3ca35d1a7e296803c6ef812999cbb4bfc35d320c31bf1",
