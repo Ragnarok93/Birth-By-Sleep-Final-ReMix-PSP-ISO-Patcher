@@ -119,6 +119,8 @@ internal object IsoBbsaDirectoryEvidence {
         )
         lines += "  BBSA version=$version directory_entries=$directoryCount " +
             "directory_table_byte_offset=$offset index_prefix_bytes=${indexPrefix.size}."
+        lines += "  BBSA filename lookup normalization: UPPERCASE name before UTF-8 CRC32 " +
+            "(OpenKh Bbsa.cs GetHash(name.ToUpper()))."
         val selected = references.take(MAX_LINKS)
         val matchLists = selected.map { mutableListOf<DirectoryRecord>() }
         val matchCounts = IntArray(selected.size)
@@ -356,10 +358,16 @@ internal object IsoBbsaDirectoryEvidence {
         else -> "unknown path ID"
     }
 
-    /** OpenKh.Bbs/Bbsa.Hash.cs: standard reflected UTF-8 CRC32. */
+    /**
+     * OpenKh.Bbs/Bbsa.cs performs GetHash(name.ToUpper()) when resolving
+     * partition filenames, while Bbsa.Hash.cs implements reflected CRC32.
+     * An ARC name is often lowercase and must NOT be hashed as-is.
+     * The decoded filenames in this game are ASCII, so invariant uppercase
+     * produces the same hash across Android, Windows, Linux and macOS.
+     */
     internal fun fileNameHash(name: String): Long {
         var crc = -1
-        for (ch in name.encodeToByteArray()) {
+        for (ch in name.uppercase().encodeToByteArray()) {
             var index = (crc xor (ch.toInt() and 255)) and 255
             repeat(8) {
                 index = if ((index and 1) != 0) (index ushr 1) xor 0xEDB88320.toInt()
