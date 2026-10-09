@@ -147,6 +147,58 @@ class BbsL2dGeometryTest {
     }
 
     @Test
+    fun menu_base_keys_remain_anchored_while_sprite_geometry_still_shrinks() {
+        val original = fixture().apply {
+            // Real camp menus use wide-ranging BaseX/BaseY positions for
+            // independently positioned labels and counters.
+            writeIntLe(0x174, 234f.toBits())
+            writeIntLe(0x180, (-134f).toBits())
+        }
+        for (percent in 70..100 step 5) {
+            val scaled = BbsL2dGeometry.scale(
+                original, percent, preserveAnimationBase = true,
+            )
+            assertEquals(234f.toBits(), scaled.bytes.readIntLe(0x174))
+            assertEquals((-134f).toBits(), scaled.bytes.readIntLe(0x180))
+            assertEquals(0, scaled.animationPositionKeysChanged)
+            assertTrue(scaled.groupFieldsChanged > 0)
+            // Native menu placement, root node offsets, animation metadata
+            // and original bytes are not disturbed.
+            assertContentEquals(original.copyOfRange(0x24c, 0x250),
+                scaled.bytes.copyOfRange(0x24c, 0x250))
+            assertContentEquals(original.copyOfRange(0x150, 0x170),
+                scaled.bytes.copyOfRange(0x150, 0x170))
+        }
+        assertContentEquals(original, BbsL2dGeometry.scale(
+            original, 100, preserveAnimationBase = true,
+        ).bytes)
+    }
+
+    @Test
+    fun menu_animation_offsets_shrink_without_displacing_base_keys() {
+        val source = fixture().apply {
+            // Two base keys + two local offset keys within SQ2's key table.
+            writeIntLe(0x138, 4)
+            this[0x15b] = 1 // OffsetX count
+            this[0x15c] = 1 // OffsetY count
+            writeIntLe(0x18c, 40f.toBits())
+            writeIntLe(0x198, (-20f).toBits())
+        }
+        val scaled = BbsL2dGeometry.scale(
+            source, 70, preserveAnimationBase = true,
+        )
+        assertEquals(80f.toBits(), scaled.bytes.readIntLe(0x174))
+        assertEquals((-50f).toBits(), scaled.bytes.readIntLe(0x180))
+        assertEquals(28f.toBits(), scaled.bytes.readIntLe(0x18c))
+        assertEquals((-14f).toBits(), scaled.bytes.readIntLe(0x198))
+        assertEquals(2, scaled.animationPositionKeysChanged)
+        assertContentEquals(source.copyOfRange(0x150, 0x170),
+            scaled.bytes.copyOfRange(0x150, 0x170))
+        assertContentEquals(source.copyOfRange(0xe0, 0xf8),
+            scaled.bytes.copyOfRange(0xe0, 0xf8))
+    }
+
+    @Test
     fun sq2_animated_translation_is_scaled_once_and_time_and_sprite_scale_are_not_modified() {
         val original = fixture()
         val result = BbsL2dGeometry.scale(original, 70)
