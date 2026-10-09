@@ -94,7 +94,9 @@ internal object IsoArcMetadataProbe {
             val offset = u32(table, at + 4)
             val size = u32(table, at + 8)
             val external = hashOrLink != 0L
-            val validPayload = external ||
+            // OpenKh ARC v1: a nonzero directory hash denotes a link;
+            // links have length=0 and their offset field is ignored.
+            val validPayload = if (external) size == 0L else
                 (offset >= headerLength.toLong() && size > 0L &&
                     offset <= availableArchiveBytes &&
                     size <= availableArchiveBytes - offset)
