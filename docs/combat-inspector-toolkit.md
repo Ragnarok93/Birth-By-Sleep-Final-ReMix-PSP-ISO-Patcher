@@ -600,6 +600,59 @@ new parser. The next export will differentiate valid structured Lua
 data from an unsupported/malformed Lua header, and report any
 candidate names for a *separate* runtime investigation.
 
+## October 9, 19:36 — G01.LUB has valid Lua 5.1 prototype structure
+
+The user-supplied `ULJM05775_10092026 (8).log` reports an
+authenticated full Lua 5.1 prototype parse for the exact BBS0
+`lua/G01.LUB` index target. The metadata is based on the
+4,096-byte allocated file, and **the game's Lua interpreter was not
+executed or instrumented**.
+
+| Evidence | Result |
+| --- | --- |
+| Lua header | Version **5.1**, format 0, little endian, 32-bit integer/size_t/instruction/number, nonintegral floating point |
+| Structurally parsed prototypes | **18** |
+| Instructions across prototypes | **228** |
+| String constant records | **73** |
+| Parsed structured bytes | **2592** out of 4096 allocated bytes |
+| Visible first examples | `g01`, `g01_mt`, `__index`, `new`, `OnInit`, `OnUpdate`, `EntityFactory`, `Add` and several gimmick identifiers |
+| Reported combat-keyword candidate | `SetMotion` |
+
+This source describes **gimmick-associated Lua data**, not a proven
+player battle script. The existing snippet does not prove any Lua
+`OnHitAttack`, `OnHitBody` or `OnHitAttackBg` callback
+was registered. The previous **18-unique-string example limit** meant
+other callback, API and hit-event strings could have gone unreported.
+`SetMotion` as a string is not evidence of runtime invocation.
+
+### Follow-up instrumented static reporting (still read-only)
+
+`IsoLua51MetadataInspector` now reports:
+
+- A bounded census of short printable ASCII string constants across
+  **all successfully parsed** prototypes, not just the first 18
+  example values.
+- Distinct callback-name string candidates (`On*`), exact known
+  native combat API-name string candidates, and exact known
+  hit-event string candidates (`OnHitAttack`, `OnHitBody`,
+  `OnHitAttackBg`). Exact-name absence is scoped to parsed
+  supported short printable ASCII constants, not game/runtime behavior.
+- Per-prototype ordinal and nesting depth, source line range,
+  parameters, instruction count, and bounded callback/combat-string
+  examples. **These are constant-table memberships, not symbol
+  definitions or function-call/registration proof.**
+- Explicit logging that long and binary strings are not included
+  in the printable examples. All returned candidate values are
+  suppressed on invalid/truncated Lua input.
+
+The new audit does not inspect 228 opcodes, recover control flow, or
+establish that any native combat flag is reachable from this script.
+Historical Stage4/5 storage remains **unsafe** where auxiliary module
+executable PT_LOAD regions overlap; combat mods remain disabled.
+The uploaded (8) log **predates** this expanded all-prototype
+symbol reporting, so the next log will provide the actual
+additional string evidence.
+
 ## Verification
 
 Tests exercise a synthetic ISO with a main EBOOT, a second MIPS ELF,
