@@ -122,7 +122,7 @@ internal object IsoBbsaLuaCategorySurvey {
     }
 
     internal fun nameHint(hash: Long): String =
-        KNOWN_NAME_HINTS[hash] ?: "not in verified short-name hints"
+        KNOWN_NAME_HINTS[hash] ?: IsoBbsaCombatNameCatalog.lookup(hash) ?: "not in verified short-name hints"
 
     fun inspect(
         source: Path,
