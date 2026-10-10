@@ -86,6 +86,23 @@ class IsoLua51MetadataInspectorTest {
     }
 
     @Test
+    fun padded_160_kib_lua_allocation_is_accepted_without_changing_the_input() {
+        // The real BBS0 index contains four 68..78-sector allocations
+        // previously rejected by the obsolete 128-KiB survey ceiling.
+        val chunk = LuaBytes().apply {
+            proto(listOf("OnHitAttack", "GetMotionNowFrame", "SetTrgFlagCancel"))
+        }.chunk()
+        val bytes = chunk + ByteArray(160 * 1024 - chunk.size)
+        val before = bytes.copyOf()
+        val report = IsoLua51MetadataInspector.inspect(bytes)
+        assertTrue(report.valid)
+        assertEquals(chunk.size, report.consumedBytes)
+        assertContains(report.callbackNameConstants, "OnHitAttack")
+        assertContains(report.nativeApiNameConstants, "SetTrgFlagCancel")
+        assertTrue(bytes.contentEquals(before))
+    }
+
+    @Test
     fun full_lua_string_census_finds_late_hit_event_beyond_truncated_display_examples() {
         val constants = (1..25).map { "gimmick${it.toString().padStart(2, '0')}" } +
             listOf("OnInit", "OnUpdate", "OnHitAttack", "SetMotion",
