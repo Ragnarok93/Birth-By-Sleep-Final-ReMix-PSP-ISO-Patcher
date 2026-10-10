@@ -941,6 +941,72 @@ or safe, lifecycle-aware resident code site is established.
 Historical Stage4/5 addresses still overlap eight
 auxiliary executable ELF module ranges.
 
+## October 9, 22:50 — five static OnHitAttack table assignments; Lua 5.1 capture descriptors
+
+The new user-supplied `ULJM05775_10092026 (4).log` was collected
+from the **current** inspector at 22:50 local time. BBS0 BBSA's
+12-byte Lua category index contains 205 entries; **95** non-G01
+scripts are eligible for this small-script survey. The deterministic
+prioritized+spread sample read **24** and validated **24 Lua 5.1
+chunks**; **5** contain exact `OnHitAttack` constants and **7**
+contain at least one catalogued native combat API string.
+
+All five scripts with `OnHitAttack` contain a **Lua 5.1
+`OP_SETTABLE` using `OnHitAttack` as the key**:
+
+| Script (OpenKh filename dictionary) | Root Lua opcode site(s) | Observed static value source |
+| --- | --- | --- |
+| `B11CD00` | root pc 22, 51 | adjacent `CLOSURE` child prototype 4, 11 |
+| `B11SB00` | root pc 24 | value register R3; direct adjacency resolver **UNVERIFIED** |
+| `G31VS00` | root pc 162 | adjacent `CLOSURE` child prototype 35 |
+| `G14SW00` | root pc 50 | adjacent `CLOSURE` child prototype 14 |
+| `G13HE00` | root pc 82 | adjacent `CLOSURE` child prototype 15 |
+
+These are **Lua callback-style table writes**, not
+`OnHitAttack` engine dispatch or hit-confirm proof. The
+child prototypes recorded above are structural, not observed runtime
+execution. The scanned child snippets do not show exact catalogued
+native combat API-name constants.
+
+### Targeted follow-up: `B11SB00` pc 21–24
+
+The new log includes this instruction sequence in `B11SB00`:
+
+```
+pc21 CLOSURE R3, child Proto[4]
+pc22 MOVE R0, R0
+pc23 MOVE R0, R1
+pc24 SETTABLE R2, K["OnHitAttack"], R3
+```
+
+Official [Lua 5.1 VM source](https://www.lua.org/source/5.1/lvm.c.html),
+case `OP_CLOSURE`, consumes **`nups` immediate
+`MOVE`/`GETUPVAL` pseudo instructions** as upvalue
+descriptors. They are *not* ordinary standalone moves in this
+context. The old adjacent-`CLOSURE` check did not
+recognize that pattern.
+
+The new inspector validates the corresponding **direct child
+prototype's declared upvalue count** and accepts a `CLOSURE`
+link only when the next exactly `nups` instructions are
+`MOVE` or `GETUPVAL`, the `SETTABLE` follows
+immediately, and its value register matches the `CLOSURE`
+destination. It also rejects wrong child upvalue counts,
+invalid interleaving instructions, and missing child references.
+The check is bounded (maximum 16 descriptors) and read-only.
+
+**Verification of this specific source sequence is still
+pending:** the uploaded log did not include child-prototype
+upvalue counts; the next inspector export will report
+`closure_provenance=CLOSURE_plus_2_Lua51_upvalue_descriptors`
+**only if the game's actual child Proto[4] declares two
+upvalues**. A mismatch remains `UNVERIFIED`.
+
+No register/CFG trace, native callback dispatch, hit-confirm,
+resident hook, or combat toggle is implemented. Historical
+Stage 4/5 overlap with auxiliary executable PT_LOAD regions
+remains a blocker.
+
 ## Verification
 
 Tests exercise a synthetic ISO with a main EBOOT, a second MIPS ELF,
