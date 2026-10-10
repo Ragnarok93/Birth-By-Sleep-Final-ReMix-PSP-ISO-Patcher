@@ -17,6 +17,31 @@ internal object IsoLua51MetadataInspector {
     private const val MAX_RECORDS = 8192
     private const val MAX_EXAMPLES = 18
     private const val MAX_NAME_LENGTH = 64
+    private const val MAX_SYMBOLS = 48
+    private const val MAX_PROTO_SUMMARIES = 24
+    // Registered names already located in the native EBOOT. Matching these
+    // *constant strings* alone is not evidence of a native API invocation.
+    private val NATIVE_COMBAT_API_NAMES = setOf(
+        "IsAttacking", "GetMotionNowFrame", "GetPlayerState", "GetSubState",
+        "GetCommandKind", "GetCommandState", "GetCommandSubcate",
+        "GetCommandCategory", "SetTrgFlagCancel", "IsTrgFlagCancel",
+        "EnableInvincible", "IsInvincible", "SetPlayerFlagInvincible",
+    )
+    private val HIT_EVENT_NAMES = setOf(
+        "OnHitAttack", "OnHitBody", "OnHitAttackBg",
+    )
+
+    data class PrototypeSummary(
+        val ordinal: Int,
+        val depth: Int,
+        val lineStart: Int,
+        val lineEnd: Int,
+        val parameters: Int,
+        val instructions: Int,
+        val printableStringConstants: Int,
+        val callbackNameConstants: List<String>,
+        val combatKeywordConstants: List<String>,
+    )
 
     data class Report(
         val valid: Boolean,
@@ -28,6 +53,12 @@ internal object IsoLua51MetadataInspector {
         val visibleExamples: List<String>,
         val combatTermExamples: List<String>,
         val lines: List<String>,
+        val printableConstantCount: Int = 0,
+        val callbackNameConstants: List<String> = emptyList(),
+        val nativeApiNameConstants: List<String> = emptyList(),
+        val hitEventNameConstants: List<String> = emptyList(),
+        val namedStringConstants: List<String> = emptyList(),
+        val prototypeSummaries: List<PrototypeSummary> = emptyList(),
     )
 
     fun inspect(bytes: ByteArray): Report {
@@ -76,6 +107,35 @@ internal object IsoLua51MetadataInspector {
                 lines += "          Example printable string constants (not execution evidence): " +
                     parser.visibleStrings.joinToString(" | ")
             }
+            lines += "          Complete printable ASCII string-constant census: " +
+                "printable=${parser.printableConstantCount}/${parser.constantStrings}, " +
+                "unique=${parser.uniqueStrings.size} " +
+                "(case-sensitive, across all validated Lua prototypes)."
+            lines += "          Candidate script callback-name constants=" +
+                parser.callbackNames.size + ": " +
+                parser.callbackNames.joinToString(" | ").ifEmpty { "none" }
+            lines += "          Exact native combat API-name constants=" +
+                parser.nativeApiNames.size + ": " +
+                parser.nativeApiNames.joinToString(" | ").ifEmpty { "none" }
+            lines += "          Exact hit-event-name constants=" +
+                parser.hitEventNames.size + ": " +
+                parser.hitEventNames.joinToString(" | ").ifEmpty { "none" }
+            lines += "          Named API/callback string candidates (bounded examples)=" +
+                parser.namedSymbols.take(MAX_SYMBOLS).size +
+                "/${parser.namedSymbols.size}: " +
+                parser.namedSymbols.take(MAX_SYMBOLS).joinToString(" | ").ifEmpty { "none" }
+            for (prototype in parser.prototypes.take(MAX_PROTO_SUMMARIES)) {
+                lines += "          Prototype[${prototype.ordinal}] depth=${prototype.depth} " +
+                    "line_range=${prototype.lineStart}..${prototype.lineEnd} " +
+                    "params=${prototype.parameters} instructions=${prototype.instructions} " +
+                    "printable_strings=${prototype.printableStringConstants} " +
+                    "callback_constants=${prototype.callbackNameConstants.joinToString(",").ifEmpty { "-" }} " +
+                    "combat_constants=${prototype.combatKeywordConstants.joinToString(",").ifEmpty { "-" }}"
+            }
+            if (parser.prototypes.size > MAX_PROTO_SUMMARIES) {
+                lines += "          Additional prototype summaries omitted: " +
+                    (parser.prototypes.size - MAX_PROTO_SUMMARIES)
+            }
             lines += "          Combat-keyword candidate constants=" +
                 parser.combatStrings.size + ": " +
                 parser.combatStrings.joinToString(" | ").ifEmpty { "none in bounded examples" }
@@ -83,7 +143,11 @@ internal object IsoLua51MetadataInspector {
                 "gameplay hook, combat event delivery, successful runtime load, or code safety."
             Report(true, "validated bounded Lua 5.1 structure", parser.position,
                 parser.functions, parser.instructions, parser.constantStrings,
-                parser.visibleStrings, parser.combatStrings, lines)
+                parser.visibleStrings, parser.combatStrings, lines,
+                parser.printableConstantCount,
+                parser.callbackNames.toList(), parser.nativeApiNames.toList(),
+                parser.hitEventNames.toList(), parser.namedSymbols.toList(),
+                parser.prototypes.toList())
         } catch (failure: DecodeError) {
             lines += "          UNVERIFIED: ${failure.message}; " +
                 "no conclusion about Lua execution or combat behavior."
@@ -110,6 +174,14 @@ internal object IsoLua51MetadataInspector {
             private set
         val visibleStrings = mutableListOf<String>()
         val combatStrings = mutableListOf<String>()
+        val uniqueStrings = linkedSetOf<String>()
+        val namedSymbols = linkedSetOf<String>()
+        val callbackNames = linkedSetOf<String>()
+        val nativeApiNames = linkedSetOf<String>()
+        val hitEventNames = linkedSetOf<String>()
+        val prototypes = mutableListOf<PrototypeSummary>()
+        var printableConstantCount = 0
+            private set
 
         private fun take(count: Int) {
             if (count < 0 || count > bytes.size - position) {
@@ -176,18 +248,37 @@ internal object IsoLua51MetadataInspector {
             return value
         }
 
+        private fun isCombatKeyword(value: String): Boolean {
+            val lower = value.lowercase()
+            return listOf("attack", "hit", "guard", "cancel", "damage",
+                "combo", "state", "motion", "player", "invuln",
+                "dodge", "counter", "critical").any { lower.contains(it) }
+        }
+
+        private fun isCallbackName(value: String): Boolean =
+            value.length > 2 && value.startsWith("On") &&
+                value.drop(2).all { it.isLetterOrDigit() || it == '_' }
+
+        private fun isNamedSymbol(value: String): Boolean =
+            isCallbackName(value) ||
+                (value.length > 3 && listOf("Set", "Get", "Is", "Enable",
+                    "Entity", "Create", "Register", "Add", "Remove").any {
+                        value.startsWith(it)
+                    }) ||
+                value == "__index" || value == "new"
+
         private fun recordString(value: String?) {
             if (value == null) return
-            if (visibleStrings.size < MAX_EXAMPLES && !visibleStrings.contains(value)) {
-                visibleStrings += value
-            }
-            val lower = value.lowercase()
-            if (combatStrings.size < MAX_EXAMPLES &&
-                listOf("attack", "hit", "guard", "cancel", "damage", "combo",
-                    "state", "motion", "player", "invuln", "dodge",
-                    "counter", "critical").any { lower.contains(it) } &&
-                !combatStrings.contains(value)
-            ) combatStrings += value
+            printableConstantCount++
+            uniqueStrings += value
+            if (visibleStrings.size < MAX_EXAMPLES &&
+                !visibleStrings.contains(value)) visibleStrings += value
+            if (isCombatKeyword(value) && combatStrings.size < MAX_EXAMPLES &&
+                !combatStrings.contains(value)) combatStrings += value
+            if (isCallbackName(value)) callbackNames += value
+            if (value in NATIVE_COMBAT_API_NAMES) nativeApiNames += value
+            if (value in HIT_EVENT_NAMES) hitEventNames += value
+            if (isNamedSymbol(value)) namedSymbols += value
         }
 
         fun parseProto(depth: Int) {
@@ -195,17 +286,22 @@ internal object IsoLua51MetadataInspector {
                 throw DecodeError("prototype count/depth exceeds bounded limit")
             }
             functions++
+            val ordinal = functions
             readString(capture = false) // source name (optional)
-            readCount() // line defined
-            readCount() // last line defined
+            val lineStart = readCount() // line defined
+            val lineEnd = readCount() // last line defined
             val upvalues = readU8()
-            readU8() // parameter count
+            val parameters = readU8() // parameter count
             readU8() // vararg flags
             val stack = readU8()
             if (stack == 0) throw DecodeError("zero Lua maxstacksize at $position")
 
-            instructions += countAndSkip(4) // Lua 5.1 instruction size
+            val instructionCount = countAndSkip(4) // Lua 5.1 instruction size
+            instructions += instructionCount
             val nConstants = readCount()
+            var printableInProto = 0
+            val callbackInProto = linkedSetOf<String>()
+            val combatInProto = linkedSetOf<String>()
             // Every constant has at least a one-byte type tag.
             if (nConstants > bytes.size - position) {
                 throw DecodeError("constant count exceeds chunk remaining bytes")
@@ -217,11 +313,22 @@ internal object IsoLua51MetadataInspector {
                     3 -> take(numberBytes) // lua_Number
                     4 -> {
                         constantStrings++
-                        recordString(readString(capture = true))
+                        val value = readString(capture = true)
+                        recordString(value)
+                        if (value != null) {
+                            printableInProto++
+                            if (isCallbackName(value)) callbackInProto += value
+                            if (isCombatKeyword(value)) combatInProto += value
+                        }
                     }
                     else -> throw DecodeError("unsupported Lua constant tag=$type")
                 }
             }
+            // Prototype ordering reflects Lua's preorder nested chunks,
+            // not an observed runtime order of execution.
+            prototypes += PrototypeSummary(ordinal, depth, lineStart, lineEnd,
+                parameters, instructionCount, printableInProto,
+                callbackInProto.take(MAX_EXAMPLES), combatInProto.take(MAX_EXAMPLES))
             val children = readCount()
             if (children > (bytes.size - position) / 24) {
                 throw DecodeError("nested proto count exceeds remaining chunk")
