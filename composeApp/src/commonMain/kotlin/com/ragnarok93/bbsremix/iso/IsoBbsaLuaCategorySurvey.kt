@@ -239,6 +239,19 @@ internal object IsoBbsaLuaCategorySurvey {
                     "child_native_API_constants=${binding.adjacentClosureNativeApis.joinToString(",").ifEmpty { "-" }} " +
                     "child_combat_constants=${binding.adjacentClosureCombatConstants.joinToString(",").ifEmpty { "-" }} " +
                     "(not runtime registration)"
+                if (binding.handlerOpcodeWindows.isNotEmpty()) {
+                    lines += "      RESOLVED HANDLER STATIC OPCODE WINDOWS " +
+                        "child_proto=${binding.adjacentClosureFunctionOrdinal} " +
+                        "windows=${binding.handlerOpcodeWindows.size} " +
+                        "(bounded raw diagnostics; no call/dataflow proof)."
+                    for (window in binding.handlerOpcodeWindows) {
+                        lines += "        METHOD_REF pc=${window.pc} " +
+                            "op=${window.opcode} name=${window.constantName}"
+                        window.context.forEach { context ->
+                            lines += "          $context"
+                        }
+                    }
+                }
                 if (binding.adjacentClosureFunctionOrdinal == null) {
                     lines += "      UNRESOLVED HIT VALUE: prior Lua 5.1 " +
                         "instruction operands, same prototype (no register/CFG inference):"
