@@ -32,6 +32,11 @@ internal object IsoLua51MetadataInspector {
         val tableRegister: Int,
         val valueOperand: String,
         val adjacentClosureProtoIndex: Int?,
+        /** Resolved only when Lua's child Proto array was fully validated. */
+        val adjacentClosureFunctionOrdinal: Int? = null,
+        val adjacentClosureInstructionCount: Int? = null,
+        val adjacentClosureNativeApis: List<String> = emptyList(),
+        val adjacentClosureCombatConstants: List<String> = emptyList(),
     )
 
     data class HitEventWriteOperands(
@@ -135,6 +140,7 @@ internal object IsoLua51MetadataInspector {
         val printableStringConstants: Int,
         val callbackNameConstants: List<String>,
         val combatKeywordConstants: List<String>,
+        val nativeApiNameConstants: List<String> = emptyList(),
     )
 
     data class Report(
@@ -247,7 +253,11 @@ internal object IsoLua51MetadataInspector {
                 lines += "          HIT_TABLE_WRITE proto=${item.ordinal} depth=${item.depth} " +
                     "pc=${item.pc} key=${item.eventName} " +
                     "table=R[${item.tableRegister}] value=${item.valueOperand} " +
-                    "adjacent_child_closure=${item.adjacentClosureProtoIndex?.toString() ?: "UNVERIFIED"}"
+                    "adjacent_child_closure=${item.adjacentClosureProtoIndex?.toString() ?: "UNVERIFIED"} " +
+                    "resolved_child_proto=${item.adjacentClosureFunctionOrdinal?.toString() ?: "UNVERIFIED"} " +
+                    "child_instructions=${item.adjacentClosureInstructionCount?.toString() ?: "UNVERIFIED"} " +
+                    "child_native_API_constants=${item.adjacentClosureNativeApis.joinToString(",").ifEmpty { "-" }} " +
+                    "child_combat_constants=${item.adjacentClosureCombatConstants.joinToString(",").ifEmpty { "-" }}"
             }
             lines += "          LIMIT: An adjacent child CLOSURE is structural evidence only; " +
                 "neither source register nor target table identity or execution is proven."
@@ -434,6 +444,7 @@ internal object IsoLua51MetadataInspector {
             var printableInProto = 0
             val callbackInProto = linkedSetOf<String>()
             val combatInProto = linkedSetOf<String>()
+            val apiInProto = linkedSetOf<String>()
             // Every constant has at least a one-byte type tag.
             if (nConstants > bytes.size - position) {
                 throw DecodeError("constant count exceeds chunk remaining bytes")
@@ -457,6 +468,7 @@ internal object IsoLua51MetadataInspector {
                             printableInProto++
                             if (isCallbackName(value)) callbackInProto += value
                             if (isCombatKeyword(value)) combatInProto += value
+                            if (value in NATIVE_COMBAT_API_NAMES) apiInProto += value
                         }
                     }
                     else -> throw DecodeError("unsupported Lua constant tag=$type")
@@ -477,7 +489,8 @@ internal object IsoLua51MetadataInspector {
             // not an observed runtime order of execution.
             prototypes += PrototypeSummary(ordinal, depth, lineStart, lineEnd,
                 parameters, instructionCount, printableInProto,
-                callbackInProto.take(MAX_EXAMPLES), combatInProto.take(MAX_EXAMPLES))
+                callbackInProto.take(MAX_EXAMPLES), combatInProto.take(MAX_EXAMPLES),
+                apiInProto.take(MAX_EXAMPLES))
             val children = readCount()
             if (children > (bytes.size - position) / 24) {
                 throw DecodeError("nested proto count exceeds remaining chunk")
@@ -494,7 +507,29 @@ internal object IsoLua51MetadataInspector {
                     binding.tableRegister, binding.valueOperand,
                     binding.adjacentClosureProtoIndex)
             }
-            repeat(children) { parseProto(depth + 1) }
+            val immediateChildren = mutableListOf<PrototypeSummary>()
+            repeat(children) {
+                val childOrdinalIndex = prototypes.size
+                parseProto(depth + 1)
+                // A direct child occupies the next preorder slot. Its own
+                // descendants follow it but are not direct children here.
+                immediateChildren += prototypes[childOrdinalIndex]
+            }
+            // Child CLOSURE operand Bx is zero-based in the *parent's*
+            // direct Proto array. Resolve only after all children validate.
+            // Neither adjacency nor child metadata proves runtime dispatch.
+            for (at in hitWrites.indices) {
+                val event = hitWrites[at]
+                if (event.ordinal != ordinal) continue
+                val idx = event.adjacentClosureProtoIndex ?: continue
+                val child = immediateChildren.getOrNull(idx) ?: continue
+                hitWrites[at] = event.copy(
+                    adjacentClosureFunctionOrdinal = child.ordinal,
+                    adjacentClosureInstructionCount = child.instructions,
+                    adjacentClosureNativeApis = child.nativeApiNameConstants,
+                    adjacentClosureCombatConstants = child.combatKeywordConstants,
+                )
+            }
             countAndSkip(4) // lineinfo
             val locals = readCount()
             if (locals > (bytes.size - position) / (sizeTBytes + 8)) {
