@@ -289,7 +289,7 @@ internal object IsoLua51MetadataInspector {
             }
             lines += "          Lua 5.1 exact hit-event SETTABLE writes=" +
                 parser.hitWrites.size + " (max recorded=$MAX_HIT_WRITES; " +
-                "R value operand / immediately preceding valid child CLOSURE only)."
+                "R value operand / immediate or validated Lua 5.1 closure captures)."
             for (item in parser.hitWrites) {
                 lines += "          HIT_TABLE_WRITE proto=${item.ordinal} depth=${item.depth} " +
                     "pc=${item.pc} key=${item.eventName} " +
