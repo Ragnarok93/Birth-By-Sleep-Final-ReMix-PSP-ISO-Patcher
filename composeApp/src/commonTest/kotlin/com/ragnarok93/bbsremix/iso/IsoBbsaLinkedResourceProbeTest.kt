@@ -120,11 +120,13 @@ class IsoBbsaLinkedResourceProbeTest {
             FileSystem.SYSTEM_TEMPORARY_DIRECTORY / "unused.iso",
             index, emptyMap(), links(), Iso9660Reader(fs))
         assertEquals(null, result.links.last().partitionFileMatches)
-        assertEquals(0, result.links.first().directoryTableMatches)
-            // Unlike a generic filename match, directory ID must also match.
+        // A malformed partition table does not erase a valid Lua
+        // directory-file index match; its payload extent is still bounded.
+        assertEquals(1, result.links.first().directoryTableMatches)
         assertContains(result.lines.joinToString("\n"),
             "8byte_partition_file_index=UNVERIFIED")
-        assertTrue(result.probes.isEmpty())
+        assertEquals(1, result.probes.size)
+        assertContains(result.probes.first().signature, "UNVERIFIED archive file/extent")
     }
 
     private fun ByteArray.write16(at: Int, value: Int) {
