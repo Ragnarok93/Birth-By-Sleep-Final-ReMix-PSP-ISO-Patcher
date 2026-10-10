@@ -117,6 +117,24 @@ class IsoBbsaIndexedPayloadProbeTest {
     }
 
     @Test
+    fun identifies_exa_and_abc_headers_without_decoding_or_semantic_claims() {
+        assertContains(
+            IsoBbsaIndexedPayloadProbe.classify(
+                byteArrayOf('e'.code.toByte(), 'x'.code.toByte(),
+                    'a'.code.toByte(), 0, 0, 0),
+            ),
+            "EXA header",
+        )
+        assertContains(
+            IsoBbsaIndexedPayloadProbe.classify(
+                byteArrayOf('@'.code.toByte(), 'A'.code.toByte(),
+                    'B'.code.toByte(), 'C'.code.toByte()),
+            ),
+            "ABC header",
+        )
+    }
+
+    @Test
     fun signatures_never_claim_semantics_from_name_alone() {
         assertContains(
             IsoBbsaIndexedPayloadProbe.classify(byteArrayOf(0x1b, 0x4c, 0x75, 0x61, 0x51)),
