@@ -133,10 +133,17 @@ internal object IsoBbsaIndexedPayloadProbe {
                         }
                         digest = sha256Hex(bytes)
                         if (fmt == "ARC header (not decoded)") {
-                            arcLines = IsoBbsaIndexedArcEvidence.inspect(
+                            val arc = IsoBbsaIndexedArcEvidence.inspect(
                                 source, entry, location.archiveRelativeByteOffset,
                                 candidate.sectorCount, bytes, reader, cancellation,
-                            ).lines
+                            )
+                            arcLines = arc.lines
+                            if (arc.validDirectory && arc.externalReferences.isNotEmpty()) {
+                                arcLines += IsoBbsaLinkedResourceProbe.inspect(
+                                    source, bbs0Index, archives,
+                                    arc.externalReferences, reader, cancellation,
+                                ).lines
+                            }
                         }
                     }
                 }
@@ -163,7 +170,8 @@ internal object IsoBbsaIndexedPayloadProbe {
         lines += "  LIMIT: Index mapping and file signature cannot prove the payload was " +
             "successfully decoded, or that it implements any combat callback. " +
             "At most one 2 KiB ARC header sector plus 12 local 16-byte " +
-            "member signature previews are read per match; no assets are extracted."
+            "member previews are read per match; validated external links may " +
+            "add up to 12 bounded 64-byte indexed header previews. No assets extracted."
         return Report(probes, lines)
     }
 
@@ -174,6 +182,13 @@ internal object IsoBbsaIndexedPayloadProbe {
                 "Lua bytecode signature (version_byte=0x" +
                     (data[4].toInt() and 255).toString(16).uppercase().padStart(2, '0') +
                     "; bytecode NOT decoded)"
+        data.size >= 4 && data[0] == 'e'.code.toByte() &&
+            data[1] == 'x'.code.toByte() && data[2] == 'a'.code.toByte() &&
+            data[3] == 0.toByte() -> "EXA header (cinematic/camerawork format; not decoded)"
+        data.size >= 4 && data[0] == '@'.code.toByte() &&
+            data[1] == 'A'.code.toByte() && data[2] == 'B'.code.toByte() &&
+            data[3] == 'C'.code.toByte() ->
+                "ABC header (attach-body collision data; not decoded)"
         data.size >= 4 && data[0] == 'A'.code.toByte() &&
             data[1] == 'R'.code.toByte() && data[2] == 'C'.code.toByte() &&
             data[3] == 0.toByte() -> "ARC header (not decoded)"
