@@ -13,19 +13,19 @@ package com.ragnarok93.bbsremix.iso
  * extent; this class accepts only a small in-memory byte array.
  */
 internal object IsoLua51MetadataInspector {
-    const val MAX_INPUT_BYTES = 8 * 1024
-    private const val MAX_FUNCTIONS = 128
+    const val MAX_INPUT_BYTES = 128 * 1024
+    private const val MAX_FUNCTIONS = 256
     private const val MAX_DEPTH = 16
-    private const val MAX_RECORDS = 8192
+    private const val MAX_RECORDS = 32768
     private const val MAX_EXAMPLES = 18
     private const val MAX_NAME_LENGTH = 64
     private const val MAX_SYMBOLS = 48
-    private const val MAX_PROTO_SUMMARIES = 24
-    private const val MAX_OPCODE_REFS = 72
-    private const val MAX_HIT_WRITES = 48
+    private const val MAX_PROTO_SUMMARIES = 256
+    private const val MAX_OPCODE_REFS = 4096
+    private const val MAX_HIT_WRITES = 512
     private const val MAX_UNRESOLVED_PRIOR_OPCODES = 7
     private const val MAX_CLOSURE_UPVALUES = 16
-    private const val MAX_HANDLER_WINDOWS = 8
+    private const val MAX_HANDLER_WINDOWS = 24
     private const val HANDLER_CONTEXT_BEFORE = 1
     private const val HANDLER_CONTEXT_AFTER = 3
 
@@ -645,7 +645,7 @@ internal object IsoLua51MetadataInspector {
                 callbackInProto.take(MAX_EXAMPLES), combatInProto.take(MAX_EXAMPLES),
                 apiInProto.take(MAX_EXAMPLES), upvalues)
             // Save only validated prototype bytecodes, already within the
-            // strict 8KiB input limit, for resolved child-only diagnostics.
+            // bounded 128KiB input limit, for resolved child-only diagnostics.
             val codeWords = (0 until instructionCount).map {
                 opcodeWord(instructionOffset, it)
             }
