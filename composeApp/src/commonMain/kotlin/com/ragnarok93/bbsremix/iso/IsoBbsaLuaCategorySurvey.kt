@@ -238,6 +238,13 @@ internal object IsoBbsaLuaCategorySurvey {
                     "child_native_API_constants=${binding.adjacentClosureNativeApis.joinToString(",").ifEmpty { "-" }} " +
                     "child_combat_constants=${binding.adjacentClosureCombatConstants.joinToString(",").ifEmpty { "-" }} " +
                     "(not runtime registration)"
+                if (binding.adjacentClosureFunctionOrdinal == null) {
+                    lines += "      UNRESOLVED HIT VALUE: prior Lua 5.1 " +
+                        "instruction operands, same prototype (no register/CFG inference):"
+                    for (prior in binding.unresolvedPriorInstructions) {
+                        lines += "        $prior"
+                    }
+                }
             }
         }
         for (line in exampleNames) lines += "  LUA example $line"
