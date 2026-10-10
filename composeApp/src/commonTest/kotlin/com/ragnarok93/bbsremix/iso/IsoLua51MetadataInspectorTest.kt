@@ -26,6 +26,8 @@ class IsoLua51MetadataInspectorTest {
             opcodes: List<Int> = listOf(30),
             upvalues: Int = 0,
             childUpvalues: Int = 0,
+            childConstants: List<String> = listOf("GetPlayerState"),
+            childOpCodes: List<Int> = listOf(30),
         ) {
             str(null) // absent source name
             i(0) // lineDefined
@@ -42,7 +44,8 @@ class IsoLua51MetadataInspectorTest {
                 str(value)
             }
             i(if (nested) 1 else 0)
-            if (nested) proto(listOf("GetPlayerState"), upvalues = childUpvalues)
+            if (nested) proto(childConstants, upvalues = childUpvalues,
+                opcodes = childOpCodes)
             i(1) // debug lineinfo count
             i(0) // one source-line number
             i(0) // local variable count
@@ -230,6 +233,52 @@ class IsoLua51MetadataInspectorTest {
             "resolved_child_proto=2")
         assertContains(result.lines.joinToString("\n"),
             "child_native_API_constants=GetPlayerState")
+    }
+
+    @Test
+    fun only_resolved_onhitattack_child_gets_bounded_method_opcode_windows() {
+        fun abx(op: Int, a: Int, bx: Int): Int =
+            op or (a shl 6) or (bx shl 14)
+        fun abc(op: Int, a: Int, b: Int, c: Int): Int =
+            op or (a shl 6) or (c shl 14) or (b shl 23)
+        val handlerOps = listOf(
+            abc(6, 1, 0, 256), // GETTABLE method = hitHandle
+            abc(28, 1, 2, 1), // CALL (raw adjacent opcode only)
+            abc(6, 1, 0, 257), // GETTABLE method = ChangeState
+            abc(28, 1, 2, 1),
+            abc(6, 1, 0, 258), // GETTABLE EnableGeneralPurposeAttackColl
+            abc(28, 1, 2, 1),
+            30,
+        )
+        val input = LuaBytes().apply {
+            proto(
+                constants = listOf("OnHitAttack"),
+                nested = true,
+                opcodes = listOf(
+                    abx(36, 2, 0), // CLOSURE R2, child 0
+                    abc(9, 0, 256, 2), // SETTABLE R0[OnHitAttack] = R2
+                    30,
+                ),
+                childConstants = listOf(
+                    "hitHandle", "ChangeState", "EnableGeneralPurposeAttackColl",
+                ),
+                childOpCodes = handlerOps,
+            )
+        }.chunk()
+        val parsed = IsoLua51MetadataInspector.inspect(input)
+        assertTrue(parsed.valid)
+        val hit = parsed.hitEventTableWrites.single()
+        assertEquals(2, hit.adjacentClosureFunctionOrdinal)
+        assertEquals(3, hit.handlerOpcodeWindows.size)
+        assertEquals(listOf("hitHandle", "ChangeState",
+            "EnableGeneralPurposeAttackColl"),
+            hit.handlerOpcodeWindows.map { it.constantName })
+        assertTrue(hit.handlerOpcodeWindows[0].context.any { it.contains("op=CALL") })
+        assertContains(parsed.lines.joinToString("\n"),
+            "RESOLVED CHILD OPCODE WINDOWS=3")
+        assertContains(parsed.lines.joinToString("\n"), "HANDLER_SYMBOL pc=0")
+        assertContains(parsed.lines.joinToString("\n"), "not calls or dataflow")
+        assertEquals(7, parsed.prototypeSummaries[1].instructions)
     }
 
     @Test
