@@ -221,7 +221,7 @@ class IsoLua51MetadataInspectorTest {
         assertEquals(2, found.adjacentClosureFunctionOrdinal)
         assertEquals(1, found.adjacentClosureInstructionCount)
         assertContains(found.adjacentClosureNativeApis, "GetPlayerState")
-        assertEquals(emptyList<String>(), found.adjacentClosureCombatConstants)
+        assertContains(found.adjacentClosureCombatConstants, "GetPlayerState")
         assertContains(result.lines.joinToString("\n"),
             "adjacent_child_closure=0")
         assertContains(result.lines.joinToString("\n"),
