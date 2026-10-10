@@ -482,6 +482,61 @@ names** and determine whether any local payload has the Lua bytecode
 signature `1B 4C 75 61`. Even a confirmed Lua member would not yet
 prove its runtime execution or its use as a combat callback.
 
+## October 9, 19:04 — G01LUA ARC nine members resolved
+
+The latest exported `ULJM05775_10092026 (6).log` provides a
+**complete, structurally validated nine-entry ARC directory** for the
+confirmed `G01LUA` container in `BBS1.DAT` at byte `145745920`
+(physical sector `71165`). The prior first-sector SHA-256 matches.
+
+| ARC member | Type | ARC-relative offset | Length / directory ID | Header signature |
+| --- | --- | ---: | --- | --- |
+| `g01_aq.exa` | local | 304 | 510 bytes | `65786100` (`exa\0`) |
+| `g01.abc` | local | 816 | 192 bytes | `40414243` (`@ABC`) |
+| `g01_ve.exa` | local | 1008 | 534 bytes | `65786100` (`exa\0`) |
+| `g01_te.exa` | local | 1552 | 542 bytes | `65786100` (`exa\0`) |
+| `xaa002aq` | external | — | `0x20004350` (`arc/pc_aqua`) | Not opened |
+| `xaa002te` | external | — | `0x30004350` (`arc/pc_terra`) | Not opened |
+| `g01xx` | external | — | `0x45464645` (`arc/effect`) | Not opened |
+| `xaa002ve` | external | — | `0x10004350` (`arc/pc_ven`) | Not opened |
+| **`g01.lub`** | **external** | — | **`0xC0000000` (`lua`)** | Not opened |
+
+OpenKh's [BBSA directory-name catalog](https://github.com/OpenKH/OpenKh/blob/master/OpenKh.Bbs/Bbsa.cs)
+identifies the four character/effect directories and the `lua`
+category. Its [EXA format notes](https://github.com/OpenKH/OpenKh/blob/master/docs/bbs/file/type/exa.md)
+describe camerawork/cutscene data, while
+[ABC format notes](https://github.com/OpenKH/OpenKh/blob/master/docs/bbs/file/type/abc.md)
+describe attachment/collision data. **Header signatures and names
+do not prove the game's actual runtime use of these members.**
+
+The **most specific script-resource lead** is now `g01.lub`, an
+external Lua-category dependency of the `G01LUA` ARC—not any of its
+four local `.exa`/`.abc` members. The previous inspector had not
+followed nested external ARC dependencies.
+
+### Read-only follow-up added
+
+The new `IsoBbsaLinkedResourceProbe` examines *only validated*
+external ARC entries and requires both their exact BBSA directory/path
+identifier and OpenKh-style `CRC32(UPPERCASE(filename stem))`.
+BBSA indexes omit filename extensions, so the `g01.lub` link will
+be looked up as **`G01`, CRC32 `0x040C749E`**, under
+**`lua`, path ID `0xC0000000`**. This is distinct from the
+earlier enclosing ARC name `G01LUA` (CRC32 `0xF5BE1086`).
+
+For each linked entry it independently scans valid bounded BBSA
+12-byte directory records and 8-byte partition-file records. It
+reports exact matches, mapped logical/physical sectors, and up to
+64 initial bytes from each verified file (12 headers maximum).
+Invalid index namespaces are reported `UNVERIFIED`, never incorrectly
+as zero matches. Signature classification now also recognizes local
+`exa\0` and `@ABC` headers; it does not decode them.
+
+The uploaded log predates this nested external-link probe:
+**the Lua file's indexed presence, physical address, header, and
+execution status have not yet been established**. No executable
+injection, modified assets, or combat features were enabled.
+
 ## Verification
 
 Tests exercise a synthetic ISO with a main EBOOT, a second MIPS ELF,
