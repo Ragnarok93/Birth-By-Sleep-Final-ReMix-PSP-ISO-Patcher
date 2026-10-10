@@ -22,6 +22,56 @@ internal object IsoLua51MetadataInspector {
     private const val MAX_SYMBOLS = 48
     private const val MAX_PROTO_SUMMARIES = 24
     private const val MAX_OPCODE_REFS = 72
+    private const val MAX_HIT_WRITES = 48
+
+    data class HitEventTableWrite(
+        val ordinal: Int,
+        val depth: Int,
+        val pc: Int,
+        val eventName: String,
+        val tableRegister: Int,
+        val valueOperand: String,
+        val adjacentClosureProtoIndex: Int?,
+    )
+
+    data class HitEventWriteOperands(
+        val eventName: String,
+        val tableRegister: Int,
+        val valueOperand: String,
+        val adjacentClosureProtoIndex: Int?,
+    )
+
+    /**
+     * Lua 5.1 OP_SETTABLE A B C: R(A)[RK(B)] := RK(C).
+     *
+     * A narrowly observed CLOSURE at precisely pc-1 may identify a
+     * direct child-prototype value when its output register matches RK(C).
+     * This DOES NOT establish a valid runtime path, a table receiver,
+     * actor ownership or callback dispatch. Closure upvalue binding may
+     * use intervening instructions, which this intentionally does not infer.
+     */
+    internal fun hitEventTableWrite(
+        word: Int,
+        priorWord: Int?,
+        names: Map<Int, String>,
+        childCount: Int,
+    ): HitEventWriteOperands? {
+        if ((word and 63) != 9) return null // Lua 5.1 OP_SETTABLE
+        val b = (word ushr 23) and 511
+        val c = (word ushr 14) and 511
+        if (b < 256) return null
+        val name = names[b - 256] ?: return null
+        if (name !in HIT_EVENT_NAMES) return null
+        val table = (word ushr 6) and 255
+        val value = if (c >= 256) "K[${c - 256}]" else "R[$c]"
+        val closure = if (c < 256 && priorWord != null &&
+            (priorWord and 63) == 36 && ((priorWord ushr 6) and 255) == c
+        ) {
+            val child = (priorWord ushr 14) and 0x3ffff
+            child.takeIf { it < childCount }
+        } else null
+        return HitEventWriteOperands(name, table, value, closure)
+    }
 
     data class SymbolOpcodeReference(
         val ordinal: Int,
@@ -104,6 +154,7 @@ internal object IsoLua51MetadataInspector {
         val namedStringConstants: List<String> = emptyList(),
         val prototypeSummaries: List<PrototypeSummary> = emptyList(),
         val opcodeSymbolReferences: List<SymbolOpcodeReference> = emptyList(),
+        val hitEventTableWrites: List<HitEventTableWrite> = emptyList(),
     )
 
     fun inspect(bytes: ByteArray): Report {
@@ -189,6 +240,17 @@ internal object IsoLua51MetadataInspector {
                 lines += "          OPCODE_REF proto=${ref.ordinal} depth=${ref.depth} " +
                     "pc=${ref.pc} op=${ref.opcode} name=${ref.constantName} role=${ref.role}"
             }
+            lines += "          Lua 5.1 exact hit-event SETTABLE writes=" +
+                parser.hitWrites.size + " (max recorded=$MAX_HIT_WRITES; " +
+                "R value operand / immediately preceding valid child CLOSURE only)."
+            for (item in parser.hitWrites) {
+                lines += "          HIT_TABLE_WRITE proto=${item.ordinal} depth=${item.depth} " +
+                    "pc=${item.pc} key=${item.eventName} " +
+                    "table=R[${item.tableRegister}] value=${item.valueOperand} " +
+                    "adjacent_child_closure=${item.adjacentClosureProtoIndex?.toString() ?: "UNVERIFIED"}"
+            }
+            lines += "          LIMIT: An adjacent child CLOSURE is structural evidence only; " +
+                "neither source register nor target table identity or execution is proven."
             lines += "          Combat-keyword candidate constants=" +
                 parser.combatStrings.size + ": " +
                 parser.combatStrings.joinToString(" | ").ifEmpty { "none in bounded examples" }
@@ -200,7 +262,8 @@ internal object IsoLua51MetadataInspector {
                 parser.printableConstantCount,
                 parser.callbackNames.toList(), parser.nativeApiNames.toList(),
                 parser.hitEventNames.toList(), parser.namedSymbols.toList(),
-                parser.prototypes.toList(), parser.opcodeReferences.toList())
+                parser.prototypes.toList(), parser.opcodeReferences.toList(),
+                parser.hitWrites.toList())
         } catch (failure: DecodeError) {
             lines += "          UNVERIFIED: ${failure.message}; " +
                 "no conclusion about Lua execution or combat behavior."
@@ -234,6 +297,7 @@ internal object IsoLua51MetadataInspector {
         val hitEventNames = linkedSetOf<String>()
         val prototypes = mutableListOf<PrototypeSummary>()
         val opcodeReferences = mutableListOf<SymbolOpcodeReference>()
+        val hitWrites = mutableListOf<HitEventTableWrite>()
         var printableConstantCount = 0
             private set
 
@@ -335,6 +399,14 @@ internal object IsoLua51MetadataInspector {
             if (isNamedSymbol(value)) namedSymbols += value
         }
 
+        private fun opcodeWord(base: Int, pc: Int): Int {
+            val at = base + pc * 4
+            return (bytes[at].toInt() and 255) or
+                ((bytes[at + 1].toInt() and 255) shl 8) or
+                ((bytes[at + 2].toInt() and 255) shl 16) or
+                ((bytes[at + 3].toInt() and 255) shl 24)
+        }
+
         fun parseProto(depth: Int) {
             if (depth > MAX_DEPTH || functions >= MAX_FUNCTIONS) {
                 throw DecodeError("prototype count/depth exceeds bounded limit")
@@ -394,11 +466,7 @@ internal object IsoLua51MetadataInspector {
             // jump targets, call edges, execution, or registration inferred.
             for (pc in 0 until instructionCount) {
                 if (opcodeReferences.size >= MAX_OPCODE_REFS) break
-                val at = instructionOffset + pc * 4
-                val word = (bytes[at].toInt() and 255) or
-                    ((bytes[at + 1].toInt() and 255) shl 8) or
-                    ((bytes[at + 2].toInt() and 255) shl 16) or
-                    ((bytes[at + 3].toInt() and 255) shl 24)
+                val word = opcodeWord(instructionOffset, pc)
                 for (use in symbolOpcodeUses(word, symbolConstantIndices)) {
                     if (opcodeReferences.size >= MAX_OPCODE_REFS) break
                     opcodeReferences += SymbolOpcodeReference(
@@ -413,6 +481,18 @@ internal object IsoLua51MetadataInspector {
             val children = readCount()
             if (children > (bytes.size - position) / 24) {
                 throw DecodeError("nested proto count exceeds remaining chunk")
+            }
+            // Child count validates a possible adjacent CLOSURE Bx.
+            for (pc in 0 until instructionCount) {
+                if (hitWrites.size >= MAX_HIT_WRITES) break
+                val word = opcodeWord(instructionOffset, pc)
+                val prior = if (pc > 0) opcodeWord(instructionOffset, pc - 1) else null
+                val binding = hitEventTableWrite(word, prior,
+                    symbolConstantIndices, children) ?: continue
+                hitWrites += HitEventTableWrite(
+                    ordinal, depth, pc, binding.eventName,
+                    binding.tableRegister, binding.valueOperand,
+                    binding.adjacentClosureProtoIndex)
             }
             repeat(children) { parseProto(depth + 1) }
             countAndSkip(4) // lineinfo
