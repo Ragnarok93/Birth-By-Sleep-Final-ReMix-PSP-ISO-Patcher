@@ -21,6 +21,8 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -80,6 +82,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.yield
 import kotlinx.coroutines.withContext
 import okio.Path
 import okio.FileSystem
@@ -127,7 +130,6 @@ fun PatcherApp(
 
         fun appendLog(message: String) {
             logEntries += "[${fileGateway.localTimeStamp()}] $message"
-            if (logEntries.size > 2000) logEntries.removeAt(0)
         }
 
         fun start(label: String, operation: suspend (CancellationToken) -> Unit) {
@@ -338,8 +340,15 @@ fun PatcherApp(
                 val lines = withContext(Dispatchers.Default) {
                     patchingService.inspectCombatPort(sourcePath, token)
                 }
-                lines.forEach(::appendLog)
-                appendLog("Read-only ISO and combat research recorded in Logs; export the log to share file inventory, ELF maps and MIPS evidence.")
+                // Batch changes to Compose state so a full indexed Lua
+                // census cannot block UI recomposition for thousands of Text nodes.
+                for (batch in lines.chunked(128)) {
+                    token.throwIfCancelled()
+                    val timestamp = fileGateway.localTimeStamp()
+                    logEntries.addAll(batch.map { "[$timestamp] $it" })
+                    yield()
+                }
+                appendLog("Read-only exhaustive indexed Lua and MIPS analysis complete. Export Logs for all records and per-script digests.")
             }
         }
 
@@ -560,9 +569,10 @@ fun PatcherApp(
                 }
                 val temporary = fileGateway.createTempPath("bbs-log", ".log")
                 try {
-                    val content = logEntries.joinToString(separator = "\n", postfix = "\n")
                     withContext(Dispatchers.IO) {
-                        FileSystem.SYSTEM.sink(temporary, mustCreate = true).buffer().use { it.writeUtf8(content) }
+                        FileSystem.SYSTEM.sink(temporary, mustCreate = true).buffer().use { sink ->
+                            logEntries.forEach { sink.writeUtf8(it).writeUtf8("\n") }
+                        }
                         fileGateway.commitOutput(
                             temporary, destination, token,
                             ProgressReporter(::report), OutputContentKind.LOG,
@@ -1048,9 +1058,9 @@ private fun LogsPage(
     onVerifyOutput: () -> Unit,
     onExportLog: () -> Unit,
 ) {
-    val logScrollState = rememberScrollState()
+    val logScrollState = rememberLazyListState()
     LaunchedEffect(entries.size) {
-        logScrollState.animateScrollTo(logScrollState.maxValue)
+        if (entries.isNotEmpty()) logScrollState.scrollToItem(entries.lastIndex)
     }
     Column(
         Modifier
@@ -1062,18 +1072,18 @@ private fun LogsPage(
         Text("Logs", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold)
         StatusCard(status, progress)
         PatcherSurface(Modifier.fillMaxWidth()) {
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 180.dp, max = 500.dp)
-                    .verticalScroll(logScrollState),
+            LazyColumn(
+                Modifier.fillMaxWidth().heightIn(min = 180.dp, max = 500.dp),
+                state = logScrollState,
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 if (entries.isEmpty()) {
-                    Text("Operation details will appear here as work progresses.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    item {
+                        Text("Operation details will appear here as work progresses.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 } else {
-                    entries.forEach { entry ->
-                        Text(entry, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
+                    items(entries.size) { index ->
+                        Text(entries[index], style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
                     }
                 }
             }
@@ -1441,9 +1451,9 @@ private fun OptionsCard(
                         )
                     }
                     Text(
-                        "Combat research: inventory the selected ISO, inspect MIPS ELF modules, " +
-                            "trace native instructions and string references. Read-only; combat mods " +
-                            "remain disabled. Export findings from Logs.",
+                        "Full combat investigation: analyze native MIPS call/field evidence " +
+                            "and every indexed BBSA Lua script, including callback/command opcode references. " +
+                            "Read-only. No PPSSPP debugger needed; export the complete report in Logs.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
