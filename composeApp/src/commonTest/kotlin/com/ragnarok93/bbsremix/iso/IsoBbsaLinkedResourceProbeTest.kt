@@ -61,7 +61,14 @@ class IsoBbsaLinkedResourceProbeTest {
         val file = ByteArray(18 * 2048)
         // Mock BBS1.DAT begins at ISO sector 5. Logical sector 104
         // maps to physical BBS1 sector 5, total ISO sector 10.
-        byteArrayOf(0x1B, 0x4C, 0x75, 0x61, 0x51).copyInto(file, 10 * 2048)
+        // Minimal structurally valid Lua 5.1 float32 chunk in allocated
+        // BBS1 sector, with no constants, children, or debug entries.
+        val luaStart = 10 * 2048
+        byteArrayOf(0x1B, 0x4C, 0x75, 0x61, 0x51,
+            0, 1, 4, 4, 4, 4, 0).copyInto(file, luaStart)
+        file[luaStart + 27] = 2 // Proto maxstacksize
+        file[luaStart + 28] = 1 // one 4-byte Lua instruction
+        file[luaStart + 32] = 30 // synthetic RETURN opcode
         "ARC\u0000".encodeToByteArray().copyInto(file, 8 * 2048)
         try {
             fs.sink(path).buffer().use { it.write(file) }
@@ -82,6 +89,9 @@ class IsoBbsaLinkedResourceProbeTest {
             assertEquals(1, result.probes.first().location?.archiveIndex)
             assertEquals(5L, result.probes.first().location?.physicalSector)
             assertContains(result.probes.first().signature, "Lua bytecode signature")
+            assertContains(result.lines.joinToString("\n"), "VALID bounded Lua 5.1 prototype structure")
+            assertContains(result.lines.joinToString("\n"), "allocated_chunk_sha256=")
+            assertContains(result.lines.joinToString("\n"), "parser_status=VALID")
 
             val pc = result.links.last()
             assertEquals(0, pc.directoryTableMatches)
