@@ -25,6 +25,18 @@ internal object IsoBbsaLuaCategorySurvey {
     private const val SECTOR_BYTES = 2048L
     private const val MAX_SAMPLES = 24
     private const val MAX_SUMMARY_NAMES = 8
+    /**
+     * Candidate extensionless names independently matched by CRC32 against
+     * OpenKh.Bbs/resources/bbsa.txt. They are name hints, not verified script
+     * semantics; the directory ID and physical bytes remain authoritative.
+     */
+    private val KNOWN_NAME_HINTS = listOf(
+        "B11CD00", "G13HE00", "G14SW00", "G33VS00",
+        "G24LS00", "G28VS00", "G10_11SW", "VENTUS", "TERRA", "AQUA",
+    ).associateBy { IsoBbsaDirectoryEvidence.fileNameHash(it) }
+    private val PRIORITY_NAMES = listOf(
+        "B11CD00", "G13HE00", "G14SW00", "VENTUS", "TERRA", "AQUA",
+    ).map { IsoBbsaDirectoryEvidence.fileNameHash(it) }.toSet()
 
     data class Entry(
         val indexOffset: Int,
@@ -92,6 +104,22 @@ internal object IsoBbsaLuaCategorySurvey {
         }.distinctBy { it.indexOffset }
     }
 
+    /** Prioritize independently named hit-candidate/player scripts, and
+     * retain a deterministic evenly spaced sample of other eligible entries.
+     * This intentionally changes the sample from a uniform survey to a
+     * targeted + spread survey; it is not statistically representative.
+     */
+    internal fun selectPrioritized(eligible: List<Entry>, limit: Int = MAX_SAMPLES): List<Entry> {
+        if (limit <= 0) return emptyList()
+        val priority = eligible.filter { it.fileHash in PRIORITY_NAMES }.take(limit)
+        val remaining = eligible.filter { it.indexOffset !in priority.map { p -> p.indexOffset } }
+        return (priority + select(remaining, limit - priority.size))
+            .distinctBy { it.indexOffset }.sortedBy { it.indexOffset }
+    }
+
+    internal fun nameHint(hash: Long): String =
+        KNOWN_NAME_HINTS[hash] ?: "not in verified short-name hints"
+
     fun inspect(
         source: Path,
         index: ByteArray,
@@ -112,7 +140,8 @@ internal object IsoBbsaLuaCategorySurvey {
             it.fileHash != alreadyProbedG01 &&
                 it.sectors in 1..(IsoLua51MetadataInspector.MAX_INPUT_BYTES / SECTOR_BYTES).toInt()
         }
-        val chosen = select(eligible)
+        val chosen = selectPrioritized(eligible)
+        val prioritized = chosen.count { it.fileHash in PRIORITY_NAMES }
         val samples = mutableListOf<Sample>()
         var validChunks = 0
         var hitCandidates = 0
@@ -153,6 +182,7 @@ internal object IsoBbsaLuaCategorySurvey {
             if (apis.isNotEmpty()) apiCandidates++
             if (exampleNames.size < MAX_SUMMARY_NAMES) {
                 exampleNames += "name_hash=${hex(entry.fileHash)} " +
+                    "name_hint=${nameHint(entry.fileHash)} " +
                     "functions=${metadata.functions} instructions=${metadata.instructions} " +
                     "callbacks=${callbacks.joinToString(",").ifEmpty { "-" }}"
             }
@@ -162,7 +192,7 @@ internal object IsoBbsaLuaCategorySurvey {
         lines += "  BBSA directory lua-category entries=${indexed.size}; " +
             "eligible_other_small_chunks=${eligible.size} " +
             "(excluding G01, allocated 1..4 sectors); sampled=${samples.size}/${eligible.size} " +
-            "(max=$MAX_SAMPLES, evenly spaced by index order)."
+            "(max=$MAX_SAMPLES; priority_named=$prioritized, remainder spread across index)."
         lines += "  Among sampled: valid_Lua51=$validChunks " +
             "unverified_format_or_mapping=$rejected " +
             "chunks_with_exact_hit_event_name_constants=$hitCandidates " +
@@ -170,6 +200,7 @@ internal object IsoBbsaLuaCategorySurvey {
         for (sample in samples) {
             if (sample.hitEvents.isEmpty() && sample.combatApis.isEmpty()) continue
             lines += "  COMBAT STRING CANDIDATE filename_hash=${hex(sample.record.fileHash)} " +
+                "name_hint=${nameHint(sample.record.fileHash)} " +
                 "index_at=${sample.record.indexOffset} " +
                 "sector=${sample.record.logicalSector} sectors=${sample.record.sectors} " +
                 "physical=${sample.location?.let {
@@ -181,8 +212,10 @@ internal object IsoBbsaLuaCategorySurvey {
         }
         for (line in exampleNames) lines += "  LUA example $line"
         if (samples.isEmpty()) lines += "  No eligible non-G01 Lua records for bounded preview."
-        lines += "  LIMIT: This is only an evenly spaced subset of short indexed Lua " +
-            "chunks, not a full-Lua-index scan. No-match in sampled files does NOT " +
+        lines += "  LIMIT: This is a prioritized + evenly spread subset of short " +
+            "indexed Lua chunks, NOT a full-Lua-index scan or statistically random " +
+            "sample. Name hints derive from OpenKh's public resource-name dictionary. " +
+            "No-match in sampled files does NOT " +
             "imply absent combat scripts elsewhere. Constant-table names alone " +
             "do NOT prove callback definitions or execution. No game files modified."
         return Report(true, indexed.size, eligible.size, samples, lines)
