@@ -52,6 +52,7 @@ internal object IsoBbsaLuaCategorySurvey {
         val callbacks: List<String> = emptyList(),
         val hitEvents: List<String> = emptyList(),
         val combatApis: List<String> = emptyList(),
+        val opcodeReferences: List<IsoLua51MetadataInspector.SymbolOpcodeReference> = emptyList(),
     )
 
     data class Report(
@@ -187,8 +188,12 @@ internal object IsoBbsaLuaCategorySurvey {
                     "callbacks=${callbacks.joinToString(",").ifEmpty { "-" }}"
             }
             samples += Sample(entry, location, "VALID Lua 5.1 structure",
-                callbacks, hits, apis)
+                callbacks, hits, apis, metadata.opcodeSymbolReferences)
         }
+        lines += "  Lua filename hashes with public dictionary hints: " +
+            "B11CD00=0x1A322A80 G14SW00=0xCE93C0E1 " +
+            "G13HE00=0xE409BB71 VENTUS=0xDED69D4D. " +
+            "These are name hints, not verified script semantics."
         lines += "  BBSA directory lua-category entries=${indexed.size}; " +
             "eligible_other_small_chunks=${eligible.size} " +
             "(excluding G01, allocated 1..4 sectors); sampled=${samples.size}/${eligible.size} " +
@@ -209,6 +214,15 @@ internal object IsoBbsaLuaCategorySurvey {
                 "hit_event_constants=${sample.hitEvents.joinToString(",").ifEmpty { "-" }} " +
                 "native_API_constants=${sample.combatApis.joinToString(",").ifEmpty { "-" }} " +
                 "callback_constants=${sample.callbacks.take(8).joinToString(",").ifEmpty { "-" }}"
+            val important = sample.opcodeReferences.filter {
+                it.constantName in sample.hitEvents || it.constantName in sample.combatApis
+            }
+            lines += "    OPCODE CROSSREF candidate references=${important.size} " +
+                "(not execution or function registration)."
+            for (ref in important.take(10)) {
+                lines += "      proto=${ref.ordinal} pc=${ref.pc} op=${ref.opcode} " +
+                    "name=${ref.constantName} role=${ref.role}"
+            }
         }
         for (line in exampleNames) lines += "  LUA example $line"
         if (samples.isEmpty()) lines += "  No eligible non-G01 Lua records for bounded preview."
