@@ -261,8 +261,10 @@ internal class IsoCombatResearchService(
         }
         lines += "COVERAGE LIMITS: ISO has been inventoried only through directory entries and " +
             "selected headers. Packed DAT/ARC/CPK internals, encrypted PRX modules, " +
-            "dynamically loaded overlay relocation, script bytecode, and runtime actor " +
-            "ownership have NOT been decoded."
+            "dynamically loaded overlay relocation, executable Lua opcode semantics, " +
+            "runtime Lua dispatch, and actor ownership have NOT been established. " +
+            "A supported Lua 5.1 chunk may be structurally parsed for metadata and " +
+            "string constants without executing or decompiling its instructions."
         lines += "Safety: no ISO files or game modules were modified. " +
             "No combat patch, code cave or executable hook was generated."
         return Report(files.size, directoryCount, elfCount, probes, truncated, findings, lines)
