@@ -31,11 +31,13 @@ internal object IsoBbsaLuaCategorySurvey {
      * semantics; the directory ID and physical bytes remain authoritative.
      */
     private val KNOWN_NAME_HINTS = listOf(
-        "B11CD00", "G13HE00", "G14SW00", "G33VS00",
-        "G24LS00", "G28VS00", "G10_11SW", "VENTUS", "TERRA", "AQUA",
+        "B11CD00", "B11SB00", "G13HE00", "G14SW00", "G31VS00",
+        "G17VS00", "G33VS00", "G24LS00", "G28VS00", "G10_11SW",
+        "VENTUS", "TERRA", "AQUA",
     ).associateBy { IsoBbsaDirectoryEvidence.fileNameHash(it) }
     private val PRIORITY_NAMES = listOf(
-        "B11CD00", "G13HE00", "G14SW00", "VENTUS", "TERRA", "AQUA",
+        "B11CD00", "B11SB00", "G13HE00", "G14SW00",
+        "G31VS00", "VENTUS", "TERRA", "AQUA",
     ).map { IsoBbsaDirectoryEvidence.fileNameHash(it) }.toSet()
 
     data class Entry(
@@ -53,6 +55,7 @@ internal object IsoBbsaLuaCategorySurvey {
         val hitEvents: List<String> = emptyList(),
         val combatApis: List<String> = emptyList(),
         val opcodeReferences: List<IsoLua51MetadataInspector.SymbolOpcodeReference> = emptyList(),
+        val hitEventTableWrites: List<IsoLua51MetadataInspector.HitEventTableWrite> = emptyList(),
     )
 
     data class Report(
@@ -188,10 +191,12 @@ internal object IsoBbsaLuaCategorySurvey {
                     "callbacks=${callbacks.joinToString(",").ifEmpty { "-" }}"
             }
             samples += Sample(entry, location, "VALID Lua 5.1 structure",
-                callbacks, hits, apis, metadata.opcodeSymbolReferences)
+                callbacks, hits, apis, metadata.opcodeSymbolReferences,
+                metadata.hitEventTableWrites)
         }
         lines += "  Lua filename hashes with public dictionary hints: " +
-            "B11CD00=0x1A322A80 G14SW00=0xCE93C0E1 " +
+            "B11CD00=0x1A322A80 B11SB00=0x4EA601AD " +
+            "G31VS00=0x7B6CB674 G14SW00=0xCE93C0E1 " +
             "G13HE00=0xE409BB71 VENTUS=0xDED69D4D. " +
             "These are name hints, not verified script semantics."
         lines += "  BBSA directory lua-category entries=${indexed.size}; " +
@@ -222,6 +227,13 @@ internal object IsoBbsaLuaCategorySurvey {
             for (ref in important.take(10)) {
                 lines += "      proto=${ref.ordinal} pc=${ref.pc} op=${ref.opcode} " +
                     "name=${ref.constantName} role=${ref.role}"
+            }
+            for (binding in sample.hitEventTableWrites.take(10)) {
+                lines += "    HIT TABLE ASSIGNMENT proto=${binding.ordinal} pc=${binding.pc} " +
+                    "event=${binding.eventName} table=R[${binding.tableRegister}] " +
+                    "value=${binding.valueOperand} " +
+                    "adjacent_child_closure=${binding.adjacentClosureProtoIndex?.toString() ?: "UNVERIFIED"} " +
+                    "(not runtime registration)"
             }
         }
         for (line in exampleNames) lines += "  LUA example $line"
