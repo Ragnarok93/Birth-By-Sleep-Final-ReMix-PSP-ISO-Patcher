@@ -30,7 +30,7 @@ is activated.
 | Generic script calls | `PspCombatScriptCallEvidence` | Verified native named-call helper call sites and MIPS delay-slot setup |
 | Whole disc | `IsoCombatResearchService` | Recursive ISO9660 directory/file inventory, extension counts, relevant file names/sizes, file-format header probes |
 | Additional game modules | `IsoCombatResearchService` | SHA-256, ELF sections, executable JAL/JALR totals, event-name candidates and sampled offset-opcode counts for bounded unencrypted ELF modules |
-| BBSA archive header | `IsoCombatResearchService` | Recognized `bbsa` game DAT archive, version (5/6), bounded index size and SHA-256; embedded asset index *not* decoded |
+| BBSA archive header | `IsoCombatResearchService` | Recognized `bbsa` game DAT archive, version (5/6), bounded index size and SHA-256; bounded, read-only partition and directory index correlation is decoded by separate tools |
 | BBSA directory cross-references | `IsoBbsaDirectoryEvidence` | Bounded BBSA directory records and exact hash-field correlation against validated ARC external links; candidate name hashes/packed sector metadata, no extraction |
 | BBS0–BBS4 DAT reconnaissance | `IsoArchiveSectorResearch` | SHA-256 and first 16 bytes of initial sector; bounded, evenly distributed 2 KiB-sector probes; ARC-like header candidates, without decoding assets or pretending a zero-sample result is exhaustive |
 | Auxiliary ELF load map | `PspElfModuleMap` | PT_LOAD file/virtual ranges, memory and file sizes, segment flags, entry point, executable-section addresses and bounds checks; no runtime overlay reservation claim |
@@ -536,6 +536,69 @@ The uploaded log predates this nested external-link probe:
 **the Lua file's indexed presence, physical address, header, and
 execution status have not yet been established**. No executable
 injection, modified assets, or combat features were enabled.
+
+## October 9, 19:22 — actual G01.LUB Lua 5.1 bytecode identified
+
+The newest uploaded export `ULJM05775_10092026 (7).log` shows a
+**positive, exact** BBS0 index lookup for the Lua-category dependency of
+the fully validated `arc/gimmick/G01LUA` ARC. The link is
+`g01.lub` -> directory ID **`0xC0000000`** (Lua category);
+OpenKh's extensionless uppercase index key is **`G01`**,
+CRC32 **`0x040C749E`**.
+
+| Grounded log evidence | Value |
+| --- | --- |
+| BBSA namespace | 12-byte file-directory record, directory ID `0xC0000000` |
+| Indexed entry location in BBS0 header | Byte `112244` |
+| Exact hash/path matches | **1** in 15,093 directory entries; **0** in 15 partition namespaces |
+| Global logical sector | `79156` |
+| Allocated length | 2 × 2,048 = **4,096 bytes** |
+| Physical archive | **BBS0.DAT** |
+| Physical sector | **79,281** |
+| Archive-relative byte offset | **162,367,488** |
+| Sampled first 64 bytes SHA-256 | `da299f4082d24cbfadce863a7ce39620ba35d1cc9b2dfe92ae2deefc87276959` |
+| First 16 bytes | `1B4C7561510001040404040000000000` |
+| Decoded header evidence | **Lua 5.1** (`0x51`), format 0, little-endian, 32-bit int/size_t/instruction/number, nonintegral Lua number |
+
+All four other external dependencies of the ARC also resolved to
+**exact partition-file index entries** and all four first headers
+were **ARC v1** in BBS1.DAT:
+
+- `xaa002aq`, `arc/pc_aqua`: physical sector **70,814**, 21 sectors.
+- `xaa002te`, `arc/pc_terra`: physical sector **70,835**, 24 sectors.
+- `g01xx`, `arc/effect`: physical sector **71,167**, 17 sectors.
+- `xaa002ve`, `arc/pc_ven`: physical sector **70,859**, 23 sectors.
+
+**Scope of proof:** the resource contains a recognizable Lua 5.1
+bytecode header, but the previous build sampled just 64 bytes; it
+did **not** parse the bytecode's function prototypes, strings,
+instructions, execution state, or live combat semantics. This is a
+gimmick-associated script lead, not a proven source for the requested
+Better Battle System combat mechanisms.
+
+### New bounded script metadata inspection
+
+`IsoLua51MetadataInspector` follows Lua 5.1's documented
+[undump record ordering](https://www.lua.org/source/5.1/lundump.c.html)
+with strict byte and nesting bounds. For **an exact Lua-category ARC
+link/index match only**, the inspector may read at most the
+matching BBSA allocation (up to **8 KiB**) in memory, and
+reports:
+
+- ABI details; count of nested function prototypes and instructions;
+  number of Lua string constants; bytes consumed versus allocation.
+- Up to 18 printable constant string examples and combat-keyword
+  candidates (names are **not evidence of event delivery**).
+- Explicit malformed/unsupported/truncated reasons marked
+  **UNVERIFIED**, including source bounds and unsupported ABI.
+- No execution, disassembly, patching, asset export, or persistent
+  local copy. At most two Lua chunks can be fully staged.
+
+The script's **actual** prototype/string contents have **not yet**
+been parsed on the uploaded ISO: the (7) log was generated before this
+new parser. The next export will differentiate valid structured Lua
+data from an unsupported/malformed Lua header, and report any
+candidate names for a *separate* runtime investigation.
 
 ## Verification
 
