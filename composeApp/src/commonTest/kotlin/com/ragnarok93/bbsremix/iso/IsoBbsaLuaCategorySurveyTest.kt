@@ -110,6 +110,32 @@ class IsoBbsaLuaCategorySurveyTest {
     }
 
     @Test
+    fun priority_named_lua_candidates_are_selected_even_if_uniform_sample_misses_them() {
+        val list = (0 until 90).map {
+            IsoBbsaLuaCategorySurvey.Entry(
+                it * 12,
+                if (it == 41) IsoBbsaDirectoryEvidence.fileNameHash("B11CD00")
+                else if (it == 47) IsoBbsaDirectoryEvidence.fileNameHash("VENTUS")
+                else if (it == 52) IsoBbsaDirectoryEvidence.fileNameHash("G14SW00")
+                else it.toLong(),
+                200L + it, 1)
+        }
+        val selected = IsoBbsaLuaCategorySurvey.selectPrioritized(list)
+        assertEquals(24, selected.size)
+        assertContains(selected.map { it.indexOffset }, 41 * 12)
+        assertContains(selected.map { it.indexOffset }, 47 * 12)
+        assertContains(selected.map { it.indexOffset }, 52 * 12)
+        assertEquals(selected.map { it.indexOffset }.sorted(),
+            selected.map { it.indexOffset })
+        assertEquals("B11CD00", IsoBbsaLuaCategorySurvey.nameHint(
+            IsoBbsaDirectoryEvidence.fileNameHash("B11CD00")))
+        assertEquals("VENTUS", IsoBbsaLuaCategorySurvey.nameHint(
+            IsoBbsaDirectoryEvidence.fileNameHash("VENTUS")))
+        assertEquals("not in verified short-name hints",
+            IsoBbsaLuaCategorySurvey.nameHint(0x12345678L))
+    }
+
+    @Test
     fun reads_only_small_non_g01_lua_allocations_and_reports_exact_combat_name_candidates() {
         val source = FileSystem.SYSTEM_TEMPORARY_DIRECTORY / "bbs-lua-category-survey.iso"
         fs.delete(source, mustExist = false)
