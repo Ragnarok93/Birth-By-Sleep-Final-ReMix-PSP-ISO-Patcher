@@ -168,7 +168,7 @@ class IsoBbsaLuaCategorySurveyTest {
             val logged = report.lines.joinToString("\n")
             assertContains(logged, "chunks_with_exact_hit_event_name_constants=1")
             assertContains(logged, "COMBAT STRING CANDIDATE")
-            assertContains(logged, "not a full-Lua-index scan")
+            assertContains(logged, "NOT a full-Lua-index scan")
             assertTrue(fs.source(source).buffer().use { it.readByteArray() }
                 .contentEquals(before))
         } finally {
