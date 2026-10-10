@@ -3,6 +3,7 @@ package com.ragnarok93.bbsremix.iso
 import com.ragnarok93.bbsremix.patch.CancellationToken
 import com.ragnarok93.bbsremix.patch.NeverCancelled
 import com.ragnarok93.bbsremix.patch.PspCombatDeepStaticInspector
+import com.ragnarok93.bbsremix.patch.PspCombatNativeXrefSurvey
 import com.ragnarok93.bbsremix.patch.PspCombatEventEvidence
 import com.ragnarok93.bbsremix.patch.PspCombatStaticAnalysis
 import com.ragnarok93.bbsremix.patch.PspElfModuleMap
@@ -186,6 +187,7 @@ internal class IsoCombatResearchService(
             staged += module.size
             elfCount++
             val deep = PspCombatDeepStaticInspector.inspect(module, entry.path)
+            lines += PspCombatNativeXrefSurvey.inspect(module, entry.path).lines
             val sections = PspCombatStaticAnalysis.sectionMap(module)
             val events = PspCombatEventEvidence.scan(module, sections)
                 .filter { it.occurrences.isNotEmpty() }
