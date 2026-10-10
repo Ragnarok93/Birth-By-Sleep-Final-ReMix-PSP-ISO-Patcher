@@ -888,6 +888,59 @@ events, or the native player hit-confirm mechanism. Historical Stage
 of ten auxiliary ELF modules; therefore combat patching remains
 disabled and the ISO is not modified.
 
+## October 9, 22:39 — Lua hit-event SETTABLE and child-closure evidence
+
+`ULJM05775_10092026 (3).log` confirms the nonmutating
+Lua 5.1 `OnHitAttack` table-write analysis in a prioritized
+24-of-95 eligible Lua sample (205 total indexed Lua-directory entries).
+All 24 samples parsed structurally as Lua 5.1 bytecode. Five
+sampled scripts have exact `OnHitAttack` string constants;
+seven contain at least one known native combat API-name constant.
+
+Six `SETTABLE` instructions across those five files use
+`OnHitAttack` as a constant table key:
+
+| Name hint | Physical BBS0.DAT sector | Lua proto / instruction PC | Bytecode value evidence |
+| --- | ---: | --- | --- |
+| `B11CD00` | 78680 | proto 1, PC 22 | R1; immediately preceding child `CLOSURE` index 2 -> validated child prototype ordinal 4 (1 instruction) |
+| `B11CD00` | 78680 | proto 1, PC 51 | R1; preceding child `CLOSURE` index 9 -> prototype ordinal 11 (3 instructions) |
+| **`B11SB00`** | **78709** | **proto 1, PC 24** | **R3; immediate child closure UNVERIFIED** |
+| `G31VS00` | 79505 | proto 1, PC 162 | R15; preceding child `CLOSURE` index 33 -> prototype ordinal 35 (3 instructions); `GetMotionNowFrame` string occurs elsewhere in that script |
+| `G14SW00` | 79406 | proto 1, PC 50 | R1; preceding child `CLOSURE` index 12 -> prototype ordinal 14 (1 instruction) |
+| `G13HE00` | 79389 | proto 1, PC 82 | R7; preceding child `CLOSURE` index 13 -> prototype ordinal 15 (1 instruction) |
+
+The five resolved child prototypes have **no exact known
+native combat API-name strings** according to the log, though
+their actual runtime action is still unverified. In Lua 5.1,
+`SETTABLE R[A],K[OnHitAttack],R[C]` writes a keyed table
+value. An adjacent child `CLOSURE` is **static bytecode
+association**, not evidence of a runtime invocation, hit
+confirmation, or the target table's identity.
+
+The **B11SB00** case is now a concrete, narrow unresolved
+register-provenance question. The inspector's prior test only
+recognized `CLOSURE` exactly at PC-1 with a matching
+destination register. A closure may be separated by a
+`MOVE`, upvalue capture, or other Lua bytecode operations,
+but the current export cannot distinguish those possibilities.
+
+### Additional bounded diagnostics
+
+For unresolved `OnHitAttack` table values, the new inspector
+prints **at most seven raw preceding Lua 5.1 instructions
+within the same prototype** (PC, opcode word, name and A/B/C/Bx
+operand fields) in the Lua category survey.
+The diagnostic deliberately does **not** infer register
+flow, control flow, upvalue capture or handler execution.
+A new user export is needed before drawing conclusions about
+`B11SB00`'s R3 value. No combat patch is enabled.
+
+Previous PSP native proof remains: player cancel bit 0x1000
+at +0x238 is established, but no Lua-to-player hit-confirm
+or safe, lifecycle-aware resident code site is established.
+Historical Stage4/5 addresses still overlap eight
+auxiliary executable ELF module ranges.
+
 ## Verification
 
 Tests exercise a synthetic ISO with a main EBOOT, a second MIPS ELF,
