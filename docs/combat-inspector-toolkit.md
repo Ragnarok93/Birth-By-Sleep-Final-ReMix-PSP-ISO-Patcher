@@ -832,6 +832,62 @@ The uploaded log predates this value-operand investigation.
 Use a new export to establish whether these five hit-event writes
 are immediately coupled to valid child-prototype creation.
 
+## October 9, 22:30 — confirmed Lua OnHitAttack SETTABLE + adjacent child CLOSURE candidates
+
+The newly uploaded `ULJM05775_10092026 (2).log` was produced
+against the supported, unmodified `ULJM05775` EBOOT
+SHA-256 `8c8947e83b829199f82370c4c638856718886d9a0a525892fed22ce6a8b26ca7`.
+
+A **bounded prioritized survey** validated 24 of 24 sampled Lua 5.1
+chunks from **205 indexed Lua-category resources**, of which 95
+non-G01 entries had 1–4-sector allocations. The log records **five**
+hit-event candidate scripts and **seven** scripts with known native
+API-name constants.
+
+The exact Lua 5.1 `OP_SETTABLE` key operand resolves to
+`OnHitAttack` in **six** observed instructions across five files:
+
+| Script (OpenKh dictionary name hint) | Parent instruction PC(s) | Immediate child CLOSURE Bx (if matched) |
+| --- | --- | --- |
+| `B11CD00` | 22, 51 | 2, 9 |
+| `B11SB00` | 24 | **UNVERIFIED** |
+| `G31VS00` | 162 | 33 |
+| `G14SW00` | 50 | 12 |
+| `G13HE00` | 82 | 13 |
+
+These are **six table key writes, not six observed live callbacks**.
+A one-instruction adjacency match with `OP_CLOSURE` suggests the
+assigned register may have originated in a direct child prototype.
+It does not prove the table identity, actor ownership, live Lua
+registration, hit-confirm semantics, MIPS/Lua dispatch, or safe
+runtime code injection. `B11SB00` has no such immediate adjacency
+match, and the inspector must not silently fill that gap.
+
+The following **source-backed native API-name constants** were
+observed in Lua category scripts: `GetPlayerState` in
+`G33VS00`, and `GetMotionNowFrame` in `TERRA`,
+`G24LS00`, `G31VS00`, `AQUA`, `VENTUS`,
+and `G10_11SW`. The observed `GETTABLE` opcode
+cross-references are more specific than bare string presence,
+but neither confirms native function invocation.
+
+### Next read-only child-prototype refinement
+
+The parser now resolves each valid, immediately adjacent `CLOSURE`
+**Bx against its parent's validated direct-children array**, rather
+than treating the raw Bx as a global script function ordinal.
+The log separately reports the resolved child Lua prototype ordinal,
+its instruction count, and exact native combat API / combat keyword
+constants found in that child. All results remain *static structural*
+hints. Missing/nonadjacent closures are explicitly `UNVERIFIED`.
+
+This does **not** yet trace register values, branching/control flow,
+actual table receiver identity, Lua function calls, emulator runtime
+events, or the native player hit-confirm mechanism. Historical Stage
+4/5 injection addresses still overlap executable regions in eight
+of ten auxiliary ELF modules; therefore combat patching remains
+disabled and the ISO is not modified.
+
 ## Verification
 
 Tests exercise a synthetic ISO with a main EBOOT, a second MIPS ELF,
