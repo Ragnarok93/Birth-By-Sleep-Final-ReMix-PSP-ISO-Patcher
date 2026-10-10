@@ -36,6 +36,7 @@ internal object IsoBbsaIndexedArcEvidence {
         val localEntries: Int,
         val members: List<MemberEvidence>,
         val lines: List<String>,
+        val externalReferences: List<IsoArcMetadataProbe.Entry> = emptyList(),
     )
 
     fun inspect(
@@ -112,7 +113,8 @@ internal object IsoBbsaIndexedArcEvidence {
         lines += "      LIMIT: ARC member names and 16-byte signature checks do NOT " +
             "identify handler semantics, hit-confirm callbacks, or runtime lifetimes."
         return Result(true, table.entryCount, table.externalLinks,
-            table.payloadRecords, members, lines)
+            table.payloadRecords, members, lines,
+            table.entries.filter { it.isExternalLink })
     }
 
     private fun hex(value: Long): String =
