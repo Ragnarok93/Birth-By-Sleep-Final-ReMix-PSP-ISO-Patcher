@@ -24,6 +24,7 @@ internal object IsoLua51MetadataInspector {
     private const val MAX_OPCODE_REFS = 72
     private const val MAX_HIT_WRITES = 48
     private const val MAX_UNRESOLVED_PRIOR_OPCODES = 7
+    private const val MAX_CLOSURE_UPVALUES = 16
 
     data class HitEventTableWrite(
         val ordinal: Int,
@@ -40,6 +41,8 @@ internal object IsoLua51MetadataInspector {
         val adjacentClosureCombatConstants: List<String> = emptyList(),
         /** Raw bounded preceding opcodes, diagnostic only; not dataflow. */
         val unresolvedPriorInstructions: List<String> = emptyList(),
+        /** Immediate, Lua 5.1 capture descriptors, or unresolved. Static only. */
+        val closureProvenance: String = "UNVERIFIED",
     )
 
     /**
@@ -178,6 +181,7 @@ internal object IsoLua51MetadataInspector {
         val callbackNameConstants: List<String>,
         val combatKeywordConstants: List<String>,
         val nativeApiNameConstants: List<String> = emptyList(),
+        val upvalueCount: Int = 0,
     )
 
     data class Report(
@@ -291,6 +295,7 @@ internal object IsoLua51MetadataInspector {
                     "pc=${item.pc} key=${item.eventName} " +
                     "table=R[${item.tableRegister}] value=${item.valueOperand} " +
                     "adjacent_child_closure=${item.adjacentClosureProtoIndex?.toString() ?: "UNVERIFIED"} " +
+                    "closure_provenance=${item.closureProvenance} " +
                     "resolved_child_proto=${item.adjacentClosureFunctionOrdinal?.toString() ?: "UNVERIFIED"} " +
                     "child_instructions=${item.adjacentClosureInstructionCount?.toString() ?: "UNVERIFIED"} " +
                     "child_native_API_constants=${item.adjacentClosureNativeApis.joinToString(",").ifEmpty { "-" }} " +
@@ -304,8 +309,10 @@ internal object IsoLua51MetadataInspector {
                     }
                 }
             }
-            lines += "          LIMIT: An adjacent child CLOSURE is structural evidence only; " +
-                "neither source register nor target table identity or execution is proven."
+            lines += "          LIMIT: A child CLOSURE immediately preceding SETTABLE or " +
+                "followed by validated Lua 5.1 MOVE/GETUPVAL upvalue-binding " +
+                "descriptors is structural evidence only. Table receiver identity, " +
+                "runtime invocation, actor ownership, and hit confirmation are NOT proven."
             lines += "          Combat-keyword candidate constants=" +
                 parser.combatStrings.size + ": " +
                 parser.combatStrings.joinToString(" | ").ifEmpty { "none in bounded examples" }
@@ -454,6 +461,45 @@ internal object IsoLua51MetadataInspector {
             if (isNamedSymbol(value)) namedSymbols += value
         }
 
+        /**
+         * Lua 5.1 lvm.c OP_CLOSURE reads one pseudo-instruction per child
+         * upvalue immediately following CLOSURE. These must be MOVE or
+         * GETUPVAL and are NOT dispatched as ordinary executable bytecode.
+         *
+         * Narrow recognition only: the child is in the validated direct
+         * Proto[] array, declares a positive bounded nups, captures have
+         * exactly the required shape, CLOSURE targets the SETTABLE value
+         * register, and SETTABLE follows immediately after the descriptors.
+         * No arbitrary register tracing, jump analysis or callback claims.
+         */
+        internal fun closureWithBoundUpvalues(
+            hitWord: Int,
+            hitPc: Int,
+            instructions: List<Int>,
+            childUpvalues: List<Int>,
+        ): Int? {
+            if ((hitWord and 63) != 9) return null
+            val valueC = (hitWord ushr 14) and 511
+            if (valueC >= 256 || hitPc < 2 || hitPc >= instructions.size) return null
+            val maxNups = minOf(MAX_CLOSURE_UPVALUES, hitPc - 1)
+            for (nups in 1..maxNups) {
+                val closurePc = hitPc - nups - 1
+                val closure = instructions[closurePc]
+                if ((closure and 63) != 36 ||
+                    ((closure ushr 6) and 255) != valueC
+                ) continue
+                val child = (closure ushr 14) and 0x3ffff
+                if (child >= childUpvalues.size ||
+                    childUpvalues[child] != nups
+                ) continue
+                val descriptorOps = (closurePc + 1 until hitPc).map {
+                    instructions[it] and 63
+                }
+                if (descriptorOps.all { it == 0 || it == 4 }) return child
+            }
+            return null
+        }
+
         private fun opcodeWord(base: Int, pc: Int): Int {
             val at = base + pc * 4
             return (bytes[at].toInt() and 255) or
@@ -535,7 +581,7 @@ internal object IsoLua51MetadataInspector {
             prototypes += PrototypeSummary(ordinal, depth, lineStart, lineEnd,
                 parameters, instructionCount, printableInProto,
                 callbackInProto.take(MAX_EXAMPLES), combatInProto.take(MAX_EXAMPLES),
-                apiInProto.take(MAX_EXAMPLES))
+                apiInProto.take(MAX_EXAMPLES), upvalues)
             val children = readCount()
             if (children > (bytes.size - position) / 24) {
                 throw DecodeError("nested proto count exceeds remaining chunk")
@@ -557,7 +603,9 @@ internal object IsoLua51MetadataInspector {
                     ordinal, depth, pc, binding.eventName,
                     binding.tableRegister, binding.valueOperand,
                     binding.adjacentClosureProtoIndex,
-                    unresolvedPriorInstructions = priorWindow)
+                    unresolvedPriorInstructions = priorWindow,
+                    closureProvenance = if (binding.adjacentClosureProtoIndex != null)
+                        "immediate_CLOSURE" else "UNVERIFIED")
             }
             val immediateChildren = mutableListOf<PrototypeSummary>()
             repeat(children) {
@@ -567,19 +615,33 @@ internal object IsoLua51MetadataInspector {
                 // descendants follow it but are not direct children here.
                 immediateChildren += prototypes[childOrdinalIndex]
             }
-            // Child CLOSURE operand Bx is zero-based in the *parent's*
-            // direct Proto array. Resolve only after all children validate.
-            // Neither adjacency nor child metadata proves runtime dispatch.
+            // Child CLOSURE operand Bx is zero-based in the parent's
+            // direct Proto array. After validating all direct children,
+            // also recognize the Lua 5.1 CLOSURE + N upvalue binding
+            // pseudo-instruction pattern (MOVE/GETUPVAL only).
+            val code = (0 until instructionCount).map {
+                opcodeWord(instructionOffset, it)
+            }
             for (at in hitWrites.indices) {
                 val event = hitWrites[at]
                 if (event.ordinal != ordinal) continue
-                val idx = event.adjacentClosureProtoIndex ?: continue
-                val child = immediateChildren.getOrNull(idx) ?: continue
+                val idx = event.adjacentClosureProtoIndex
+                    ?: closureWithBoundUpvalues(
+                        code[event.pc], event.pc, code,
+                        immediateChildren.map { it.upvalueCount },
+                    )
+                val child = idx?.let { immediateChildren.getOrNull(it) } ?: continue
+                val bindingMode = if (event.adjacentClosureProtoIndex != null)
+                    "immediate_CLOSURE" else
+                    "CLOSURE_plus_${child.upvalueCount}_Lua51_upvalue_descriptors"
                 hitWrites[at] = event.copy(
+                    adjacentClosureProtoIndex = idx,
                     adjacentClosureFunctionOrdinal = child.ordinal,
                     adjacentClosureInstructionCount = child.instructions,
                     adjacentClosureNativeApis = child.nativeApiNameConstants,
                     adjacentClosureCombatConstants = child.combatKeywordConstants,
+                    unresolvedPriorInstructions = emptyList(),
+                    closureProvenance = bindingMode,
                 )
             }
             countAndSkip(4) // lineinfo
