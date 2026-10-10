@@ -231,6 +231,53 @@ class IsoLua51MetadataInspectorTest {
     }
 
     @Test
+    fun unresolved_hit_value_reports_preceding_closure_and_move_without_claiming_register_flow() {
+        // The immediate-predecessor-only rule cannot identify the value
+        // when a MOVE appears between a CLOSURE and a table assignment.
+        // We deliberately DO NOT infer the move's origin; the raw context
+        // is diagnostic evidence for a later, separately verified pass.
+        fun abc(op: Int, a: Int, b: Int, c: Int): Int =
+            op or (a shl 6) or (c shl 14) or (b shl 23)
+        fun abx(op: Int, a: Int, bx: Int): Int =
+            op or (a shl 6) or (bx shl 14)
+
+        val closure = abx(36, 2, 0)  // CLOSURE R2 <- child 0
+        val move = abc(0, 3, 2, 0) // MOVE R3 <- R2
+        val hitWrite = abc(9, 0, 256, 3) // R0["OnHitAttack"] <- R3
+        val raw = LuaBytes().apply {
+            proto(listOf("OnHitAttack"), nested = true,
+                opcodes = listOf(closure, move, hitWrite, 30))
+        }.chunk()
+        val report = IsoLua51MetadataInspector.inspect(raw)
+        assertTrue(report.valid)
+        val write = report.hitEventTableWrites.single()
+        assertEquals(2, write.pc)
+        assertEquals("R[3]", write.valueOperand)
+        assertEquals(null, write.adjacentClosureFunctionOrdinal)
+        assertEquals(2, write.unresolvedPriorInstructions.size)
+        assertContains(write.unresolvedPriorInstructions[0], "op=CLOSURE A=2")
+        assertContains(write.unresolvedPriorInstructions[1], "op=MOVE A=3 B=2")
+        assertContains(report.lines.joinToString("\n"), "UNRESOLVED HIT VALUE provenance")
+        assertContains(report.lines.joinToString("\n"), "no dataflow proof")
+    }
+
+    @Test
+    fun unresolved_opcode_context_is_clamped_to_seven_previous_instructions() {
+        fun abc(op: Int, a: Int, b: Int, c: Int): Int =
+            op or (a shl 6) or (c shl 14) or (b shl 23)
+        val opcodes = List(12) { abc(0, 1, 2, 0) } +
+            abc(9, 0, 256, 3) + 30
+        val report = IsoLua51MetadataInspector.inspect(LuaBytes().apply {
+            proto(listOf("OnHitAttack"), opcodes = opcodes)
+        }.chunk())
+        assertTrue(report.valid)
+        val lines = report.hitEventTableWrites.single().unresolvedPriorInstructions
+        assertEquals(7, lines.size)
+        assertTrue(lines.first().startsWith("pc=5 "))
+        assertTrue(lines.last().startsWith("pc=11 "))
+    }
+
+    @Test
     fun malformed_or_truncated_protos_never_claim_validity_or_string_matches() {
         val chunk = LuaBytes().apply {
             proto(listOf("OnHitAttack"))
