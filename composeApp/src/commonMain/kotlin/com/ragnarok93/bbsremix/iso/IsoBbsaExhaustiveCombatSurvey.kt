@@ -120,7 +120,7 @@ internal object IsoBbsaExhaustiveCombatSurvey {
             hits.forEach { byEvent[it] = (byEvent[it] ?: 0) + 1 }
             apis.forEach { byApi[it] = (byApi[it] ?: 0) + 1 }
             callbacks.forEach { byCallback[it] = (byCallback[it] ?: 0) + 1 }
-            lines += "$prefix sha256=$digest duplicate_of_indexes=${duplicates.joinToString(",").ifEmpty { "-" }} " +
+            lines += "$prefix sha256=$digest duplicate_of_indexes=${duplicates.joinToString(",") { "0x" + it.toString(16) }.ifEmpty { "-" }} " +
                 "LUA51_VALID functions=${report.functions} instructions=${report.instructions} " +
                 "constants=${report.constantStrings} consumed=${report.consumedBytes}/${content.size} " +
                 "hit_event_names=${hits.joinToString(",").ifEmpty { "-" }} " +
