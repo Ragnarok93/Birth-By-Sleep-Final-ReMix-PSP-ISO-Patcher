@@ -776,6 +776,62 @@ export will reveal which Lua 5.1 opcodes reference hit-event and
 known API names in the prioritized scripts. The ISO remains
 read-only throughout.
 
+## October 9, 22:19 — five indexed Lua hit-event table writes
+
+The latest `ULJM05775_10092026 (1).log` confirms the updated
+priority-plus-spread read-only Lua inspector ran successfully on
+ULJM05775. The index still has **205 Lua-category records** and
+**95 eligible small non-G01 entries**. All **24/24** sampled Lua
+chunks parsed structurally; **5 samples** contained exact
+`OnHitAttack` string constants, and **7 samples** contained known
+native API-name constants. Those results describe the sampled
+subset, not the remaining eligible files.
+
+The inspector now has stronger opcode-level evidence than string
+presence alone: all five `OnHitAttack` candidates contain Lua 5.1
+**`SETTABLE` with a constant `OnHitAttack` key** in their
+root prototype:
+
+| Script name | Hash | BBS0 physical sector | Exact SETTABLE PCs |
+| --- | --- | ---: | --- |
+| `B11CD00` | `0x1A322A80` | 78680 | 22, 51 |
+| `B11SB00` | `0x4EA601AD` | 78709 | 24 |
+| `G31VS00` | `0x7B6CB674` | 79505 | 162 |
+| `G14SW00` | `0xCE93C0E1` | 79406 | 50 |
+| `G13HE00` | `0xE409BB71` | 79389 | 82 |
+
+`B11SB00` and `G31VS00` were newly resolved against the
+[OpenKh BBS filename dictionary](https://github.com/OpenKH/OpenKh/blob/master/OpenKh.Bbs/resources/bbsa.txt).
+Another previously unknown `0xB9E4E2DF` name was resolved to
+`G17VS00` (a `GetMotionNowFrame` string candidate).
+Name/hashes are independently cross-checked but are not proof of
+actor category or script execution.
+
+Samples of other native API-name operands:
+`G33VS00` uses `GETTABLE GetPlayerState` in prototype 5,
+and `AQUA`/`VENTUS` use `GETTABLE GetMotionNowFrame`
+in their parsed bytecode. These are *table-key reads*, not
+proven native invocation sites. The previous native PSP event-string
+tables and historical overlay memory collisions remain unchanged.
+
+### Next read-only improvement
+
+The `IsoLua51MetadataInspector` now examines **only validated
+Lua 5.1 `SETTABLE` instructions whose RK(B) names a known hit
+event**. For each, it emits destination table register `R(A)`,
+assigned value operand `RK(C)`, and whether the immediately
+preceding instruction is `CLOSURE` writing that same value
+register with a valid local child-prototype index.
+This is an explicitly **adjacent-only** structural pattern check:
+a missing direct-adjacent closure is **UNVERIFIED**, not proof
+of no Lua handler. An observed adjacent closure is still **not
+proof of a callback registration that executed**, valid PSP actor
+ownership, or a combat hook. No code is injected or written.
+
+The uploaded log predates this value-operand investigation.
+Use a new export to establish whether these five hit-event writes
+are immediately coupled to valid child-prototype creation.
+
 ## Verification
 
 Tests exercise a synthetic ISO with a main EBOOT, a second MIPS ELF,
