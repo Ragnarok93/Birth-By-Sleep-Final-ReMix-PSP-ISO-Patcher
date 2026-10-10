@@ -239,6 +239,9 @@ internal class IsoCombatResearchService(
                     lines += IsoBbsaIndexedPayloadProbe.inspect(
                         source, index, archives, correlation, reader, cancellation,
                     ).lines
+                    lines += IsoBbsaLuaCategorySurvey.inspect(
+                        source, index, archives, reader, cancellation,
+                    ).lines
                 } else {
                     lines += "BBSA link correlation skipped: malformed/unbounded BBS0 index prefix."
                 }
