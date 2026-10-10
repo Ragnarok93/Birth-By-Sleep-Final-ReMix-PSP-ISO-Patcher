@@ -95,8 +95,16 @@ internal object PspCombatNativeXrefSurvey {
                             "return_va=0x${(pc + 8).toString(16)}"
                     }
                 }
-                val reading = op in setOf(0x20, 0x21, 0x23, 0x24, 0x25, 0x31)
-                val writing = op in setOf(0x28, 0x29, 0x2B, 0x39)
+                // This loop scans hundreds of thousands of words: do not
+                // allocate a Set for every opcode decoded.
+                val reading = when (op) {
+                    0x20, 0x21, 0x23, 0x24, 0x25, 0x31 -> true
+                    else -> false
+                }
+                val writing = when (op) {
+                    0x28, 0x29, 0x2B, 0x39 -> true
+                    else -> false
+                }
                 if (!reading && !writing) continue
                 val offset = instruction and 0xffff
                 val name = offsets[offset] ?: continue
