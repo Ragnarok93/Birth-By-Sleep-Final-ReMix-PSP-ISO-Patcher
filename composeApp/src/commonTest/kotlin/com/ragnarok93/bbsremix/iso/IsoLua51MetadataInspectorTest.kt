@@ -80,6 +80,52 @@ class IsoLua51MetadataInspectorTest {
     }
 
     @Test
+    fun full_lua_string_census_finds_late_hit_event_beyond_truncated_display_examples() {
+        val constants = (1..25).map { "gimmick${it.toString().padStart(2, '0')}" } +
+            listOf("OnInit", "OnUpdate", "OnHitAttack", "SetMotion",
+                "SetTrgFlagCancel", "EntityFactory", "__index")
+        val bytes = LuaBytes().apply {
+            proto(constants, nested = true)
+        }.chunk()
+        val input = bytes + ByteArray(4096 - bytes.size)
+        val report = IsoLua51MetadataInspector.inspect(input)
+        assertTrue(report.valid)
+        assertEquals(2, report.functions)
+        assertEquals(constants.size + 1, report.constantStrings)
+        assertEquals(constants.size + 1, report.printableConstantCount)
+        assertEquals(listOf("OnInit", "OnUpdate", "OnHitAttack"),
+            report.callbackNameConstants)
+        assertContains(report.nativeApiNameConstants, "SetTrgFlagCancel")
+        assertContains(report.nativeApiNameConstants, "GetPlayerState")
+        assertContains(report.hitEventNameConstants, "OnHitAttack")
+        assertFalse(report.visibleExamples.contains("OnHitAttack"))
+        assertEquals(2, report.prototypeSummaries.size)
+        assertEquals(1, report.prototypeSummaries[0].ordinal)
+        assertEquals(0, report.prototypeSummaries[0].depth)
+        assertEquals(1, report.prototypeSummaries[1].depth)
+        assertContains(report.prototypeSummaries[0].callbackNameConstants, "OnHitAttack")
+        assertEquals(1, report.prototypeSummaries[0].instructions)
+        assertEquals(1, report.prototypeSummaries[1].instructions)
+        assertContains(report.lines.joinToString("\n"), "Exact hit-event-name constants=1: OnHitAttack")
+        assertContains(report.lines.joinToString("\n"), "Prototype[2] depth=1")
+        assertContains(report.lines.joinToString("\n"), "not execution evidence")
+    }
+
+    @Test
+    fun valid_gimmick_callback_strings_do_not_imply_a_hit_event_name_constant() {
+        val bytes = LuaBytes().apply {
+            proto(listOf("g01", "g01_mt", "OnInit", "OnUpdate", "SetMotion"))
+        }.chunk()
+        val report = IsoLua51MetadataInspector.inspect(bytes)
+        assertTrue(report.valid)
+        assertEquals(listOf("OnInit", "OnUpdate"), report.callbackNameConstants)
+        assertTrue(report.hitEventNameConstants.isEmpty())
+        assertTrue(report.nativeApiNameConstants.isEmpty())
+        assertEquals(listOf("SetMotion"), report.combatTermExamples)
+        assertContains(report.lines.joinToString("\n"), "Exact hit-event-name constants=0: none")
+    }
+
+    @Test
     fun malformed_or_truncated_protos_never_claim_validity_or_string_matches() {
         val chunk = LuaBytes().apply {
             proto(listOf("OnHitAttack"))
@@ -89,6 +135,8 @@ class IsoLua51MetadataInspectorTest {
         assertFalse(report.valid)
         assertTrue(report.visibleExamples.isEmpty())
         assertTrue(report.combatTermExamples.isEmpty())
+        assertTrue(report.hitEventNameConstants.isEmpty())
+        assertTrue(report.prototypeSummaries.isEmpty())
         assertContains(report.lines.joinToString("\n"), "UNVERIFIED")
 
         // Replace the first Lua constants type with an invalid tag.
