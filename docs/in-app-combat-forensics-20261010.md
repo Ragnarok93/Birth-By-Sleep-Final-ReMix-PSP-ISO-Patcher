@@ -64,3 +64,49 @@ binary safety gates and practical gameplay checks before an individual combat
 toggle can be enabled.
 
 **No PPSSPP debugging setup is requested from the user for this stage.**
+
+
+## October 10 full-log findings and targeted follow-up
+
+Analyzed the user-exported 80,893-line ULJM05775 in-app report. The canonical,
+unchanged English-patched EBOOT matches SHA-256
+`8c8947e83b829199f82370c4c638856718886d9a0a525892fed22ce6a8b26ca7`.
+
+- Lua category records: **205**; valid Lua 5.1 chunks: **200**;
+  **4 allocated scripts exceeded 128 KiB** (index ordinals 27, 55, 123,
+  140, hashes `239A2165`, `43936910`, `A699863D`, `B613CFD0`).
+  One 100 KiB script (ordinal 48, hash `3B8D7786`) hit the old
+  prototype/depth parser limit. The subsequent code raises the allocated
+  script ceiling to **256 KiB** and increases structurally checked
+  prototype/depth/opcode budgets. New ISO export must confirm this actually
+  resolves all five; no success is assumed from changing constants alone.
+- The successfully parsed entries contain **186** static hit-event
+  `SETTABLE` assignments; **84** scripts contain an exact hit-event
+  name, **87** contain a named native-combat API, and **196** contain
+  callback-like names. These counts **do not prove runtime callbacks**.
+- Native survey: 11 file-backed MIPS ELFs inspected. EBOOT direct-call
+  matches: **50** to the guarded player resolver `0x089E74A8`, and
+  **31** to the named script-call helper `0x089E6334`; zero direct
+  calls to the native cancel setter is consistent with indirect/table
+  dispatch, not absence. The census includes ordinary stack offset
+  loads/stores; subsequent logging separates `sp`/`fp` access from
+  other unknown object bases to prevent mistaking stack frames for player
+  fields.
+- Existing `SetTrgFlagCancel` name references occur in only **seven**
+  indexed Lua scripts. Cross-referencing CRC32 hashes against
+  `OpenKh.Bbs/resources/bbsa.txt` identifies their filenames as
+  `B56EX00`, `B82VS00`, `M08EX00`, `B10CD00`, `B83VS00`,
+  `B10SB00`, and `B52EX00`. These are battle resource filenames;
+  they **do not establish** a global player event scheduler.
+- The OpenKh dictionary resolves **all 205** hashes in this supported
+  source. The app now records the name next to each entry and a candidate
+  matrix showing which scripts contain relevant API, hit, OnUpdate and
+  OnCommand names. These are ownership *leads*, not verified identities.
+  Dictionary provenance: [OpenKh BBS resources](https://github.com/OpenKH/OpenKh/blob/master/OpenKh.Bbs/resources/bbsa.txt),
+  [OpenKh Apache 2.0 license](https://github.com/OpenKH/OpenKh/blob/master/LICENSE).
+
+The old Stage 4/5 overlay memory collision and overwritten `s0` restore
+remain. This round makes **read-only diagnostic improvements**, not the
+unvalidated combat patches. Gameplay implementation must still show
+safe native state ownership, a reliable player scheduler and source-checked
+patching without code colliding with dynamically loaded overlays.
