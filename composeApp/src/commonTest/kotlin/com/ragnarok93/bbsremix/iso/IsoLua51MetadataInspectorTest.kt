@@ -218,8 +218,16 @@ class IsoLua51MetadataInspectorTest {
         assertEquals("OnHitAttack", found.eventName)
         assertEquals("R[2]", found.valueOperand)
         assertEquals(0, found.adjacentClosureProtoIndex)
+        assertEquals(2, found.adjacentClosureFunctionOrdinal)
+        assertEquals(1, found.adjacentClosureInstructionCount)
+        assertContains(found.adjacentClosureNativeApis, "GetPlayerState")
+        assertEquals(emptyList<String>(), found.adjacentClosureCombatConstants)
         assertContains(result.lines.joinToString("\n"),
             "adjacent_child_closure=0")
+        assertContains(result.lines.joinToString("\n"),
+            "resolved_child_proto=2")
+        assertContains(result.lines.joinToString("\n"),
+            "child_native_API_constants=GetPlayerState")
     }
 
     @Test
