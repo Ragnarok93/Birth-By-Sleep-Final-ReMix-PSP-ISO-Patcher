@@ -23,6 +23,7 @@ class IsoLua51MetadataInspectorTest {
         fun proto(
             constants: List<String>,
             nested: Boolean = false,
+            opcodes: List<Int> = listOf(30),
         ) {
             str(null) // absent source name
             i(0) // lineDefined
@@ -31,8 +32,8 @@ class IsoLua51MetadataInspectorTest {
             b(0) // params
             b(2) // vararg
             b(2) // stack
-            i(1) // instruction count
-            i(30) // stand-in RETURN opcode; no opcode decoding performed
+            i(opcodes.size) // instruction count
+            opcodes.forEach { i(it) } // decoded only when operand references a named string
             i(constants.size)
             for (value in constants) {
                 b(4) // LUA_TSTRING
@@ -123,6 +124,52 @@ class IsoLua51MetadataInspectorTest {
         assertTrue(report.nativeApiNameConstants.isEmpty())
         assertEquals(listOf("SetMotion"), report.combatTermExamples)
         assertContains(report.lines.joinToString("\n"), "Exact hit-event-name constants=0: none")
+    }
+
+    @Test
+    fun lua51_opcode_operand_decoding_distinguishes_table_key_write_and_global_read() {
+        fun abc(op: Int, a: Int, b: Int, c: Int): Int =
+            op or (a shl 6) or (c shl 14) or (b shl 23)
+        val map = mapOf(0 to "OnHitAttack", 1 to "GetPlayerState")
+        val setter = IsoLua51MetadataInspector.symbolOpcodeUses(
+            abc(9, 0, 256, 1), map)
+        assertEquals(1, setter.size)
+        assertEquals("SETTABLE", setter.single().opcode)
+        assertEquals("OnHitAttack", setter.single().name)
+        assertEquals("table key write", setter.single().role)
+        val getter = IsoLua51MetadataInspector.symbolOpcodeUses(
+            5 or (1 shl 14), map)
+        assertEquals("GETGLOBAL", getter.single().opcode)
+        assertEquals("GetPlayerState", getter.single().name)
+        assertEquals("global name read", getter.single().role)
+        val reader = IsoLua51MetadataInspector.symbolOpcodeUses(
+            abc(6, 0, 0, 256), map)
+        assertEquals("GETTABLE", reader.single().opcode)
+        assertEquals("table key read", reader.single().role)
+        assertTrue(IsoLua51MetadataInspector.symbolOpcodeUses(
+            abc(9, 0, 0, 1), map).isEmpty())
+    }
+
+    @Test
+    fun reports_validated_symbol_opcode_provenance_but_no_runtime_behavior() {
+        val setTable = 9 or (256 shl 23)
+        val getGlobal = 5 or (1 shl 14)
+        val bytecode = LuaBytes().apply {
+            proto(listOf("OnHitAttack", "GetPlayerState", "SetMotion"),
+                opcodes = listOf(setTable, getGlobal, 30))
+        }.chunk()
+        val report = IsoLua51MetadataInspector.inspect(bytecode)
+        assertTrue(report.valid)
+        assertEquals(2, report.opcodeSymbolReferences.size)
+        assertEquals("OnHitAttack", report.opcodeSymbolReferences[0].constantName)
+        assertEquals(0, report.opcodeSymbolReferences[0].pc)
+        assertEquals("SETTABLE", report.opcodeSymbolReferences[0].opcode)
+        assertEquals("GETGLOBAL", report.opcodeSymbolReferences[1].opcode)
+        assertEquals("GetPlayerState", report.opcodeSymbolReferences[1].constantName)
+        assertContains(report.lines.joinToString("\n"), "OPCODE_REF proto=1")
+        assertTrue(report.lines.any { it.contains("not execution") })
+        val broken = bytecode.copyOf(bytecode.size - 2)
+        assertTrue(IsoLua51MetadataInspector.inspect(broken).opcodeSymbolReferences.isEmpty())
     }
 
     @Test
