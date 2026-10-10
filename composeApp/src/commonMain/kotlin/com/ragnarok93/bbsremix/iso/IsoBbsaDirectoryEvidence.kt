@@ -345,6 +345,11 @@ internal object IsoBbsaDirectoryEvidence {
 
     /** Known path IDs from OpenKh.Bbs/Bbsa.cs, not CRC32 values. */
     internal fun knownArcDirectory(hash: Long): String = when (hash) {
+        0xC0000000L -> "lua (BBSA directory category)"
+        0x10004350L -> "arc/pc_ven"
+        0x20004350L -> "arc/pc_aqua"
+        0x30004350L -> "arc/pc_terra"
+        0x45464645L -> "arc/effect"
         0x4D4D4947L -> "arc/gimmick"
         0x53534F42L -> "arc/boss"
         0x4D454E45L -> "arc/enemy"
