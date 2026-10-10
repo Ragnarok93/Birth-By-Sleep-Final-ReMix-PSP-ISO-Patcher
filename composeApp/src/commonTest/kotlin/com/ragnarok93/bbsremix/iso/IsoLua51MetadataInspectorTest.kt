@@ -173,6 +173,56 @@ class IsoLua51MetadataInspectorTest {
     }
 
     @Test
+    fun exact_hit_event_value_operand_and_immediate_closure_provenance() {
+        fun abc(op: Int, a: Int, b: Int, c: Int): Int =
+            op or (a shl 6) or (c shl 14) or (b shl 23)
+        fun abx(op: Int, a: Int, bx: Int): Int =
+            op or (a shl 6) or (bx shl 14)
+
+        val closureIntoR2 = abx(36, 2, 0) // CLOSURE R2, child-proto 0
+        val hitWrite = abc(9, 0, 256, 2) // SETTABLE R0, K0, R2
+        val operands = IsoLua51MetadataInspector.hitEventTableWrite(
+            hitWrite, closureIntoR2,
+            mapOf(0 to "OnHitAttack"), childCount = 1,
+        )
+        assertEquals("OnHitAttack", operands?.eventName)
+        assertEquals(0, operands?.tableRegister)
+        assertEquals("R[2]", operands?.valueOperand)
+        assertEquals(0, operands?.adjacentClosureProtoIndex)
+
+        // A register assignment is NOT automatically a child Lua closure.
+        assertEquals(null, IsoLua51MetadataInspector.hitEventTableWrite(
+            hitWrite, abx(36, 3, 0), mapOf(0 to "OnHitAttack"), 1
+        )?.adjacentClosureProtoIndex)
+        assertEquals(null, IsoLua51MetadataInspector.hitEventTableWrite(
+            hitWrite, abx(36, 2, 1), mapOf(0 to "OnHitAttack"), 1
+        )?.adjacentClosureProtoIndex)
+        assertEquals(null, IsoLua51MetadataInspector.hitEventTableWrite(
+            hitWrite, null, mapOf(0 to "OnHitAttack"), 1
+        )?.adjacentClosureProtoIndex)
+        assertTrue(IsoLua51MetadataInspector.hitEventTableWrite(
+            abc(9, 0, 0, 2), closureIntoR2,
+            mapOf(0 to "OnHitAttack"), 1
+        ) == null)
+
+        val bytes = LuaBytes().apply {
+            proto(listOf("OnHitAttack"), nested = true,
+                opcodes = listOf(closureIntoR2, hitWrite, 30))
+        }.chunk()
+        val result = IsoLua51MetadataInspector.inspect(bytes)
+        assertTrue(result.valid)
+        assertEquals(1, result.hitEventTableWrites.size)
+        val found = result.hitEventTableWrites.single()
+        assertEquals(1, found.ordinal)
+        assertEquals(1, found.pc)
+        assertEquals("OnHitAttack", found.eventName)
+        assertEquals("R[2]", found.valueOperand)
+        assertEquals(0, found.adjacentClosureProtoIndex)
+        assertContains(result.lines.joinToString("\n"),
+            "adjacent_child_closure=0")
+    }
+
+    @Test
     fun malformed_or_truncated_protos_never_claim_validity_or_string_matches() {
         val chunk = LuaBytes().apply {
             proto(listOf("OnHitAttack"))
