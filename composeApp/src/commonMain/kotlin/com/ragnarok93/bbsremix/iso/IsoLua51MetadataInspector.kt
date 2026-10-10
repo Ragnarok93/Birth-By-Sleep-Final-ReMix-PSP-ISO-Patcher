@@ -25,6 +25,21 @@ internal object IsoLua51MetadataInspector {
     private const val MAX_HIT_WRITES = 48
     private const val MAX_UNRESOLVED_PRIOR_OPCODES = 7
     private const val MAX_CLOSURE_UPVALUES = 16
+    private const val MAX_HANDLER_WINDOWS = 8
+    private const val HANDLER_CONTEXT_BEFORE = 1
+    private const val HANDLER_CONTEXT_AFTER = 3
+
+    /**
+     * Only constant-bearing opcode locations inside a structurally resolved
+     * hit-event child Proto. Nearby PCs are raw opcode diagnostics, not
+     * register-dataflow, confirmed calls, CFG or execution evidence.
+     */
+    data class HandlerOpcodeWindow(
+        val pc: Int,
+        val opcode: String,
+        val constantName: String,
+        val context: List<String>,
+    )
 
     data class HitEventTableWrite(
         val ordinal: Int,
@@ -43,6 +58,7 @@ internal object IsoLua51MetadataInspector {
         val unresolvedPriorInstructions: List<String> = emptyList(),
         /** Immediate, Lua 5.1 capture descriptors, or unresolved. Static only. */
         val closureProvenance: String = "UNVERIFIED",
+        val handlerOpcodeWindows: List<HandlerOpcodeWindow> = emptyList(),
     )
 
     /**
@@ -300,6 +316,16 @@ internal object IsoLua51MetadataInspector {
                     "child_instructions=${item.adjacentClosureInstructionCount?.toString() ?: "UNVERIFIED"} " +
                     "child_native_API_constants=${item.adjacentClosureNativeApis.joinToString(",").ifEmpty { "-" }} " +
                     "child_combat_constants=${item.adjacentClosureCombatConstants.joinToString(",").ifEmpty { "-" }}"
+                if (item.handlerOpcodeWindows.isNotEmpty()) {
+                    lines += "          RESOLVED CHILD OPCODE WINDOWS=" +
+                        item.handlerOpcodeWindows.size + " (raw nearby Lua 5.1 " +
+                        "operand diagnostics; not calls or dataflow)."
+                    for (window in item.handlerOpcodeWindows) {
+                        lines += "            HANDLER_SYMBOL pc=${window.pc} " +
+                            "op=${window.opcode} name=${window.constantName}"
+                        window.context.forEach { lines += "              $it" }
+                    }
+                }
                 if (item.adjacentClosureFunctionOrdinal == null) {
                     lines += "          UNRESOLVED HIT VALUE provenance: " +
                         "bounded previous ${item.unresolvedPriorInstructions.size} opcode(s) " +
@@ -360,6 +386,11 @@ internal object IsoLua51MetadataInspector {
         val prototypes = mutableListOf<PrototypeSummary>()
         val opcodeReferences = mutableListOf<SymbolOpcodeReference>()
         val hitWrites = mutableListOf<HitEventTableWrite>()
+        private data class FunctionOpcodeEvidence(
+            val opcodes: List<Int>,
+            val symbols: Map<Int, String>,
+        )
+        private val functionOpcodeEvidence = mutableMapOf<Int, FunctionOpcodeEvidence>()
         var printableConstantCount = 0
             private set
 
@@ -508,6 +539,37 @@ internal object IsoLua51MetadataInspector {
                 ((bytes[at + 3].toInt() and 255) shl 24)
         }
 
+        /**
+         * Narrow evidence only for a validated handler child. The six-opcode
+         * neighborhood is printed as opaque instructions; this does not
+         * establish CALL receiver identity or prove control-flow reachability.
+         */
+        private fun handlerOpcodeWindows(ordinal: Int): List<HandlerOpcodeWindow> {
+            val entry = functionOpcodeEvidence[ordinal] ?: return emptyList()
+            val results = mutableListOf<HandlerOpcodeWindow>()
+            for ((pc, word) in entry.opcodes.withIndex()) {
+                if (results.size >= MAX_HANDLER_WINDOWS) break
+                val uses = symbolOpcodeUses(word, entry.symbols)
+                for (use in uses) {
+                    val value = use.name.lowercase()
+                    if (value !in listOf("hithandle", "getcurrentmotion",
+                            "enablegeneralpurposeattackcoll", "changestate") &&
+                        !listOf("attack", "hit", "motion", "state",
+                            "cancel", "damage", "guard").any { value.contains(it) }
+                    ) continue
+                    val from = maxOf(0, pc - HANDLER_CONTEXT_BEFORE)
+                    val until = minOf(entry.opcodes.size, pc + HANDLER_CONTEXT_AFTER + 1)
+                    val context = (from until until).map { nearby ->
+                        opcodeDiagnostic(nearby, entry.opcodes[nearby])
+                    }
+                    results += HandlerOpcodeWindow(pc, use.opcode,
+                        use.name, context)
+                    if (results.size >= MAX_HANDLER_WINDOWS) break
+                }
+            }
+            return results
+        }
+
         fun parseProto(depth: Int) {
             if (depth > MAX_DEPTH || functions >= MAX_FUNCTIONS) {
                 throw DecodeError("prototype count/depth exceeds bounded limit")
@@ -582,6 +644,14 @@ internal object IsoLua51MetadataInspector {
                 parameters, instructionCount, printableInProto,
                 callbackInProto.take(MAX_EXAMPLES), combatInProto.take(MAX_EXAMPLES),
                 apiInProto.take(MAX_EXAMPLES), upvalues)
+            // Save only validated prototype bytecodes, already within the
+            // strict 8KiB input limit, for resolved child-only diagnostics.
+            val codeWords = (0 until instructionCount).map {
+                opcodeWord(instructionOffset, it)
+            }
+            functionOpcodeEvidence[ordinal] = FunctionOpcodeEvidence(
+                codeWords, symbolConstantIndices.toMap(),
+            )
             val children = readCount()
             if (children > (bytes.size - position) / 24) {
                 throw DecodeError("nested proto count exceeds remaining chunk")
@@ -619,9 +689,7 @@ internal object IsoLua51MetadataInspector {
             // direct Proto array. After validating all direct children,
             // also recognize the Lua 5.1 CLOSURE + N upvalue binding
             // pseudo-instruction pattern (MOVE/GETUPVAL only).
-            val code = (0 until instructionCount).map {
-                opcodeWord(instructionOffset, it)
-            }
+            val code = codeWords
             for (at in hitWrites.indices) {
                 val event = hitWrites[at]
                 if (event.ordinal != ordinal) continue
@@ -642,6 +710,7 @@ internal object IsoLua51MetadataInspector {
                     adjacentClosureCombatConstants = child.combatKeywordConstants,
                     unresolvedPriorInstructions = emptyList(),
                     closureProvenance = bindingMode,
+                    handlerOpcodeWindows = handlerOpcodeWindows(child.ordinal),
                 )
             }
             countAndSkip(4) // lineinfo
