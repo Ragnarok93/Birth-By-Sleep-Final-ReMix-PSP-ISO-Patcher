@@ -46,6 +46,49 @@ internal object IsoBbsaExhaustiveCombatSurvey {
         return Decision(null, archive.dataOffset + offset, length.toInt())
     }
 
+    /** Only structurally detected symbol names, not executed callback paths. */
+    internal data class ScriptCrossReference(
+        val hash: Long,
+        val filenameHint: String,
+        val nativeApiNames: List<String>,
+        val hitEventNames: List<String>,
+        val callbackNames: List<String>,
+    )
+
+    /** Explicit common-feature overlaps for triaging actor-local Lua scripts. */
+    internal fun candidateLines(candidates: List<ScriptCrossReference>): List<String> {
+        val lines = mutableListOf(
+            "COMBAT SCRIPT CANDIDATE MATRIX — name/constant co-occurrence only, NOT player ownership:"
+        )
+        for (api in listOf(
+            "SetTrgFlagCancel", "IsTrgFlagCancel", "IsAttacking",
+            "GetPlayerState", "GetCommandCategory", "GetCommandKind",
+            "EnableInvincible", "SetPlayerFlagInvincible", "GetMotionNowFrame",
+        )) {
+            val matching = candidates.filter { api in it.nativeApiNames }
+            lines += "  API_MATRIX $api script_count=${matching.size}"
+            for (item in matching) {
+                lines += "    SCRIPT name_hint=${item.filenameHint} " +
+                    "hash=0x${item.hash.toString(16).uppercase().padStart(8, '0')} " +
+                    "has_OnHitAttack=${"OnHitAttack" in item.hitEventNames} " +
+                    "has_OnUpdate=${"OnUpdate" in item.callbackNames} " +
+                    "has_OnCommand=${"OnCommand" in item.callbackNames} " +
+                    "other_apis=${item.nativeApiNames.filter { it != api }.joinToString(",").ifEmpty { "-" }}"
+            }
+        }
+        val overlaps = candidates.filter {
+            "OnHitAttack" in it.hitEventNames &&
+                "GetPlayerState" in it.nativeApiNames &&
+                "IsAttacking" in it.nativeApiNames
+        }
+        lines += "  HIT_PLAYER_ATTACK_NAME_OVERLAP scripts=${overlaps.size}; " +
+            "potential investigative leads, not proof of player hit-confirm."
+        for (item in overlaps) {
+            lines += "    OVERLAP name_hint=${item.filenameHint} hash=0x${item.hash.toString(16)}"
+        }
+        return lines
+    }
+
     data class Report(
         val indexed: Int,
         val parsed: Int,
@@ -79,6 +122,7 @@ internal object IsoBbsaExhaustiveCombatSurvey {
         val byApi = mutableMapOf<String, Int>()
         val byEvent = mutableMapOf<String, Int>()
         val byCallback = mutableMapOf<String, Int>()
+        val scriptCrossReferences = mutableListOf<ScriptCrossReference>()
         for ((ordinal, entry) in entries.withIndex()) {
             cancellation.throwIfCancelled()
             val location = IsoBbsaIndexedPayloadProbe.map(
@@ -120,6 +164,10 @@ internal object IsoBbsaExhaustiveCombatSurvey {
             hits.forEach { byEvent[it] = (byEvent[it] ?: 0) + 1 }
             apis.forEach { byApi[it] = (byApi[it] ?: 0) + 1 }
             callbacks.forEach { byCallback[it] = (byCallback[it] ?: 0) + 1 }
+            scriptCrossReferences += ScriptCrossReference(
+                entry.fileHash, IsoBbsaLuaCategorySurvey.nameHint(entry.fileHash),
+                apis, hits, callbacks,
+            )
             lines += "$prefix sha256=$digest duplicate_of_indexes=${duplicates.joinToString(",") { "0x" + it.toString(16) }.ifEmpty { "-" }} " +
                 "LUA51_VALID functions=${report.functions} instructions=${report.instructions} " +
                 "constants=${report.constantStrings} consumed=${report.consumedBytes}/${content.size} " +
@@ -165,6 +213,7 @@ internal object IsoBbsaExhaustiveCombatSurvey {
         )) {
             for ((name, count) in counts.toSortedMap()) lines += "  $label $name scripts=$count"
         }
+        lines += candidateLines(scriptCrossReferences)
         lines += "FULL CENSUS LIMITS: per-script format validity, names, tables, raw opcode operands " +
             "and structural child closures do not prove player-owned callbacks, script load, " +
             "dispatch, hit-confirm state, safe executable hooks, or animation timing."
