@@ -233,6 +233,7 @@ internal object IsoBbsaLuaCategorySurvey {
                     "event=${binding.eventName} table=R[${binding.tableRegister}] " +
                     "value=${binding.valueOperand} " +
                     "adjacent_child_closure=${binding.adjacentClosureProtoIndex?.toString() ?: "UNVERIFIED"} " +
+                    "closure_provenance=${binding.closureProvenance} " +
                     "resolved_child_proto=${binding.adjacentClosureFunctionOrdinal?.toString() ?: "UNVERIFIED"} " +
                     "child_instructions=${binding.adjacentClosureInstructionCount?.toString() ?: "UNVERIFIED"} " +
                     "child_native_API_constants=${binding.adjacentClosureNativeApis.joinToString(",").ifEmpty { "-" }} " +
