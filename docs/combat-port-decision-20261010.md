@@ -124,3 +124,55 @@ is not a substitute.
 The engineering priority is **functionality and correctness**, not
 adding more log messages, word-counting candidate strings, or another
 guess at an unsafe code cave.
+
+
+## October 10 log follow-up: runtime trace capture added
+
+The October 10 ISO read-only log is from the supported unmodified English-patched
+EBOOT (SHA-256 `8c8947e83b829199f82370c4c638856718886d9a0a525892fed22ce6a8b26ca7`).
+It verifies eight native instruction patterns, thirteen named PSP script API
+bindings, 205 indexed Lua-category records and a 24-script *non-exhaustive*
+sample. The sampled `OnHitAttack` table assignments are actor-local Lua
+callbacks, not proof of a globally delivered player hit confirmation.
+
+**New tool**: `reference/capture_bbs_combat_runtime.py`, a deliberately
+read-only PPSSPP WebSocket debugger helper. It connects only to ULJM05775,
+verifies the actual live resident instruction words at `0x08955F10`
+(cancel consumer) and `0x08B07020` (native cancel setter), refuses to
+overwrite preexisting breakpoints, and captures bounded registers and
+player-object fields with breakpoint cleanup. It never writes memory or
+modifies any game/ISO bytes. It is an **evidence collector, not a combat patch**.
+
+PPSSPP must expose its debugger WebSocket endpoint. For desktop/headless PPSSPP
+the upstream option is `--debugger=8080` (change port if needed). With the
+supported game running and a clean baseline save available:
+
+```bash
+python3 -m pip install websocket-client
+python3 reference/capture_bbs_combat_runtime.py \
+  --url ws://127.0.0.1:8080/debugger \
+  --max-hits 48 --timeout-seconds 180 \
+  --output bbs-combat-trace.json
+```
+
+Execute and **label** separate baseline scenarios in user test notes: neutral
+movement, guard, normal attack, successful attack hit, missed attack, finisher,
+command, dodge, Shotlock, and stage/menu transitions. Repeat per Terra,
+Ventus, Aqua and each supported FPS option. The tool only captures the
+set/consume paths of the native cancel bit; it does not automatically infer
+causality or a hit-confirm signal from this data.
+
+For original source-level Lua inspection, also run the existing
+`reference/export_bbs_combat_sources.py` command above to produce one
+`bbs-combat-sources.zip`. **The exported evidence bundle and a real runtime
+trace are both needed before implementing the individual combat patches.**
+Tests for the capture tool run under the existing Python unittest-discovery
+GitHub CI gate.
+
+Cautions: instruction checks fingerprint only the two observed live native
+functions, **not the entire loaded EBOOT or ISO**. A matching disc serial and
+those signatures are insufficient to certify all game assets or later stages.
+Breakpoints temporarily pause emulation and can affect timing; they cannot
+validate action timing by themselves. Do not expose the debugger port over
+an untrusted network. If the utility warns about a breakpoint cleanup failure,
+remove that address manually in PPSSPP before continuing.
