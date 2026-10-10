@@ -5,7 +5,9 @@ package com.ragnarok93.bbsremix.iso
  *
  * Follows Lua 5.1's lundump.c layout: header, recursive Proto source,
  * line ranges, register parameters, code, constants/prototypes, debug data.
- * It does NOT execute, decompile, disassemble opcodes or change script data.
+ * It does NOT execute, decompile, change script data or recover control flow.
+ * A narrowly-scoped Lua 5.1 opcode/constant cross-reference is decoded
+ * for known names; a bytecode read/write alone never establishes execution.
  *
  * The caller MUST independently validate the originating BBSA index and ISO
  * extent; this class accepts only a small in-memory byte array.
@@ -19,6 +21,48 @@ internal object IsoLua51MetadataInspector {
     private const val MAX_NAME_LENGTH = 64
     private const val MAX_SYMBOLS = 48
     private const val MAX_PROTO_SUMMARIES = 24
+    private const val MAX_OPCODE_REFS = 72
+
+    data class SymbolOpcodeReference(
+        val ordinal: Int,
+        val depth: Int,
+        val pc: Int,
+        val opcode: String,
+        val constantName: String,
+        val role: String,
+    )
+
+    data class OpcodeSymbolUse(val opcode: String, val name: String, val role: String)
+
+    /**
+     * Lua 5.1 lopcodes.h (NOT Lua 5.2+). Only constant-bearing operands
+     * with understood encodings are included. SETTABLE with a constant key
+     * indicates a table-key WRITE operation, not necessarily a registration
+     * that executed. GETGLOBAL is a global name READ, not a native API call.
+     */
+    internal fun symbolOpcodeUses(word: Int, names: Map<Int, String>): List<OpcodeSymbolUse> {
+        val op = word and 63
+        val b = (word ushr 23) and 511
+        val c = (word ushr 14) and 511
+        val bx = (word ushr 14) and 0x3ffff
+        val out = mutableListOf<OpcodeSymbolUse>()
+        fun add(idx: Int, opcode: String, role: String) {
+            val name = names[idx] ?: return
+            out += OpcodeSymbolUse(opcode, name, role)
+        }
+        when (op) {
+            1 -> add(bx, "LOADK", "literal constant load")
+            5 -> add(bx, "GETGLOBAL", "global name read")
+            7 -> add(bx, "SETGLOBAL", "global name write")
+            6 -> if (c >= 256) add(c - 256, "GETTABLE", "table key read")
+            9 -> {
+                if (b >= 256) add(b - 256, "SETTABLE", "table key write")
+                if (c >= 256) add(c - 256, "SETTABLE", "table value constant")
+            }
+            11 -> if (c >= 256) add(c - 256, "SELF", "method/table key read")
+        }
+        return out
+    }
     // Registered names already located in the native EBOOT. Matching these
     // *constant strings* alone is not evidence of a native API invocation.
     private val NATIVE_COMBAT_API_NAMES = setOf(
@@ -59,6 +103,7 @@ internal object IsoLua51MetadataInspector {
         val hitEventNameConstants: List<String> = emptyList(),
         val namedStringConstants: List<String> = emptyList(),
         val prototypeSummaries: List<PrototypeSummary> = emptyList(),
+        val opcodeSymbolReferences: List<SymbolOpcodeReference> = emptyList(),
     )
 
     fun inspect(bytes: ByteArray): Report {
@@ -137,6 +182,13 @@ internal object IsoLua51MetadataInspector {
                 lines += "          Additional prototype summaries omitted: " +
                     (parser.prototypes.size - MAX_PROTO_SUMMARIES)
             }
+            lines += "          Lua 5.1 opcode-to-named-string cross-references=" +
+                parser.opcodeReferences.size + " (max printed=$MAX_OPCODE_REFS; " +
+                "READ/WRITE labels describe instruction operands, not execution)."
+            for (ref in parser.opcodeReferences.take(MAX_OPCODE_REFS)) {
+                lines += "          OPCODE_REF proto=${ref.ordinal} depth=${ref.depth} " +
+                    "pc=${ref.pc} op=${ref.opcode} name=${ref.constantName} role=${ref.role}"
+            }
             lines += "          Combat-keyword candidate constants=" +
                 parser.combatStrings.size + ": " +
                 parser.combatStrings.joinToString(" | ").ifEmpty { "none in bounded examples" }
@@ -148,7 +200,7 @@ internal object IsoLua51MetadataInspector {
                 parser.printableConstantCount,
                 parser.callbackNames.toList(), parser.nativeApiNames.toList(),
                 parser.hitEventNames.toList(), parser.namedSymbols.toList(),
-                parser.prototypes.toList())
+                parser.prototypes.toList(), parser.opcodeReferences.toList())
         } catch (failure: DecodeError) {
             lines += "          UNVERIFIED: ${failure.message}; " +
                 "no conclusion about Lua execution or combat behavior."
@@ -181,6 +233,7 @@ internal object IsoLua51MetadataInspector {
         val nativeApiNames = linkedSetOf<String>()
         val hitEventNames = linkedSetOf<String>()
         val prototypes = mutableListOf<PrototypeSummary>()
+        val opcodeReferences = mutableListOf<SymbolOpcodeReference>()
         var printableConstantCount = 0
             private set
 
@@ -297,9 +350,15 @@ internal object IsoLua51MetadataInspector {
             val stack = readU8()
             if (stack == 0) throw DecodeError("zero Lua maxstacksize at $position")
 
-            val instructionCount = countAndSkip(4) // Lua 5.1 instruction size
+            val instructionCount = readCount() // Lua 5.1 4-byte instructions
+            if (instructionCount > (bytes.size - position) / 4) {
+                throw DecodeError("Lua opcode array exceeds allocated chunk")
+            }
+            val instructionOffset = position
+            take(instructionCount * 4)
             instructions += instructionCount
             val nConstants = readCount()
+            val symbolConstantIndices = mutableMapOf<Int, String>()
             var printableInProto = 0
             val callbackInProto = linkedSetOf<String>()
             val combatInProto = linkedSetOf<String>()
@@ -307,7 +366,7 @@ internal object IsoLua51MetadataInspector {
             if (nConstants > bytes.size - position) {
                 throw DecodeError("constant count exceeds chunk remaining bytes")
             }
-            repeat(nConstants) {
+            repeat(nConstants) { constantIndex ->
                 when (val type = readU8()) {
                     0 -> Unit // nil
                     1 -> take(1) // boolean
@@ -316,6 +375,12 @@ internal object IsoLua51MetadataInspector {
                         constantStrings++
                         val value = readString(capture = true)
                         recordString(value)
+                        if (value != null &&
+                            (isNamedSymbol(value) || isCombatKeyword(value) ||
+                                value in NATIVE_COMBAT_API_NAMES || value in HIT_EVENT_NAMES)
+                        ) {
+                            symbolConstantIndices[constantIndex] = value
+                        }
                         if (value != null) {
                             printableInProto++
                             if (isCallbackName(value)) callbackInProto += value
@@ -323,6 +388,21 @@ internal object IsoLua51MetadataInspector {
                         }
                     }
                     else -> throw DecodeError("unsupported Lua constant tag=$type")
+                }
+            }
+            // Known, constant-bearing Lua 5.1 opcodes only. No control flow,
+            // jump targets, call edges, execution, or registration inferred.
+            for (pc in 0 until instructionCount) {
+                if (opcodeReferences.size >= MAX_OPCODE_REFS) break
+                val at = instructionOffset + pc * 4
+                val word = (bytes[at].toInt() and 255) or
+                    ((bytes[at + 1].toInt() and 255) shl 8) or
+                    ((bytes[at + 2].toInt() and 255) shl 16) or
+                    ((bytes[at + 3].toInt() and 255) shl 24)
+                for (use in symbolOpcodeUses(word, symbolConstantIndices)) {
+                    if (opcodeReferences.size >= MAX_OPCODE_REFS) break
+                    opcodeReferences += SymbolOpcodeReference(
+                        ordinal, depth, pc, use.opcode, use.name, use.role)
                 }
             }
             // Prototype ordering reflects Lua's preorder nested chunks,
