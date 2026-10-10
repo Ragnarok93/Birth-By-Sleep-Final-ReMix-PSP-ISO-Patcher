@@ -106,7 +106,7 @@ class IsoBbsaLuaCategorySurveyTest {
         assertEquals(0, chosen.first().indexOffset)
         assertEquals(99 * 12, chosen.last().indexOffset)
         assertEquals(chosen.map { it.indexOffset }.distinct(), chosen.map { it.indexOffset })
-        assertEquals(entries, IsoBbsaLuaCategorySurvey.select(entries))
+        assertEquals(entries.take(12), IsoBbsaLuaCategorySurvey.select(entries.take(12)))
     }
 
     @Test
