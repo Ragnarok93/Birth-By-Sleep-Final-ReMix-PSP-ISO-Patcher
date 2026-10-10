@@ -23,6 +23,7 @@ internal object IsoLua51MetadataInspector {
     private const val MAX_PROTO_SUMMARIES = 24
     private const val MAX_OPCODE_REFS = 72
     private const val MAX_HIT_WRITES = 48
+    private const val MAX_UNRESOLVED_PRIOR_OPCODES = 7
 
     data class HitEventTableWrite(
         val ordinal: Int,
@@ -37,7 +38,43 @@ internal object IsoLua51MetadataInspector {
         val adjacentClosureInstructionCount: Int? = null,
         val adjacentClosureNativeApis: List<String> = emptyList(),
         val adjacentClosureCombatConstants: List<String> = emptyList(),
+        /** Raw bounded preceding opcodes, diagnostic only; not dataflow. */
+        val unresolvedPriorInstructions: List<String> = emptyList(),
     )
+
+    /**
+     * Lua 5.1 opcode decoding for diagnostic windows only. Prints raw
+     * operands without classifying register definitions or control flow.
+     */
+    internal fun opcodeDiagnostic(pc: Int, word: Int): String {
+        val op = word and 63
+        val name = when (op) {
+            0 -> "MOVE"
+            1 -> "LOADK"
+            4 -> "GETUPVAL"
+            5 -> "GETGLOBAL"
+            6 -> "GETTABLE"
+            9 -> "SETTABLE"
+            10 -> "NEWTABLE"
+            11 -> "SELF"
+            22 -> "JMP"
+            26 -> "TEST"
+            27 -> "TESTSET"
+            28 -> "CALL"
+            29 -> "TAILCALL"
+            30 -> "RETURN"
+            35 -> "CLOSE"
+            36 -> "CLOSURE"
+            37 -> "VARARG"
+            else -> "OP_$op"
+        }
+        val a = (word ushr 6) and 255
+        val b = (word ushr 23) and 511
+        val c = (word ushr 14) and 511
+        val bx = (word ushr 14) and 0x3ffff
+        val hex = word.toUInt().toString(16).uppercase().padStart(8, '0')
+        return "pc=$pc word=0x$hex op=$name A=$a B=$b C=$c Bx=$bx"
+    }
 
     data class HitEventWriteOperands(
         val eventName: String,
@@ -258,6 +295,14 @@ internal object IsoLua51MetadataInspector {
                     "child_instructions=${item.adjacentClosureInstructionCount?.toString() ?: "UNVERIFIED"} " +
                     "child_native_API_constants=${item.adjacentClosureNativeApis.joinToString(",").ifEmpty { "-" }} " +
                     "child_combat_constants=${item.adjacentClosureCombatConstants.joinToString(",").ifEmpty { "-" }}"
+                if (item.adjacentClosureFunctionOrdinal == null) {
+                    lines += "          UNRESOLVED HIT VALUE provenance: " +
+                        "bounded previous ${item.unresolvedPriorInstructions.size} opcode(s) " +
+                        "in same prototype, decoded operands ONLY; no dataflow proof."
+                    for (before in item.unresolvedPriorInstructions) {
+                        lines += "            $before"
+                    }
+                }
             }
             lines += "          LIMIT: An adjacent child CLOSURE is structural evidence only; " +
                 "neither source register nor target table identity or execution is proven."
@@ -502,10 +547,17 @@ internal object IsoLua51MetadataInspector {
                 val prior = if (pc > 0) opcodeWord(instructionOffset, pc - 1) else null
                 val binding = hitEventTableWrite(word, prior,
                     symbolConstantIndices, children) ?: continue
+                val priorWindow = if (binding.adjacentClosureProtoIndex == null) {
+                    (maxOf(0, pc - MAX_UNRESOLVED_PRIOR_OPCODES) until pc)
+                        .map { earlier ->
+                            opcodeDiagnostic(earlier, opcodeWord(instructionOffset, earlier))
+                        }
+                } else emptyList()
                 hitWrites += HitEventTableWrite(
                     ordinal, depth, pc, binding.eventName,
                     binding.tableRegister, binding.valueOperand,
-                    binding.adjacentClosureProtoIndex)
+                    binding.adjacentClosureProtoIndex,
+                    unresolvedPriorInstructions = priorWindow)
             }
             val immediateChildren = mutableListOf<PrototypeSummary>()
             repeat(children) {
