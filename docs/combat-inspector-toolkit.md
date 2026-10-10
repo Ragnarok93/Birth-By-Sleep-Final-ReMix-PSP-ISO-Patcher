@@ -713,6 +713,69 @@ The (9) log predates this category-wide survey. A newer
 inspector build/export is necessary before drawing
 conclusions about other Lua scripts.
 
+## October 9, 22:05 — Lua category survey finds OnHitAttack string candidates
+
+User export `ULJM05775_10092026.log` includes the new
+**BBSA LUA CATEGORY SURVEY**, with a validated BBSA file index:
+
+| Finding | Evidence from this log |
+| --- | --- |
+| Lua-category indexed records | **205** (path ID `0xC0000000`) |
+| Eligible non-G01 allocated 1–4-sector entries | **95** |
+| Evenly distributed sampled entries | **24** of 95 |
+| Structurally valid Lua 5.1 chunks among those samples | **24/24** |
+| Samples containing exact `OnHitAttack` constants | **3** |
+| Samples containing names in the 13-API native combat catalog | **5** |
+
+Using OpenKh's [Birth by Sleep resource-name dictionary](https://github.com/OpenKH/OpenKh/blob/master/OpenKh.Bbs/resources/bbsa.txt),
+the discovered script filename hashes have these independent name
+matches (case-normalized CRC32, not semantic proof):
+
+| Lua filename stem | CRC32 | BBS0 physical sector | String leads |
+| --- | --- | ---: | --- |
+| **`B11CD00`** | `0x1A322A80` | **78680** | `OnHitAttack`, `OnHitBg` |
+| **`G14SW00`** | `0xCE93C0E1` | **79406** | `OnHitAttack`, `OnHitBg`, `OnDamage` |
+| **`G13HE00`** | `0xE409BB71` | **79389** | `OnHitAttack`, `OnHitBg`, `OnDamage` |
+| `G33VS00` | `0x01ACE514` | 79518 | `GetPlayerState` |
+| `G24LS00` | `0x47745D5A` | 79494 | `GetMotionNowFrame` |
+| `G28VS00` | `0xBD2007A0` | 79499 | `GetMotionNowFrame` |
+| **`VENTUS`** | `0xDED69D4D` | **78049** | `GetMotionNowFrame` |
+| `G10_11SW` | `0xFFF03F6F` | 79293 | `GetMotionNowFrame` |
+
+All addresses are **physical sectors inside BBS0.DAT**, not
+PSP memory virtual addresses or code injection sites. Names,
+constants and opcode references do **not** establish who owns
+a runtime actor, callback dispatch, or cancellation policy.
+The source export still reports executable auxiliary ELF PT_LOAD
+conflicts with historical Stage 4/5 injection addresses in **8/10**
+modules. No combat patches were enabled.
+
+### Next static investigation implemented
+
+1. `IsoBbsaLuaCategorySurvey` now prioritizes the independently
+   identified `B11CD00`, `G13HE00`, `G14SW00`, and the
+   `VENTUS`, `TERRA`, `AQUA` filename hashes **if eligible**,
+   while filling the remaining 24-slot budget with an evenly
+   distributed sample. This changes the sample definition; results
+   should **not** be interpreted as random or statistically exhaustive.
+2. `IsoLua51MetadataInspector` now decodes only the known
+   constant-referencing operands for Lua **5.1** `LOADK`,
+   `GETGLOBAL`, `SETGLOBAL`, `GETTABLE`, `SETTABLE`,
+   and `SELF`. It reports bounded per-prototype instruction PCs,
+   string names and table/global read/write *operand categories*.
+   In particular, `SETTABLE` with a constant `OnHitAttack`
+   key is stronger static evidence than an unreferenced string,
+   but **not runtime registration proof**.
+3. The category survey reports these narrowly-scoped opcode
+   references for hit-event and native-API name candidates.
+   This does **not** trace register values, function calls,
+   Lua closures, control flow or real PSP callback invocation.
+
+The uploaded log **predates** these changes. A subsequent analysis
+export will reveal which Lua 5.1 opcodes reference hit-event and
+known API names in the prioritized scripts. The ISO remains
+read-only throughout.
+
 ## Verification
 
 Tests exercise a synthetic ISO with a main EBOOT, a second MIPS ELF,
