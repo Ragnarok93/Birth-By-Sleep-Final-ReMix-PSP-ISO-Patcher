@@ -653,6 +653,66 @@ The uploaded (8) log **predates** this expanded all-prototype
 symbol reporting, so the next log will provide the actual
 additional string evidence.
 
+## October 9, 19:47 — G01.LUB is a gimmick script, not a demonstrated combat hook
+
+`ULJM05775_10092026 (9).log` reports a completed, verified,
+read-only Lua 5.1 structure parse of `g01.lub` in BBS0.DAT:
+
+- **18 nested Lua prototypes**, **228 instructions**, **73 string
+  constants**, **2592 meaningful structured bytes** within the
+  4096-byte BBSA allocated region.
+- **72 of 73** constants were short printable ASCII with **42 unique**
+  strings; names were checked across *all* successfully parsed prototypes,
+  not just the first 18 display examples.
+- The only callback-name string constants are **`OnInit`** and
+  **`OnUpdate`**. The script has **zero exact name matches** to all
+  13 cataloged native PSP combat APIs, and **zero exact matches**
+  to `OnHitAttack`, `OnHitBody`, or `OnHitAttackBg`.
+- The only keyword-hit among these constants is **`SetMotion`**,
+  which is associated with prototype 3 (depth 1, lines 20..45,
+  65 instructions). The root prototype has `OnInit` and `OnUpdate`
+  constants, but this does **not** prove their function implementations,
+  actual registration or runtime invocation.
+- Several constants correspond to gimmick/treasure/collision operations:
+  `EntityFactory`, `SetGimmickKind`, `GetTreasureBoxID`,
+  `EnableBgColl`, `EnableGravity`, `IsOpenTreasure`,
+  `SetReplyDistSq`, `SetCommandReply`. The evidence is
+  **environment/gimmick oriented**, not a verified combat event path.
+
+**Conclusion:** There is no reason to keep testing the same
+`g01.lub` for a hit-confirm hook without new evidence. Names
+being absent from these validated supported printable constant
+tables does not rule out dynamic references, other modules, or
+different game scripts. The previous Stage4/5 executable overlay
+conflicts are unchanged and combat patches remain disabled.
+
+### Broader read-only Lua-category survey
+
+The new `IsoBbsaLuaCategorySurvey` enumerates **all** 12-byte
+BBS0 BBSA directory records with exact path ID `0xC0000000`
+and reports the total *indexed* Lua-category record count. It
+samples at most **24** non-`G01` file hashes from entries
+allocating **1–4 sectors** (up to **8 KiB** each) with a
+deterministic even spread across that eligible range.
+
+Every sampled file must pass global-sector-to-DAT mapping,
+bounds checks, Lua 5.1 signature and structural parsing
+before its callback, hit-event, and known native API-name
+constant summaries are reported. Only exact short printable
+string-constant matches are considered leads; no strings
+are considered invocation proofs.
+
+**Scope:** This is NOT a comprehensive script search.
+Larger Lua allocations, Lua files outside the sampled
+index subset, alternative directory IDs and runtime-created
+scripts are untested. Zero matches are scoped explicitly
+to the sampled valid chunks. No file contents are exported
+and no game files are patched.
+
+The (9) log predates this category-wide survey. A newer
+inspector build/export is necessary before drawing
+conclusions about other Lua scripts.
+
 ## Verification
 
 Tests exercise a synthetic ISO with a main EBOOT, a second MIPS ELF,
