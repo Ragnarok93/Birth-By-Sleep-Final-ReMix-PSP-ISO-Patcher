@@ -107,7 +107,8 @@ internal object IsoLua51MetadataInspector {
                 lines += "          Example printable string constants (not execution evidence): " +
                     parser.visibleStrings.joinToString(" | ")
             }
-            lines += "          Complete printable ASCII string-constant census: " +
+            lines += "          Bounded short printable ASCII string-constant census " +
+                "(length<=${MAX_NAME_LENGTH}; longer/binary strings excluded): " +
                 "printable=${parser.printableConstantCount}/${parser.constantStrings}, " +
                 "unique=${parser.uniqueStrings.size} " +
                 "(case-sensitive, across all validated Lua prototypes)."
