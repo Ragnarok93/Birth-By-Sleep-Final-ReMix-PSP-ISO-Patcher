@@ -25,6 +25,7 @@ internal object IsoBbsaLinkedResourceProbe {
     private const val MAX_EXAMPLES_PER_LINK = 4
     private const val MAX_TOTAL_HEADER_READS = 12
     private const val HEADER_SAMPLE_BYTES = 64
+    private const val MAX_LUA_CHUNK_READS = 2
 
     data class IndexedCandidate(
         val namespace: String,
@@ -120,6 +121,7 @@ internal object IsoBbsaLinkedResourceProbe {
 
         val linkReports = mutableListOf<LinkEvidence>()
         val assetProbes = mutableListOf<AssetProbe>()
+        var luaChunksRead = 0
         for (link in refs) {
             cancellation.throwIfCancelled()
             // In the BBSA index, filenames are recorded without their
@@ -179,6 +181,7 @@ internal object IsoBbsaLinkedResourceProbe {
                 var signature = "UNVERIFIED logical/physical archive mapping"
                 var digest: String? = null
                 var preview: String? = null
+                var luaLines: List<String> = emptyList()
                 if (loc != null) {
                     val entry = archiveFiles[loc.archiveIndex]
                     val fullSize = candidate.sectorCount.toLong() * SECTOR
@@ -198,6 +201,28 @@ internal object IsoBbsaLinkedResourceProbe {
                             (it.toInt() and 255).toString(16).uppercase().padStart(2, '0')
                         }
                         signature = IsoBbsaIndexedPayloadProbe.classify(sample)
+                        if (link.reference == 0xC0000000L &&
+                            signature.startsWith("Lua bytecode signature") &&
+                            fullSize in 12L..IsoLua51MetadataInspector.MAX_INPUT_BYTES.toLong() &&
+                            luaChunksRead < MAX_LUA_CHUNK_READS
+                        ) {
+                            // Only a confirmed index pair and valid ISO extent
+                            // may trigger this bounded, in-memory Lua 5.1
+                            // metadata check. Bytecode is never executed or
+                            // exported; no other resource type is staged.
+                            luaChunksRead++
+                            cancellation.throwIfCancelled()
+                            val chunk = reader.readAt(source,
+                                entry.dataOffset + loc.archiveRelativeByteOffset,
+                                fullSize.toInt(),
+                            )
+                            cancellation.throwIfCancelled()
+                            val metadata = IsoLua51MetadataInspector.inspect(chunk)
+                            luaLines = metadata.lines + "        Indexed Lua " +
+                                "allocated_chunk_sha256=${sha256Hex(chunk)} " +
+                                "allocated_bytes=${chunk.size}; " +
+                                "parser_status=${if (metadata.valid) "VALID" else "UNVERIFIED"}."
+                        }
                     } else signature = "UNVERIFIED: header sample budget exhausted"
                 }
                 val probe = AssetProbe(link.name, candidate.namespace,
@@ -211,6 +236,7 @@ internal object IsoBbsaLinkedResourceProbe {
                         ?: "UNVERIFIED"} header=${probe.signature} " +
                     "sample_sha256=${digest ?: "UNVERIFIED"} " +
                     "first16_hex=${preview ?: "UNVERIFIED"}"
+                lines += luaLines
             }
         }
         if (validatedLinks.count { it.isExternalLink } > MAX_LINKS) {
@@ -218,7 +244,9 @@ internal object IsoBbsaLinkedResourceProbe {
         }
         lines += "        LIMIT: Matching a name+path index entry and/or bytecode magic " +
             "does NOT prove execution, handler dispatch, combat state, or actor ownership. " +
-            "No file extraction or ISO modifications."
+            "At most $MAX_LUA_CHUNK_READS Lua-category allocated chunks " +
+            "(each <= ${IsoLua51MetadataInspector.MAX_INPUT_BYTES} bytes) " +
+            "are parsed in memory. No file extraction or ISO modifications."
         return Report(linkReports, assetProbes, lines)
     }
 
