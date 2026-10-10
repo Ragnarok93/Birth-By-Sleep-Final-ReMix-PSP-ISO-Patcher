@@ -14,7 +14,7 @@ import okio.Path
  */
 internal object IsoBbsaExhaustiveCombatSurvey {
     private const val SECTOR = 2048L
-    private const val MAX_SCRIPT = IsoLua51MetadataInspector.MAX_INPUT_BYTES.toLong()
+    private val MAX_SCRIPT = IsoLua51MetadataInspector.MAX_INPUT_BYTES.toLong()
     private const val MAX_TOTAL_READ = 32L * 1024L * 1024L
 
     data class Decision(val reason: String?, val absoluteOffset: Long?, val length: Int) {
