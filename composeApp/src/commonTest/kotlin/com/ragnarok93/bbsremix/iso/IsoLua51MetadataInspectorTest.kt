@@ -24,11 +24,13 @@ class IsoLua51MetadataInspectorTest {
             constants: List<String>,
             nested: Boolean = false,
             opcodes: List<Int> = listOf(30),
+            upvalues: Int = 0,
+            childUpvalues: Int = 0,
         ) {
             str(null) // absent source name
             i(0) // lineDefined
             i(0) // lastLineDefined
-            b(0) // upvalues
+            b(upvalues) // upvalues
             b(0) // params
             b(2) // vararg
             b(2) // stack
@@ -40,7 +42,7 @@ class IsoLua51MetadataInspectorTest {
                 str(value)
             }
             i(if (nested) 1 else 0)
-            if (nested) proto(listOf("GetPlayerState"))
+            if (nested) proto(listOf("GetPlayerState"), upvalues = childUpvalues)
             i(1) // debug lineinfo count
             i(0) // one source-line number
             i(0) // local variable count
@@ -228,6 +230,82 @@ class IsoLua51MetadataInspectorTest {
             "resolved_child_proto=2")
         assertContains(result.lines.joinToString("\n"),
             "child_native_API_constants=GetPlayerState")
+    }
+
+    @Test
+    fun lua51_closure_two_upvalue_descriptors_resolves_b11sb00_hit_value() {
+        fun abc(op: Int, a: Int, b: Int, c: Int): Int =
+            op or (a shl 6) or (c shl 14) or (b shl 23)
+        fun abx(op: Int, a: Int, bx: Int): Int =
+            op or (a shl 6) or (bx shl 14)
+        // pc21 CLOSURE R3, child0; pc22/23 are the two Lua 5.1
+        // upvalue binding descriptors, NOT ordinary MOVE execution.
+        val raw = LuaBytes().apply {
+            proto(
+                listOf("OnHitAttack"),
+                nested = true,
+                childUpvalues = 2,
+                opcodes = listOf(
+                    abx(36, 3, 0),
+                    abc(0, 0, 0, 0),
+                    abc(0, 0, 1, 0),
+                    abc(9, 2, 256, 3),
+                    30,
+                ),
+            )
+        }.chunk()
+        val input = raw + ByteArray(2048 - raw.size)
+        val report = IsoLua51MetadataInspector.inspect(input)
+        assertTrue(report.valid)
+        val event = report.hitEventTableWrites.single()
+        assertEquals(3, event.pc)
+        assertEquals("OnHitAttack", event.eventName)
+        assertEquals(0, event.adjacentClosureProtoIndex)
+        assertEquals(2, event.adjacentClosureFunctionOrdinal)
+        assertEquals(2, report.prototypeSummaries[1].upvalueCount)
+        assertEquals("CLOSURE_plus_2_Lua51_upvalue_descriptors",
+            event.closureProvenance)
+        assertTrue(event.unresolvedPriorInstructions.isEmpty())
+        assertContains(report.lines.joinToString("\\n"), "closure_provenance=CLOSURE_plus_2")
+    }
+
+    @Test
+    fun lua51_closure_descriptor_resolution_rejects_mismatched_child_nups_or_real_instructions() {
+        fun abc(op: Int, a: Int, b: Int, c: Int): Int =
+            op or (a shl 6) or (c shl 14) or (b shl 23)
+        fun abx(op: Int, a: Int, bx: Int): Int =
+            op or (a shl 6) or (bx shl 14)
+        fun run(nups: Int, middleOpcode: Int): IsoLua51MetadataInspector.HitEventTableWrite {
+            val chunk = LuaBytes().apply {
+                proto(
+                    listOf("OnHitAttack"),
+                    nested = true,
+                    childUpvalues = nups,
+                    opcodes = listOf(
+                        abx(36, 3, 0),
+                        abc(0, 0, 0, 0),
+                        abc(middleOpcode, 0, 1, 0),
+                        abc(9, 2, 256, 3),
+                        30,
+                    ),
+                )
+            }.chunk()
+            val parsed = IsoLua51MetadataInspector.inspect(chunk)
+            assertTrue(parsed.valid)
+            return parsed.hitEventTableWrites.single()
+        }
+        // A child with only one upvalue cannot have two capture
+        // descriptors; the candidate remains explicitly unresolved.
+        val wrongCount = run(1, 0)
+        assertEquals(null, wrongCount.adjacentClosureFunctionOrdinal)
+        assertEquals("UNVERIFIED", wrongCount.closureProvenance)
+        // Ordinary CALL cannot be mistaken for a capture descriptor.
+        val realOpcode = run(2, 28)
+        assertEquals(null, realOpcode.adjacentClosureFunctionOrdinal)
+        assertEquals("UNVERIFIED", realOpcode.closureProvenance)
+        // Valid Lua 5.1 GETUPVAL may appear as a pseudo instruction.
+        val validCapture = run(2, 4)
+        assertEquals(2, validCapture.adjacentClosureFunctionOrdinal)
     }
 
     @Test
