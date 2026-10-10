@@ -15,9 +15,10 @@ spec.loader.exec_module(mod)
 
 
 class FakeWebSocket:
-    def __init__(self, game="ULJM05775", existing=()):
+    def __init__(self, game="ULJM05775", existing=(), corrupt_source=False):
         self.game = game
         self.existing = existing
+        self.corrupt_source = corrupt_source
         self.sent = []
         self.incoming = deque()
         self.added = 0
@@ -50,7 +51,15 @@ class FakeWebSocket:
                 "uintValues": [0x08955F10, 0x08900000, 0x0, 0x08800000],
             }]
         elif event == "memory.read":
-            reply["base64"] = base64.b64encode(self.memory).decode("ascii")
+            address = packet["address"]
+            if address in mod.EXPECTED_INSTRUCTIONS:
+                words = mod.EXPECTED_INSTRUCTIONS[address]
+                raw = b"".join(word.to_bytes(4, "little") for word in words)
+                if self.corrupt_source:
+                    raw = bytes([raw[0] ^ 0xFF]) + raw[1:]
+            else:
+                raw = bytes(self.memory)
+            reply["base64"] = base64.b64encode(raw).decode("ascii")
         self.incoming.append(reply)
         if event == "cpu.breakpoint.add":
             self.added += 1
@@ -100,6 +109,12 @@ class ReadOnlyCombatTraceTests(unittest.TestCase):
     def test_wrong_game_refused_without_breakpoints(self):
         fake = FakeWebSocket(game="ULUS00000")
         with self.assertRaisesRegex(RuntimeError, "Expected ULJM05775"):
+            mod.trace(mod.Debugger(fake), max_hits=1, seconds=5)
+        self.assertFalse(any(x["event"] == "cpu.breakpoint.add" for x in fake.sent))
+
+    def test_bad_runtime_signature_is_refused(self):
+        fake = FakeWebSocket(corrupt_source=True)
+        with self.assertRaisesRegex(RuntimeError, "instruction signature mismatch"):
             mod.trace(mod.Debugger(fake), max_hits=1, seconds=5)
         self.assertFalse(any(x["event"] == "cpu.breakpoint.add" for x in fake.sent))
 
