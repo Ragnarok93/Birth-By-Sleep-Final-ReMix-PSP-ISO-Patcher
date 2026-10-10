@@ -21,6 +21,34 @@ SITES = {
     0x08955F10: ("cancel_consumer", "s0"),  # lw a0,+0x238(s0)
     0x08B07020: ("cancel_setter", "a0"),    # lw a2,+0x238(a0)
 }
+# Source-fingerprinted resident PSP instructions (not Steam memory offsets).
+# Validate these in live emulated memory before adding any breakpoints.
+EXPECTED_INSTRUCTIONS = {
+    0x08955F10: (
+        0x8E040238, 0x30841000, 0x14800006, 0x3404000E, 0x8E040240,
+        0x00912024, 0x148001D7, 0x00000000, 0x3404000E, 0xA604022C,
+    ),
+    0x08B07020: (
+        0x8C860238, 0x2407EFFF, 0x30A50001, 0x00C73024,
+        0x00052B00, 0x00C52825, 0x03E00008, 0xAC850238,
+    ),
+}
+
+
+def verify_resident_source(debugger: "Debugger") -> None:
+    for address, instructions in EXPECTED_INSTRUCTIONS.items():
+        response = debugger.request(
+            "memory.read", address=address, size=4 * len(instructions), replacements=False
+        )
+        actual = base64.b64decode(response["base64"], validate=True)
+        expected = b"".join(word.to_bytes(4, "little") for word in instructions)
+        if actual != expected:
+            raise RuntimeError(
+                f"PSP instruction signature mismatch at {address:#010x}; "
+                "refusing runtime trace for a different or modified executable"
+            )
+
+
 PLAYER_FIELDS = {
     "state": (0x220, 4),
     "substate": (0x22C, 2),
@@ -96,6 +124,7 @@ def trace(debugger: Debugger, max_hits: int, seconds: int) -> dict:
     game = debugger.request("game.status").get("game")
     if not isinstance(game, dict) or game.get("id") != EXPECTED_GAME:
         raise RuntimeError(f"Expected {EXPECTED_GAME}, connected game: {game!r}")
+    verify_resident_source(debugger)
     # Adding a breakpoint replaces an existing breakpoint at the same address;
     # refuse rather than clobbering a human debugger session.
     current = debugger.request("cpu.breakpoint.list").get("breakpoints", [])
