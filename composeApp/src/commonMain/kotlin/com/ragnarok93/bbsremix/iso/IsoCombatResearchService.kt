@@ -214,42 +214,44 @@ internal class IsoCombatResearchService(
                     }
             }
         }
-        if (linkCandidates.isNotEmpty()) {
-            val entry = bbsaIndexEntry
-            if (entry != null) {
-                val prefixSize = reader.readAt(source, entry.dataOffset, 0x30)
-                val indexSize = u16(prefixSize, 0x1a).toLong() * 2048L
-                if (indexSize in 2048L..MAX_BBSA_INDEX_BYTES.toLong() &&
-                    indexSize <= entry.size
-                ) {
-                    cancellation.throwIfCancelled()
-                    val index = reader.readAt(source, entry.dataOffset, indexSize.toInt())
+        // The full Lua census must not depend on detecting sampled ARC links.
+        val bbs0 = bbsaIndexEntry
+        if (bbs0 != null) {
+            cancellation.throwIfCancelled()
+            val prefix = reader.readAt(source, bbs0.dataOffset, 0x30)
+            val indexSize = u16(prefix, 0x1a).toLong() * 2048L
+            if (indexSize in 2048L..MAX_BBSA_INDEX_BYTES.toLong() &&
+                indexSize <= bbs0.size
+            ) {
+                val index = reader.readAt(source, bbs0.dataOffset, indexSize.toInt())
+                cancellation.throwIfCancelled()
+                val archives = files.mapNotNull { dat ->
+                    val normalized = normalize(dat.path)
+                    val number = (0..4).firstOrNull {
+                        normalized == "PSP_GAME/USRDIR/BBS$it.DAT"
+                    }
+                    if (number != null && validExtent(dat, image)) number to dat
+                    else null
+                }.toMap()
+                if (linkCandidates.isNotEmpty()) {
                     val correlation = IsoBbsaDirectoryEvidence.inspect(
                         index, linkCandidates, cancellation,
                     )
                     lines += correlation.lines
-                    val archives = files.mapNotNull { dat ->
-                        val normalized = normalize(dat.path)
-                        val number = (0..4).firstOrNull {
-                            normalized == "PSP_GAME/USRDIR/BBS$it.DAT"
-                        }
-                        if (number != null && validExtent(dat, image)) number to dat
-                        else null
-                    }.toMap()
                     lines += IsoBbsaIndexedPayloadProbe.inspect(
                         source, index, archives, correlation, reader, cancellation,
                     ).lines
-                    lines += IsoBbsaLuaCategorySurvey.inspect(
-                        source, index, archives, reader, cancellation,
-                    ).lines
                 } else {
-                    lines += "BBSA link correlation skipped: malformed/unbounded BBS0 index prefix."
+                    lines += "BBSA link correlation: no structurally validated sampled ARC external links."
                 }
+                lines += IsoBbsaExhaustiveCombatSurvey.inspect(
+                    source, index, archives, reader, cancellation,
+                ).lines
             } else {
-                lines += "BBSA link correlation skipped: canonical BBS0.DAT index not available."
+                lines += "EXHAUSTIVE LUA SURVEY REFUSED: malformed/unbounded BBS0 index prefix."
             }
         } else {
-            lines += "BBSA link correlation: no structurally validated ARC external links in sampled sectors."
+            lines += "EXHAUSTIVE LUA SURVEY REFUSED: canonical BBS0.DAT not available."
         }
         lines += PspOverlayConflictAudit.summarize(overlapFindings, elfCount)
         lines += "ISO candidate file inventory: ${relevant.size} likely module/archive/script file(s), " +
