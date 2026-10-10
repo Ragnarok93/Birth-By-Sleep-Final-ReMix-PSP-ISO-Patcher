@@ -69,6 +69,8 @@ internal object PspCombatNativeXrefSurvey {
         var instructions = 0
         var callCount = 0
         var fieldCount = 0
+        var stackFrameAccesses = 0
+        var otherObjectAccesses = 0
         val callCounts = mutableMapOf<Long, Int>()
         val fieldCounts = mutableMapOf<Int, Pair<Int, Int>>()
         for (section in sections) {
@@ -114,18 +116,26 @@ internal object PspCombatNativeXrefSurvey {
                     else counts.copy(second = counts.second + 1)
                 val base = (instruction ushr 21) and 31
                 val register = (instruction ushr 16) and 31
+                val baseDomain = when (base) {
+                    29 -> "STACK_POINTER"
+                    30 -> "FRAME_POINTER_POSSIBLE"
+                    else -> "UNKNOWN_OBJECT_OR_DATA"
+                }
+                if (base == 29 || base == 30) stackFrameAccesses++ else otherObjectAccesses++
                 val preceding = if (local >= 4)
                     "0x${word(local - 4).toUInt().toString(16)}" else "OUTSIDE_SECTION"
                 val following = if (local + 8 <= section.length)
                     "0x${word(local + 4).toUInt().toString(16)}" else "OUTSIDE_SECTION"
                 lines += "    FIELD_ACCESS site=0x${pc.toString(16)} kind=${if (reading) "READ" else "WRITE"} " +
-                    "name=$name offset=0x${offset.toString(16)} base_reg=$base data_reg=$register " +
+                    "name=$name offset=0x${offset.toString(16)} base_reg=$base base_domain=$baseDomain " +
+                    "data_reg=$register " +
                     "word=0x${instruction.toUInt().toString(16)} " +
                     "prior_word=$preceding next_word=$following"
             }
         }
         lines += "NATIVE XREF TOTAL: executable_instructions=$instructions " +
-            "known_helper_direct_calls=$callCount candidate_offset_accesses=$fieldCount"
+            "known_helper_direct_calls=$callCount candidate_offset_accesses=$fieldCount " +
+            "stack_or_frame_pointer_accesses=$stackFrameAccesses other_base_accesses=$otherObjectAccesses"
         for ((address, name) in knownTargets) {
             lines += "  NATIVE_TARGET name=$name va=0x${address.toString(16)} direct_calls=${callCounts[address] ?: 0}"
         }
