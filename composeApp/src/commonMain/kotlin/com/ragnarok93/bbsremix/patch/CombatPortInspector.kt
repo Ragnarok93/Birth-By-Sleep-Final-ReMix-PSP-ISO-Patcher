@@ -104,6 +104,7 @@ internal object CombatPortInspector {
         lines += PspCombatScriptCallEvidence.inspect(source, exact).lines
         lines += PspCombatStaticAnalysis.inspect(source)
         lines += PspCombatDeepStaticInspector.inspect(source, "selected ISO EBOOT").lines
+        lines += PspCombatNativeXrefSurvey.inspect(source, "selected ISO EBOOT").lines
         lines += "Known PC-port gameplay groups: hit-aware cancels; invincibility; extended defense; " +
             "command cancels; Critical abilities/passives; exclusions; telemetry."
         lines += "Status: UNVALIDATED. No gameplay feature is enabled by this report. " +
