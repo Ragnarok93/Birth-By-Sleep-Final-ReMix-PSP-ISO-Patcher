@@ -1007,6 +1007,61 @@ resident hook, or combat toggle is implemented. Historical
 Stage 4/5 overlap with auxiliary executable PT_LOAD regions
 remains a blocker.
 
+## October 9, 23:04 — OnHitAttack Lua child-closure provenance verified statically
+
+The newest uploaded `ULJM05775_10092026.log` (23:04:09
+inspector export, 456 lines) shows a validated BBSA index of **205**
+Lua-category resources and a **24/24 valid** Lua 5.1
+prioritized-plus-spread sample. Five selected scripts have exact
+`OnHitAttack` constant names, and the bounded opcode parser also
+finds **Lua `SETTABLE` table-key writes** with Lua child-closure
+provenance.
+
+The standout is **`B11SB00`** (filename CRC32 `0x4EA601AD`;
+**BBS0.DAT physical sector 78709**). At root Lua prototype 1,
+**PC 24**, the instruction writes the `OnHitAttack` key:
+table=R[2], value=R[3]. Lua 5.1 child-prototype selection is
+resolved through **`CLOSURE + 2 MOVE/GETUPVAL upvalue binding
+descriptors`** to **child prototype 6**, with **65 instructions**
+and strings `GetCurrentMotion`, `hitHandle`,
+`EnableGeneralPurposeAttackColl`, `ChangeState`.
+
+Other exact root `SETTABLE` key writes in the same export:
+
+| Indexed Lua name | Root PC(s) | Resolved child / instructions |
+| --- | --- | --- |
+| `B11CD00` | 22, 51 | Child 4 / 1; child 11 / 3 |
+| `G31VS00` | 162 | Child 35 / 3 |
+| `G14SW00` | 50 | Child 14 / 1 |
+| `G13HE00` | 82 | Child 15 / 1 |
+
+The 65-instruction B11SB00 child is therefore a stronger,
+narrower **static handler candidate** than unrelated
+`OnHitAttack` constant names. The five scripts are still
+largely world/gimmick or entity resources, so do **not**
+misidentify them as player-owned or hit-confirm handlers.
+
+### Follow-up read-only handler opcode windows
+
+`IsoLua51MetadataInspector` now retains bounded opcode arrays
+already contained inside the at-most-8KiB validated Lua chunk.
+**Only resolved hit-event child prototypes** receive a narrowly
+scoped scan of known constant-bearing method/global accesses.
+It reports up to **8 named-symbol opcode windows per child**,
+with PC-local nearby raw Lua 5.1 opcodes, to assess how
+`hitHandle`, `GetCurrentMotion`, `ChangeState`, and
+attack-collision identifiers appear around `CALL`, `TEST`,
+or `JMP` operands. This is **not a decompiler** and does not
+prove which function a CALL actually executes, reachable
+control flow, runtime assignment, hit confirmation, or
+receiver identity. No game data is modified.
+
+A newer inspector export is needed to see the real
+opcode windows from `B11SB00` child 6. The existing
+historical Stage4/Stage5 PSP virtual address conflict
+(8/10 auxiliary ELF modules) is not resolved and those
+unsafe executable hooks remain disabled.
+
 ## Verification
 
 Tests exercise a synthetic ISO with a main EBOOT, a second MIPS ELF,
